@@ -30,7 +30,7 @@ describe('JsonStateRepository', () => {
       characters: [
         {
           id: '1',
-          name: 'Jogador',
+          name: 'Aric',
           description: 'Um aventureiro determinado.',
           personality: 'Corajoso e cauteloso.',
           isPlayer: true,
@@ -75,7 +75,7 @@ describe('JsonStateRepository', () => {
       turnNumber: 1,
       history: [],
       characters: [
-        { id: '1', name: 'Jogador', description: 'Herói', personality: 'Bravo', isPlayer: true },
+        { id: '1', name: 'Aric', description: 'Herói', personality: 'Bravo', isPlayer: true },
       ],
     };
 
@@ -86,7 +86,7 @@ describe('JsonStateRepository', () => {
       turnNumber: 5,
       history: ['Turno 1: ...'],
       characters: [
-        { id: '1', name: 'Jogador', description: 'Herói', personality: 'Bravo', isPlayer: true },
+        { id: '1', name: 'Aric', description: 'Herói', personality: 'Bravo', isPlayer: true },
       ],
     };
 

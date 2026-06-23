@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { ChatOpenAI } from '@langchain/openai';
 import {
   cpuActionSystemPrompt,
   cpuActionHumanPrompt,
@@ -7,62 +6,11 @@ import {
   arbiterHumanPrompt,
   narratorSystemPrompt,
   narratorHumanPrompt,
-} from '../prompts.js';
-import type { GameState, Character } from '../../domain/types.js';
-import { SystemMessage, HumanMessage } from '@langchain/core/messages';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as process from 'process';
-
-const LLM_BASE_URL = process.env.OPENAI_API_BASE || 'http://localhost:1234/v1';
-const LLM_API_KEY = process.env.OPENAI_API_KEY || 'lm-studio';
-
-async function invokeLlm(judgeSystemPrompt: string, judgeHumanPrompt: string): Promise<string> {
-  const judge = new ChatOpenAI({
-    temperature: 0,
-    model: 'gemma-4b',
-    apiKey: LLM_API_KEY,
-    configuration: { baseURL: LLM_BASE_URL },
-  });
-  const messages = [
-    new SystemMessage(judgeSystemPrompt),
-    new HumanMessage(judgeHumanPrompt),
-  ];
-  const response = await judge.invoke(messages);
-  return response.content as string;
-}
-
-function buildState(overrides: Partial<GameState> = {}): GameState {
-  return {
-    worldContext: 'Ano 2157. Neo-Tóquio é uma cidade de contrastes: arranha-céus corporativos refletem letreiros de neon nos bairros alagados. Chuva ácida cai 300 dias por ano.',
-    narrativeStyle: 'Ação / Sci-Fi Cyberpunk',
-    writingStyle: 'Cômico / Sarcástico',
-    characters: [
-      { id: '1', name: 'Jogador', description: 'Protagonista', personality: 'Determinado', isPlayer: true },
-    ],
-    history: [
-      'Turno 1: Você chegou ao bar iluminado por neon "O Raio Enferrujado". Ghost já estava lá, tomando uma bebida que brilha azul.',
-      'Turno 2: Um grupo de agentes da Arasaka entrou no bar e começou a fazer perguntas.',
-    ],
-    turnNumber: 3,
-    ...overrides,
-  };
-}
-
-function saveOutput(scenario: string, phase: string, content: string) {
-  const dir = path.join(process.cwd(), 'test-output');
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `${timestamp}_${scenario}_${phase}.md`;
-  return fs.mkdir(dir, { recursive: true }).then(() =>
-    fs.writeFile(path.join(dir, filename), content, 'utf-8')
-  );
-}
-
-const pularTestes = process.env.SKIP_LMSTUDIO_CHECK === '1';
-const describeIf = pularTestes ? describe.skip : describe;
+} from '../../prompts.js';
+import type { Character } from '../../../domain/types.js';
+import { buildState, invokeLlm, saveOutput, describeIf } from './helpers.js';
 
 describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
-
   it('deve executar o pipeline NPC → Árbitro → Narrador para Cyberpunk', async () => {
     const state = buildState();
     const npc: Character = {
@@ -79,7 +27,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     );
     await saveOutput('cyberpunk', '1-npc', npxResponse);
     expect(npxResponse.length).toBeGreaterThan(10);
-    const actions = [`Jogador tenta: Investigar a mesa ao lado.`, `Ghost tenta: ${npxResponse}`];
+    const actions = [`Kael tenta: Investigar a mesa ao lado.`, `Ghost tenta: ${npxResponse}`];
 
     const arbiterResponse = await invokeLlm(
       arbiterSystemPrompt,
@@ -116,7 +64,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     );
     await saveOutput('fantasia', '1-npc', npxResponse);
     expect(npxResponse.length).toBeGreaterThan(10);
-    const actions = [`Jogador tenta: Examinar a taça de vinho do rei.`, `Elara tenta: ${npxResponse}`];
+    const actions = [`Darian tenta: Examinar a taça de vinho do rei.`, `Elara tenta: ${npxResponse}`];
 
     const arbiterResponse = await invokeLlm(
       arbiterSystemPrompt,
@@ -153,7 +101,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     );
     await saveOutput('terror', '1-npc', npxResponse);
     expect(npxResponse.length).toBeGreaterThan(10);
-    const actions = [`Jogador tenta: Apontar a lanterna para o corredor escuro.`, `Marcus tenta: ${npxResponse}`];
+    const actions = [`Elias tenta: Apontar a lanterna para o corredor escuro.`, `Marcus tenta: ${npxResponse}`];
 
     const arbiterResponse = await invokeLlm(
       arbiterSystemPrompt,

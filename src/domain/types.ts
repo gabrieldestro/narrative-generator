@@ -9,6 +9,14 @@ export interface Character {
   isPlayer: boolean;   // Se true, aguarda input do console. Se false, a IA decide a ação.
 }
 
+// Template de personagem usado em arquivos de mundo e cenários customizados
+export interface CharacterTemplate {
+  name: string;
+  description: string;
+  personality: string;
+  isPlayer?: boolean;  // Se omitido, assume false
+}
+
 // Configuração base do mundo — compartilhada entre template inicial e estado em jogo
 export interface WorldConfig {
   narrativeStyle: string; // O gênero da história (Fantasia Medieval, Cyberpunk, etc.)
@@ -20,7 +28,7 @@ export interface WorldConfig {
 export interface WorldTemplate extends WorldConfig {
   name: string;
   description: string;
-  companionDescription: string;
+  characters: CharacterTemplate[];
 }
 
 // Representa o Estado global do nosso jogo em um dado momento

@@ -25,7 +25,10 @@ src/
 │   ├── prompts.ts
 │   └── __tests__/
 │       ├── GameEngine.test.ts
-│       └── LlmIntegration.integration.test.ts
+│       └── integration/
+│           ├── helpers.ts
+│           ├── arbiter.integration.test.ts
+│           └── pipeline.integration.test.ts
 ├── infrastructure/           # Adaptadores concretos (Adapters)
 │   ├── ConsoleInput.ts
 │   ├── ConsoleOutput.ts
@@ -71,16 +74,28 @@ Isso é o **Dependency Inversion Principle** do SOLID: o domínio (`domain/ports
 ## Testes
 
 ```bash
-npm test                # Unitários + Repositório (rápido ~1s)
-npm run test:watch      # Modo watch (desenvolvimento)
-npm run test:integration  # LLM real (requer LM Studio rodando, ~2min)
+npm test                   # Unitários + Repositório (rápido ~1s)
+npm run test:watch         # Modo watch (desenvolvimento)
+npm run test:integration   # Todos os testes de integração (LLM real, ~3min)
+```
+
+### Rodar testes de integração individualmente
+
+```bash
+# Apenas testes do Árbitro (ações fora do tema)
+npx vitest run --config vitest.integration.config.ts arbiter
+
+# Apenas testes do pipeline NPC → Árbitro → Narrador
+npx vitest run --config vitest.integration.config.ts pipeline
 ```
 
 ### O que cobre
 
-- **Unitários (7 testes):** `application/__tests__/GameEngine.test.ts` — mocks de `IUserInput`, `IOutputWriter`, `IStateRepository` e `ChatOpenAI`. Nenhum `vi.mock()` de módulo do Node, apenas objetos planos.
+- **Unitários (10 testes):** `application/__tests__/GameEngine.test.ts` — mocks de `IUserInput`, `IOutputWriter`, `IStateRepository` e `ChatOpenAI`. Valida criação de personagens (jogador + N NPCs manuais ou gerados por IA), ciclo de jogo e limitação de histórico.
 - **Infraestrutura (12 testes):** `infrastructure/__tests__/JsonStateRepository.test.ts` (4 — arquivo real) + `WorldTemplateRepository.test.ts` (8 — templates `worlds/`).
-- **LLM-as-a-Judge (3 cenários):** `application/__tests__/LlmIntegration.integration.test.ts` — pipeline NPC→Árbitro→Narrador com chamadas reais ao LM Studio. Excluído do `npm test` padrão (config separada `vitest.integration.config.ts`).
+- **Integração com LLM real:**
+  - `integration/arbiter.integration.test.ts` (2 cenários) — valida que o Árbitro não nega ações por estilo/tema/gênero, apenas por capacidade física.
+  - `integration/pipeline.integration.test.ts` (3 cenários) — pipeline completo NPC→Árbitro→Narrador para Cyberpunk, Fantasia Medieval e Terror.
 
 **Paralelo C#:** Os mocks com `vi.fn()` são o equivalente a `Mock<IUserInput>.Setup(x => x.Question(...)).ReturnsAsync(...)` do Moq. A diferença é que no Vitest os mocks são objetos literais, sem necessidade de uma biblioteca separada como Moq/NSubstitute — o próprio test runner já fornece `vi.fn()`.
 

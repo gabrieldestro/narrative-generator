@@ -29,15 +29,19 @@ export const arbiterSystemPrompt =
 
 export function arbiterHumanPrompt(state: GameState, actions: string[]): string {
   return [
-    `Gênero da história: ${state.narrativeStyle}`,
-    `Estilo de escrita/tom: ${state.writingStyle}`,
     `Cenário atual: ${state.worldContext}`,
     '',
     'Ações intentadas neste turno:',
     actions.join('\n'),
     '',
     'Instruções:',
-    `Como um Árbitro de RPG imparcial para o gênero ${state.narrativeStyle} com tom ${state.writingStyle}, avalie se essas ações teriam sucesso baseado na física do mundo e no bom senso do gênero e tom.`,
+    'Avalie APENAS se o CORPO do personagem é capaz de executar fisicamente a ação.',
+    'NÃO avalie contexto, adequação, bom senso, consequências sociais, lógica do mundo, anacronismo, ou adequação ao cenário.',
+    'NÃO use o gênero da história, o estilo de escrita ou o tom para negar ou aprovar ações.',
+    'O tema, o estilo e a adequação ao cenário NÃO importam — apenas a capacidade física importa.',
+    'Exemplo: "Personagem tenta: Contar uma piada." -> O corpo do personagem é capaz de falar? Sim -> Sucesso.',
+    'Exemplo: "Personagem tenta: Voar batendo os braços." -> O corpo do personagem é capaz de voar? Não -> Falha.',
+    'Se uma pessoa comum poderia fazer aquela ação com o próprio corpo, é Sucesso.',
     'Responda de forma CRUA e DIRETA, sem literatura.',
     'Para cada ação diga: [Personagem] tentou [Ação] -> [Sucesso/Falha] porque [Motivo].',
   ].join('\n');
@@ -79,10 +83,28 @@ export function initialContextHumanPrompt(style: string, writingStyle: string): 
   return `Descreva o local inicial (em até 3 frases) onde os personagens começam uma aventura do gênero ${style} no estilo de escrita ${writingStyle}. Responda em português.`;
 }
 
+export function playerCharacterSystemPrompt(writingStyle: string): string {
+  return `Você é um gerador de personagens de RPG. Adapte o tom do personagem para o estilo de escrita: ${writingStyle}.`;
+}
+
+export function playerCharacterHumanPrompt(style: string, writingStyle: string, playerName: string): string {
+  return [
+    `Crie o protagonista '${playerName}' para uma história de ${style} no estilo de escrita ${writingStyle}.`,
+    'Responda APENAS no formato abaixo (sem texto extra):',
+    'Descrição: <aparência, visual e ocupação do protagonista, uma ou duas frases>',
+    'Personalidade: <traços de personalidade, poucas palavras>',
+  ].join('\n');
+}
+
 export function companionDescriptionSystemPrompt(writingStyle: string): string {
   return `Você é um gerador de personagens de RPG. Adapte o tom do personagem para o estilo de escrita: ${writingStyle}.`;
 }
 
-export function companionDescriptionHumanPrompt(style: string, writingStyle: string): string {
-  return `Crie uma descrição curta (uma frase) para a parceira do jogador chamada 'Elara', adaptando a ocupação, visual e atitude dela para o gênero ${style} e estilo de escrita ${writingStyle}. Responda em português.`;
+export function companionDescriptionHumanPrompt(style: string, writingStyle: string, npcName: string): string {
+  return [
+    `Crie um NPC companheiro chamado '${npcName}' para uma história de ${style} no estilo de escrita ${writingStyle}.`,
+    'Responda APENAS no formato abaixo (sem texto extra):',
+    `Descrição: <ocupação, visual e atitude do(a) ${npcName}, uma ou duas frases>`,
+    'Personalidade: <traços de personalidade, poucas palavras>',
+  ].join('\n');
 }

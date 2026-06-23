@@ -1,49 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GameEngine } from '../GameEngine.js';
-import type { GameState } from '../../domain/types.js';
+import { SessionFactory } from '../SessionFactory.js';
+import { LlmService } from '../LlmService.js';
+import type { GameState, CharacterTemplate } from '../../domain/types.js';
 import type { IUserInput, IOutputWriter } from '../../domain/ports.js';
+import type { IStateRepository } from '../../infrastructure/JsonStateRepository.js';
 
-describe('GameEngine', () => {
-  let engine: GameEngine;
+// ── SessionFactory ──
+
+describe('SessionFactory', () => {
   let mockInput: IUserInput;
   let mockOutput: IOutputWriter;
-  let mockRepo: { load: ReturnType<typeof vi.fn>; save: ReturnType<typeof vi.fn> };
-  let mockLlm: { invoke: ReturnType<typeof vi.fn>; stream: ReturnType<typeof vi.fn> };
+  let mockRepo: IStateRepository;
+  let mockLlmService: LlmService;
+  let factory: SessionFactory;
 
-  function createEngine() {
-    return new GameEngine(mockInput, mockOutput, mockRepo as any, mockLlm as any);
-  }
+  const playerAric: CharacterTemplate = {
+    name: 'Aric',
+    description: 'Um guerreiro marcado por batalhas passadas.',
+    personality: 'Corajoso e leal.',
+    isPlayer: true,
+  };
+
+  const companionElara: CharacterTemplate = {
+    name: 'Elara',
+    description: 'Uma elfa das florestas prateadas.',
+    personality: 'Sábia e furtiva.',
+  };
 
   beforeEach(() => {
-    mockInput = {
-      question: vi.fn().mockResolvedValue(''),
-      close: vi.fn(),
-    };
-    mockOutput = {
-      write: vi.fn(),
-      writeLine: vi.fn(),
-      clear: vi.fn(),
-    };
-    mockRepo = {
-      load: vi.fn(),
-      save: vi.fn(),
-    };
-    mockLlm = {
-      invoke: vi.fn().mockResolvedValue({ content: 'resposta mockada' }),
-      stream: vi.fn().mockImplementation(async function* () {
-        yield { content: 'narrativa mockada' };
-      }),
-    };
-    engine = createEngine();
+    mockInput = { question: vi.fn().mockResolvedValue(''), close: vi.fn() };
+    mockOutput = { write: vi.fn(), writeLine: vi.fn(), clear: vi.fn() };
+    mockRepo = { load: vi.fn(), save: vi.fn() };
+
+    const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
+    mockLlmService = new LlmService(mockLlm as any);
+
+    factory = new SessionFactory(mockInput, mockOutput, mockRepo, mockLlmService);
   });
 
   describe('createNewGame', () => {
-    it('deve criar um GameState com todas as propriedades preenchidas corretamente', async () => {
-      const state = await engine.createNewGame(
+    it('deve criar GameState com propriedades corretas para 2 personagens', async () => {
+      const state = await factory.createNewGame(
         'Fantasia Medieval',
         'Épico / Poético',
         'Uma taverna escura na encruzilhada dos reinos.',
-        'Uma elfa guerreira com cicatrizes de batalha e olhar cansado.'
+        [playerAric, companionElara]
       );
 
       expect(state.narrativeStyle).toBe('Fantasia Medieval');
@@ -51,176 +53,260 @@ describe('GameEngine', () => {
       expect(state.worldContext).toBe('Uma taverna escura na encruzilhada dos reinos.');
       expect(state.turnNumber).toBe(1);
       expect(state.history).toEqual([]);
-
       expect(state.characters).toHaveLength(2);
       expect(state.characters[0]!.isPlayer).toBe(true);
-      expect(state.characters[0]!.name).toBe('Jogador');
+      expect(state.characters[0]!.name).toBe('Aric');
       expect(state.characters[1]!.isPlayer).toBe(false);
       expect(state.characters[1]!.name).toBe('Elara');
-      expect(state.characters[1]!.description).toBe(
-        'Uma elfa guerreira com cicatrizes de batalha e olhar cansado.'
-      );
+      expect(state.characters[1]!.description).toBe('Uma elfa das florestas prateadas.');
     });
 
-    it('deve persistir o estado inicial via repository.save', async () => {
-      await engine.createNewGame(
-        'Cyberpunk',
-        'Cômico / Sarcástico',
-        'Néons brilham sobre as ruas molhadas.',
-        'Uma hacker com jaqueta de couro e implantes cibernéticos.'
+    it('deve persistir via repository.save', async () => {
+      await factory.createNewGame(
+        'Cyberpunk', 'Cômico / Sarcástico', 'Néons brilham.', [playerAric, companionElara]
       );
 
       expect(mockRepo.save).toHaveBeenCalledTimes(1);
       const savedState = mockRepo.save.mock.calls[0]![0] as GameState;
       expect(savedState.narrativeStyle).toBe('Cyberpunk');
-      expect(savedState.writingStyle).toBe('Cômico / Sarcástico');
       expect(savedState.turnNumber).toBe(1);
     });
 
-    it('deve gerar ids sequenciais para os personagens', async () => {
-      const state = await engine.createNewGame(
-        'Fantasia',
-        'Épico',
-        'Um castelo.',
-        'Uma guarda real.'
+    it('deve atribuir ids sequenciais', async () => {
+      const state = await factory.createNewGame(
+        'Fantasia', 'Épico', 'Castelo.', [playerAric, companionElara]
       );
-
       expect(state.characters[0]!.id).toBe('1');
       expect(state.characters[1]!.id).toBe('2');
     });
+
+    it('deve aceitar N personagens no template', async () => {
+      const chars: CharacterTemplate[] = [
+        playerAric, companionElara,
+        { name: 'Marcus', description: 'Ladrão.', personality: 'Cínico.' },
+        { name: 'Luna', description: 'Maga.', personality: 'Misteriosa.' },
+        { name: 'Thorn', description: 'Bárbaro.', personality: 'Violento.' },
+      ];
+
+      const state = await factory.createNewGame('Fantasia', 'Épico', 'Castelo.', chars);
+
+      expect(state.characters).toHaveLength(5);
+      expect(state.characters[4]!.name).toBe('Thorn');
+      expect(state.characters[4]!.id).toBe('5');
+    });
   });
 
-  describe('start() - ciclo completo de jogo', () => {
-    it('deve criar um novo jogo quando não há save e incrementar turnNumber', async () => {
-      mockRepo.load.mockResolvedValue(null);
+  describe('setupNewGame – criação de personagem em cenário customizado', () => {
+    it('deve criar jogo apenas com o jogador (sem NPCs)', async () => {
       vi.mocked(mockInput.question)
-        .mockResolvedValueOnce('1')
-        .mockResolvedValueOnce('1')
-        .mockResolvedValueOnce('Examino a sala')
-        .mockResolvedValueOnce('n');
+        .mockResolvedValueOnce('1')       // gênero
+        .mockResolvedValueOnce('1')       // tom
+        .mockResolvedValueOnce('Aric')    // nome
+        .mockResolvedValueOnce('n');      // add NPC? → não
 
-      mockLlm.invoke
-        .mockResolvedValueOnce({ content: 'Uma taverna escura.' })
-        .mockResolvedValueOnce({ content: 'Uma elfa misteriosa.' })
-        .mockResolvedValueOnce({ content: 'Elara observa o ambiente.' })
-        .mockResolvedValueOnce({
-          content: 'Jogador examinou a sala -> Sucesso. Elara observou -> Sucesso.',
-        });
+      const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
+      const llmService = new LlmService(mockLlm as any);
+      const genContextSpy = vi.spyOn(llmService, 'generateInitialContext')
+        .mockResolvedValue('Floresta sombria.');
+      const genPlayerSpy = vi.spyOn(llmService, 'generatePlayerCharacter')
+        .mockResolvedValue(['Um aventureiro.', 'Determinado.']);
+      const localFactory = new SessionFactory(mockInput, mockOutput, mockRepo, llmService);
 
-      await engine.start();
+      const state = await localFactory.setupNewGame();
 
-      expect(mockRepo.save).toHaveBeenCalled();
-      const savedState = mockRepo.save.mock.calls.find(
-        (call) => (call[0] as GameState).turnNumber === 2
-      )?.[0] as GameState;
-      expect(savedState).toBeDefined();
-      expect(savedState.turnNumber).toBe(2);
-      expect(savedState.history.length).toBeGreaterThan(0);
+      expect(state.characters).toHaveLength(1);
+      expect(state.characters[0]!.name).toBe('Aric');
+      expect(state.characters[0]!.isPlayer).toBe(true);
+      expect(genContextSpy).toHaveBeenCalledOnce();
+      expect(genPlayerSpy).toHaveBeenCalledOnce();
     });
 
-    it('deve carregar save existente quando usuário opta por continuar', async () => {
-      const existingState: GameState = {
-        worldContext: 'Uma floresta sombria.',
-        narrativeStyle: 'Terror de Sobrevivência',
-        writingStyle: 'Terror Sombrio',
-        turnNumber: 3,
-        history: ['Turno 1: Entrada', 'Turno 2: Exploração'],
-        characters: [
-          { id: '1', name: 'Jogador', description: 'Herói', personality: 'Corajoso', isPlayer: true },
-          { id: '2', name: 'Elara', description: 'Elfa sombria', personality: 'Furtiva', isPlayer: false },
-        ],
-      };
-      mockRepo.load.mockResolvedValue(existingState);
+    it('deve adicionar NPC preenchendo dados manualmente', async () => {
       vi.mocked(mockInput.question)
-        .mockResolvedValueOnce('s')
-        .mockResolvedValueOnce('Continuo explorando')
-        .mockResolvedValueOnce('n');
+        .mockResolvedValueOnce('1')       // gênero
+        .mockResolvedValueOnce('1')       // tom
+        .mockResolvedValueOnce('Aric')    // nome
+        .mockResolvedValueOnce('s')       // add NPC
+        .mockResolvedValueOnce('Marcus')  // nome NPC
+        .mockResolvedValueOnce('s')       // manual
+        .mockResolvedValueOnce('Ex-soldado.')  // desc
+        .mockResolvedValueOnce('Cínico.')     // personalidade
+        .mockResolvedValueOnce('n');      // add NPC? → não
 
-      mockLlm.invoke
-        .mockResolvedValueOnce({ content: 'Elara segue em silêncio.' })
-        .mockResolvedValueOnce({
-          content: 'Jogador continuou explorando -> Sucesso. Elara seguiu -> Sucesso.',
-        });
+      const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
+      const llmService = new LlmService(mockLlm as any);
+      vi.spyOn(llmService, 'generateInitialContext').mockResolvedValue('Sala escura.');
+      vi.spyOn(llmService, 'generatePlayerCharacter').mockResolvedValue(['Herói.', 'Bravo.']);
+      const localFactory = new SessionFactory(mockInput, mockOutput, mockRepo, llmService);
 
-      await engine.start();
+      const state = await localFactory.setupNewGame();
 
-      expect(mockRepo.load).toHaveBeenCalled();
-      const savedState = mockRepo.save.mock.calls.find(
-        (call) => (call[0] as GameState).turnNumber === 4
-      )?.[0] as GameState;
-      expect(savedState).toBeDefined();
-      expect(savedState.turnNumber).toBe(4);
-      expect(savedState.narrativeStyle).toBe('Terror de Sobrevivência');
-      expect(savedState.writingStyle).toBe('Terror Sombrio');
+      expect(state.characters).toHaveLength(2);
+      expect(state.characters[1]!.name).toBe('Marcus');
+      expect(state.characters[1]!.description).toBe('Ex-soldado.');
+      expect(state.characters[1]!.personality).toBe('Cínico.');
     });
 
-    it('deve criar novo jogo quando usuário opta por não carregar save', async () => {
-      const existingState: GameState = {
-        worldContext: 'Ruínas antigas.',
-        narrativeStyle: 'Fantasia Medieval',
-        writingStyle: 'Épico / Poético',
-        turnNumber: 10,
-        history: ['Histórico antigo'],
-        characters: [
-          { id: '1', name: 'Jogador', description: 'Herói', personality: 'Corajoso', isPlayer: true },
-          { id: '2', name: 'Elara', description: 'Maga', personality: 'Sábia', isPlayer: false },
-        ],
-      };
-      mockRepo.load.mockResolvedValue(existingState);
+    it('deve adicionar NPC gerado por IA', async () => {
       vi.mocked(mockInput.question)
-        .mockResolvedValueOnce('n')
-        .mockResolvedValueOnce('1')
-        .mockResolvedValueOnce('2')
-        .mockResolvedValueOnce('Ação inicial')
-        .mockResolvedValueOnce('n');
+        .mockResolvedValueOnce('1')       // gênero
+        .mockResolvedValueOnce('1')       // tom
+        .mockResolvedValueOnce('Aric')    // nome
+        .mockResolvedValueOnce('s')       // add NPC
+        .mockResolvedValueOnce('Elara')   // nome NPC
+        .mockResolvedValueOnce('n')       // manual? → não
+        .mockResolvedValueOnce('n');      // add NPC? → não
 
-      mockLlm.invoke
-        .mockResolvedValueOnce({ content: 'Novo contexto gerado.' })
-        .mockResolvedValueOnce({ content: 'Nova descrição da Elara.' })
-        .mockResolvedValueOnce({ content: 'Elara age.' })
-        .mockResolvedValueOnce({ content: 'Sucesso.' });
+      const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
+      const llmService = new LlmService(mockLlm as any);
+      vi.spyOn(llmService, 'generateInitialContext').mockResolvedValue('Floresta.');
+      vi.spyOn(llmService, 'generatePlayerCharacter').mockResolvedValue(['Herói.', 'Bravo.']);
+      const genNpcSpy = vi.spyOn(llmService, 'generateCompanionDetails')
+        .mockResolvedValue(['Uma elfa arqueira.', 'Sábia.']);
+      const localFactory = new SessionFactory(mockInput, mockOutput, mockRepo, llmService);
 
-      await engine.start();
+      const state = await localFactory.setupNewGame();
 
-      expect(mockRepo.save).toHaveBeenCalled();
-      const savedState = mockRepo.save.mock.calls.find(
-        (call) => (call[0] as GameState).turnNumber === 2
-      )?.[0] as GameState;
-      expect(savedState).toBeDefined();
-      expect(savedState.narrativeStyle).toBe('Fantasia Medieval');
-      expect(savedState.turnNumber).toBe(2);
+      expect(state.characters).toHaveLength(2);
+      expect(state.characters[1]!.name).toBe('Elara');
+      expect(state.characters[1]!.description).toBe('Uma elfa arqueira.');
+      expect(state.characters[1]!.personality).toBe('Sábia.');
+      expect(genNpcSpy).toHaveBeenCalledOnce();
     });
 
-    it('deve limitar o histórico a 15 entradas', async () => {
-      const longHistory = Array.from({ length: 14 }, (_, i) => `Entrada ${i + 1}`);
-      const loadedState: GameState = {
-        worldContext: 'Teste.',
-        narrativeStyle: 'Fantasia',
-        writingStyle: 'Épico',
-        turnNumber: 1,
-        history: longHistory,
-        characters: [
-          { id: '1', name: 'Jogador', description: 'Herói', personality: 'Corajoso', isPlayer: true },
-          { id: '2', name: 'Elara', description: 'Elfa', personality: 'Furtiva', isPlayer: false },
-        ],
-      };
-      mockRepo.load.mockResolvedValue(loadedState);
+    it('deve adicionar múltiplos NPCs (manual + IA)', async () => {
       vi.mocked(mockInput.question)
-        .mockResolvedValueOnce('s')
-        .mockResolvedValueOnce('Ação de teste')
-        .mockResolvedValueOnce('n');
+        .mockResolvedValueOnce('1')       // gênero
+        .mockResolvedValueOnce('1')       // tom
+        .mockResolvedValueOnce('Aric')    // nome
+        .mockResolvedValueOnce('s')       // add NPC 1
+        .mockResolvedValueOnce('Marcus')  // nome NPC 1
+        .mockResolvedValueOnce('s')       // manual
+        .mockResolvedValueOnce('Ladrão.') // desc
+        .mockResolvedValueOnce('Ágil.')   // personalidade
+        .mockResolvedValueOnce('s')       // add NPC 2
+        .mockResolvedValueOnce('Luna')    // nome NPC 2
+        .mockResolvedValueOnce('n')       // manual? → não
+        .mockResolvedValueOnce('n');      // add NPC? → não
 
-      mockLlm.invoke
-        .mockResolvedValueOnce({ content: 'Elara age.' })
-        .mockResolvedValueOnce({ content: 'Sucesso.' });
+      const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
+      const llmService = new LlmService(mockLlm as any);
+      vi.spyOn(llmService, 'generateInitialContext').mockResolvedValue('Caverna.');
+      vi.spyOn(llmService, 'generatePlayerCharacter').mockResolvedValue(['Herói.', 'Bravo.']);
+      vi.spyOn(llmService, 'generateCompanionDetails')
+        .mockResolvedValue(['Maga dos bosques.', 'Misteriosa.']);
+      const localFactory = new SessionFactory(mockInput, mockOutput, mockRepo, llmService);
 
-      await engine.start();
+      const state = await localFactory.setupNewGame();
 
-      const savedState = mockRepo.save.mock.calls.find(
-        (call) => (call[0] as GameState).turnNumber === 2
-      )?.[0] as GameState;
-      expect(savedState).toBeDefined();
-      expect(savedState.history.length).toBeLessThanOrEqual(15);
+      expect(state.characters).toHaveLength(3);
+      expect(state.characters[1]!.name).toBe('Marcus');
+      expect(state.characters[2]!.name).toBe('Luna');
     });
+  });
+});
+
+// ── GameEngine ──
+
+describe('GameEngine', () => {
+  let mockInput: IUserInput;
+  let mockOutput: IOutputWriter;
+  let mockRepo: IStateRepository;
+  let mockLlmService: LlmService;
+  let mockSessionFactory: SessionFactory;
+  let engine: GameEngine;
+
+  const existingState: GameState = {
+    worldContext: 'Uma floresta sombria.',
+    narrativeStyle: 'Terror de Sobrevivência',
+    writingStyle: 'Terror Sombrio',
+    turnNumber: 3,
+    history: ['Turno 1: Entrada', 'Turno 2: Exploração'],
+    characters: [
+      { id: '1', name: 'Aric', description: 'Herói', personality: 'Corajoso', isPlayer: true },
+      { id: '2', name: 'Elara', description: 'Elfa sombria', personality: 'Furtiva', isPlayer: false },
+    ],
+  };
+
+  beforeEach(() => {
+    mockInput = { question: vi.fn().mockResolvedValue(''), close: vi.fn() };
+    mockOutput = { write: vi.fn(), writeLine: vi.fn(), clear: vi.fn() };
+    mockRepo = { load: vi.fn(), save: vi.fn() };
+
+    const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
+    mockLlmService = new LlmService(mockLlm as any);
+
+    mockSessionFactory = new SessionFactory(mockInput, mockOutput, mockRepo, mockLlmService);
+    engine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockSessionFactory);
+  });
+
+  it('deve carregar save e executar um turno', async () => {
+    mockRepo.load.mockResolvedValue(existingState);
+    vi.mocked(mockInput.question)
+      .mockResolvedValueOnce('s')        // carregar save
+      .mockResolvedValueOnce('Explorar a caverna')  // ação do jogador
+      .mockResolvedValueOnce('n');       // continuar? → não
+
+    vi.spyOn(mockLlmService, 'decideCpuAction').mockResolvedValue('Elara segue em silêncio.');
+    vi.spyOn(mockLlmService, 'arbitrateLogic')
+      .mockResolvedValue('Aric explorou -> Sucesso. Elara seguiu -> Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Aric avança corajosamente...');
+
+    await engine.start();
+
+    const savedState = mockRepo.save.mock.calls.find(
+      (call) => (call[0] as GameState).turnNumber === 4
+    )?.[0] as GameState;
+    expect(savedState).toBeDefined();
+    expect(savedState.turnNumber).toBe(4);
+  });
+
+  it('deve limitar o histórico a 15 entradas', async () => {
+    const longHistory = Array.from({ length: 14 }, (_, i) => `Entrada ${i + 1}`);
+    const loadedState: GameState = { ...existingState, turnNumber: 1, history: longHistory };
+    mockRepo.load.mockResolvedValue(loadedState);
+
+    vi.mocked(mockInput.question)
+      .mockResolvedValueOnce('s')
+      .mockResolvedValueOnce('Ação de teste')
+      .mockResolvedValueOnce('n');
+
+    vi.spyOn(mockLlmService, 'decideCpuAction').mockResolvedValue('Elara age.');
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
+
+    await engine.start();
+
+    const savedState = mockRepo.save.mock.calls.find(
+      (call) => (call[0] as GameState).turnNumber === 2
+    )?.[0] as GameState;
+    expect(savedState).toBeDefined();
+    expect(savedState.history.length).toBeLessThanOrEqual(15);
+  });
+
+  it('deve criar novo jogo quando não há save', async () => {
+    mockRepo.load.mockResolvedValue(null);
+    vi.mocked(mockInput.question)
+      .mockResolvedValueOnce('1')       // gênero
+      .mockResolvedValueOnce('1')       // tom
+      .mockResolvedValueOnce('Aric')    // nome
+      .mockResolvedValueOnce('n')       // add NPC? → não
+      .mockResolvedValueOnce('Abrir a porta')  // ação
+      .mockResolvedValueOnce('n');      // continuar? → não
+
+    vi.spyOn(mockLlmService, 'generateInitialContext').mockResolvedValue('Floresta.');
+    vi.spyOn(mockLlmService, 'generatePlayerCharacter').mockResolvedValue(['Guerreiro.', 'Bravo.']);
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Porta range...');
+
+    await engine.start();
+
+    expect(mockRepo.save).toHaveBeenCalled();
+    const savedState = mockRepo.save.mock.calls.find(
+      (call) => (call[0] as GameState).turnNumber === 2
+    )?.[0] as GameState;
+    expect(savedState).toBeDefined();
+    expect(savedState.characters).toHaveLength(1);
+    expect(savedState.characters[0]!.name).toBe('Aric');
   });
 });
