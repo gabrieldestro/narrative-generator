@@ -16,15 +16,25 @@ Motor narrativo de RPG multi-agentes (Narrador, Árbitro, NPCs) em Node.js + Typ
 
 ```
 src/
-├── domain/          # Entidades e interfaces (Ports)
-│   ├── types.ts     # GameState, Character
-│   └── ports.ts     # IUserInput, IOutputWriter
-├── application/     # Casos de uso (GameEngine)
-├── infrastructure/  # Adaptadores concretos (Adapters)
-│   ├── ConsoleInput.ts     # readline/promises
-│   ├── ConsoleOutput.ts    # process.stdout, console.log
-│   └── JsonStateRepository.ts
-└── index.ts         # Composition Root (DI)
+├── domain/                   # Entidades e interfaces (Ports)
+│   ├── types.ts              # WorldConfig, WorldTemplate, GameState, Character
+│   ├── ports.ts              # IUserInput, IOutputWriter
+│   └── (__tests__/)
+├── application/              # Casos de uso (GameEngine)
+│   ├── GameEngine.ts
+│   ├── prompts.ts
+│   └── __tests__/
+│       ├── GameEngine.test.ts
+│       └── LlmIntegration.integration.test.ts
+├── infrastructure/           # Adaptadores concretos (Adapters)
+│   ├── ConsoleInput.ts
+│   ├── ConsoleOutput.ts
+│   ├── JsonStateRepository.ts
+│   ├── WorldTemplateRepository.ts
+│   └── __tests__/
+│       ├── JsonStateRepository.test.ts
+│       └── WorldTemplateRepository.test.ts
+└── index.ts                  # Composition Root (DI)
 ```
 
 **Paralelo C#:** Essa estrutura é idêntica a um projeto .NET com pastas `Domain/`, `Application/`, `Infrastructure/`. O `index.ts` faz o papel do **Composition Root** (equivalente ao `Program.cs` que registra serviços no DI container).
@@ -39,7 +49,8 @@ constructor(
   private readonly input: IUserInput,
   private readonly output: IOutputWriter,
   private readonly repository: IStateRepository,
-  private readonly llm: ChatOpenAI
+  private readonly llm: ChatOpenAI,
+  private readonly worldTemplateRepo?: WorldTemplateRepository  // opcional
 ) {}
 ```
 
@@ -67,9 +78,9 @@ npm run test:integration  # LLM real (requer LM Studio rodando, ~2min)
 
 ### O que cobre
 
-- **Unitários (7 testes):** `GameEngine.test.ts` — mocks de `IUserInput`, `IOutputWriter`, `IStateRepository` e `ChatOpenAI`. Nenhum `vi.mock()` de módulo do Node, apenas objetos planos.
-- **Repositório (4 testes):** `JsonStateRepository.test.ts` — arquivo real no disco, sem mocks.
-- **LLM-as-a-Judge (3 testes):** `LlmIntegration.integration.test.ts` — chamadas reais ao LM Studio validando aderência aos estilos narrativos via juiz IA. Excluído do `npm test` padrão (config separada).
+- **Unitários (7 testes):** `application/__tests__/GameEngine.test.ts` — mocks de `IUserInput`, `IOutputWriter`, `IStateRepository` e `ChatOpenAI`. Nenhum `vi.mock()` de módulo do Node, apenas objetos planos.
+- **Infraestrutura (12 testes):** `infrastructure/__tests__/JsonStateRepository.test.ts` (4 — arquivo real) + `WorldTemplateRepository.test.ts` (8 — templates `worlds/`).
+- **LLM-as-a-Judge (3 cenários):** `application/__tests__/LlmIntegration.integration.test.ts` — pipeline NPC→Árbitro→Narrador com chamadas reais ao LM Studio. Excluído do `npm test` padrão (config separada `vitest.integration.config.ts`).
 
 **Paralelo C#:** Os mocks com `vi.fn()` são o equivalente a `Mock<IUserInput>.Setup(x => x.Question(...)).ReturnsAsync(...)` do Moq. A diferença é que no Vitest os mocks são objetos literais, sem necessidade de uma biblioteca separada como Moq/NSubstitute — o próprio test runner já fornece `vi.fn()`.
 

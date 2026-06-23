@@ -1,8 +1,9 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
-import { GameState, Character } from "../domain/types.js";
+import { GameState, Character, WorldTemplate } from "../domain/types.js";
 import type { IUserInput, IOutputWriter } from "../domain/ports.js";
 import { IStateRepository } from "../infrastructure/JsonStateRepository.js";
+import { WorldTemplateRepository } from "../infrastructure/WorldTemplateRepository.js";
 import {
   cpuActionSystemPrompt,
   cpuActionHumanPrompt,
@@ -21,7 +22,8 @@ export class GameEngine {
     private readonly input: IUserInput,
     private readonly output: IOutputWriter,
     private readonly repository: IStateRepository,
-    private readonly llm: ChatOpenAI
+    private readonly llm: ChatOpenAI,
+    private readonly worldTemplateRepo?: WorldTemplateRepository
   ) {}
 
   public async start() {
@@ -89,6 +91,55 @@ export class GameEngine {
   }
 
   private async setupNewGame(): Promise<GameState> {
+    const templates: WorldTemplate[] = this.worldTemplateRepo
+      ? await this.worldTemplateRepo.listAll()
+      : [];
+
+    if (templates.length > 0) {
+      this.output.writeLine("\nComo você quer iniciar a aventura?");
+      this.output.writeLine("1. Escolher um mundo pré-configurado");
+      this.output.writeLine("2. Criar um cenário personalizado via IA");
+
+      const mode = await this.input.question("\nEscolha (1-2): ");
+      if (mode === '1') {
+        return this.selectPreconfiguredWorld(templates);
+      }
+    }
+
+    return this.createCustomScenario();
+  }
+
+  private async selectPreconfiguredWorld(templates: WorldTemplate[]): Promise<GameState> {
+    this.output.writeLine("\n--- Mundos Pré-Configurados ---");
+    for (let i = 0; i < templates.length; i++) {
+      const t = templates[i]!;
+      this.output.writeLine(`${i + 1}. ${t.name}`);
+      this.output.writeLine(`   ${t.description}`);
+    }
+
+    const choice = await this.input.question(`\nEscolha um mundo (1-${templates.length}): `);
+    const index = parseInt(choice, 10) - 1;
+    const selected = templates[index];
+
+    if (!selected) {
+      this.output.writeLine("Opção inválida. Usando configuração personalizada.");
+      return this.createCustomScenario();
+    }
+
+    this.output.writeLine(`\nMundo selecionado: ${selected.name}`);
+    const state = await this.createNewGame(
+      selected.narrativeStyle,
+      selected.writingStyle,
+      selected.worldContext,
+      selected.companionDescription
+    );
+    this.output.writeLine(`\n==================================================`);
+    this.output.writeLine(`Contexto Inicial: ${state.worldContext}`);
+    this.output.writeLine(`==================================================\n`);
+    return state;
+  }
+
+  private async createCustomScenario(): Promise<GameState> {
     this.output.writeLine("\nEscolha o gênero/estilo narrativo da história:");
     this.output.writeLine("1. Fantasia Medieval");
     this.output.writeLine("2. Terror de Sobrevivência (Suspense/Monstros)");

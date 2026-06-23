@@ -9,11 +9,22 @@ export interface Character {
   isPlayer: boolean;   // Se true, aguarda input do console. Se false, a IA decide a ação.
 }
 
-// Representa o Estado global do nosso jogo em um dado momento
-export interface GameState {
-  worldContext: string;
+// Configuração base do mundo — compartilhada entre template inicial e estado em jogo
+export interface WorldConfig {
   narrativeStyle: string; // O gênero da história (Fantasia Medieval, Cyberpunk, etc.)
   writingStyle: string;   // O tom/estilo de escrita (Terror Sombrio, Cômico/Sarcástico, Épico, etc.)
+  worldContext: string;   // A descrição do cenário/mundo atual
+}
+
+// Representa um template de mundo pré-configurado carregado da pasta /worlds/
+export interface WorldTemplate extends WorldConfig {
+  name: string;
+  description: string;
+  companionDescription: string;
+}
+
+// Representa o Estado global do nosso jogo em um dado momento
+export interface GameState extends WorldConfig {
   characters: Character[];
   history: string[];      // O histórico das últimas interações narrativas para dar contexto ao LLM
   turnNumber: number;

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GameEngine } from '../application/GameEngine.js';
-import type { GameState } from '../domain/types.js';
-import type { IUserInput, IOutputWriter } from '../domain/ports.js';
+import { GameEngine } from '../GameEngine.js';
+import type { GameState } from '../../domain/types.js';
+import type { IUserInput, IOutputWriter } from '../../domain/ports.js';
 
 describe('GameEngine', () => {
   let engine: GameEngine;

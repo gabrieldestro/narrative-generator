@@ -3,6 +3,7 @@ node_modules/
 savegame.json
 docs/
 dist/
+worlds/
 coverage/
 test-output/
 *.log

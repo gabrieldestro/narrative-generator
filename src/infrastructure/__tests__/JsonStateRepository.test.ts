@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JsonStateRepository } from '../infrastructure/JsonStateRepository.js';
-import type { GameState } from '../domain/types.js';
+import { JsonStateRepository } from '../JsonStateRepository.js';
+import type { GameState } from '../../domain/types.js';
 
 describe('JsonStateRepository', () => {
   const testFilePath = `savegame-test-${Date.now()}.json`;
