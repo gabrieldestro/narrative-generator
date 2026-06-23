@@ -17,7 +17,13 @@ Estas regras definem o contexto, o comportamento esperado e as preferências do 
 *   **Arquitetura:** Adota-se fortemente a **Clean Architecture** e o uso de **Dependency Injection** (Repository Pattern, separação de Domain, Application e Infrastructure).
 *   **IA:** A comunicação com o LLM é feita via ecossistema LangChain (`@langchain/openai`, `@langchain/core`). 
 
-## 3. Preferências de Comunicação e Aprendizado
+## 3. Convenções de Código
+
+*   **Idioma do código:** Toda a escrita **técnica** deve ser em **inglês**: nomes de variáveis, funções, classes, métodos, parâmetros, tipos, arquivos, comentários técnicos, mensagens de commit, nomes de teste (`it('should ...')`).
+*   **Idioma da UI:** Apenas **strings exibidas ao usuário** devem estar em **português** (mensagens no console, prompts de input, labels de interface).
+*   **Exemplo:** O método `getUltimaNarrativa` deve ser renomeado para `getLastNarrative`; a variável `ultimaNarrativa` para `lastNarrative`; o texto `"Save anterior encontrado!"` permanece em português por ser UI.
+
+## 4. Preferências de Comunicação e Aprendizado
 *   **Background do Usuário:** O usuário possui forte conhecimento e vivência em **C# / .NET**, mas está focado em aprender o ecossistema moderno do **Node.js**.
 *   **Explicações:** Ao introduzir um conceito novo no Node/TypeScript, sempre faça paralelos com ferramentas, comportamentos ou arquiteturas do ecossistema C# (ex: `package.json` vs `.csproj`, `import` vs `using`, Injeção de Dependências, etc).
 *   **Documentação:** O usuário valoriza a criação de documentações claras na pasta `docs/` para consolidar o aprendizado das ferramentas e configurações aplicadas a cada evolução da arquitetura.

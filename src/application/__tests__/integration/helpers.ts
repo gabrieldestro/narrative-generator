@@ -1,3 +1,4 @@
+import { describe } from 'vitest';
 import { ChatOpenAI } from '@langchain/openai';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import * as fs from 'fs/promises';
@@ -49,4 +50,6 @@ export async function saveOutput(scenario: string, phase: string, content: strin
 }
 
 export const pularTestes = process.env.SKIP_LMSTUDIO_CHECK === '1';
-export const describeIf = pularTestes ? describe.skip : describe;
+export const describeIf = pularTestes
+  ? (name: string, fn: () => void) => describe.skip(name, fn)
+  : describe;

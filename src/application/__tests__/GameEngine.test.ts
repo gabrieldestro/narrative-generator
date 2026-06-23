@@ -67,7 +67,7 @@ describe('SessionFactory', () => {
       );
 
       expect(mockRepo.save).toHaveBeenCalledTimes(1);
-      const savedState = mockRepo.save.mock.calls[0]![0] as GameState;
+      const savedState = vi.mocked(mockRepo.save).mock.calls[0]![0] as GameState;
       expect(savedState.narrativeStyle).toBe('Cyberpunk');
       expect(savedState.turnNumber).toBe(1);
     });
@@ -241,9 +241,10 @@ describe('GameEngine', () => {
   });
 
   it('deve carregar save e executar um turno', async () => {
-    mockRepo.load.mockResolvedValue(existingState);
+    vi.mocked(mockRepo.load).mockResolvedValue(existingState);
     vi.mocked(mockInput.question)
       .mockResolvedValueOnce('s')        // carregar save
+      .mockResolvedValueOnce('')         // Enter para continuar
       .mockResolvedValueOnce('Explorar a caverna')  // ação do jogador
       .mockResolvedValueOnce('n');       // continuar? → não
 
@@ -254,7 +255,7 @@ describe('GameEngine', () => {
 
     await engine.start();
 
-    const savedState = mockRepo.save.mock.calls.find(
+    const savedState = vi.mocked(mockRepo.save).mock.calls.find(
       (call) => (call[0] as GameState).turnNumber === 4
     )?.[0] as GameState;
     expect(savedState).toBeDefined();
@@ -264,10 +265,11 @@ describe('GameEngine', () => {
   it('deve limitar o histórico a 15 entradas', async () => {
     const longHistory = Array.from({ length: 14 }, (_, i) => `Entrada ${i + 1}`);
     const loadedState: GameState = { ...existingState, turnNumber: 1, history: longHistory };
-    mockRepo.load.mockResolvedValue(loadedState);
+    vi.mocked(mockRepo.load).mockResolvedValue(loadedState);
 
     vi.mocked(mockInput.question)
       .mockResolvedValueOnce('s')
+      .mockResolvedValueOnce('')         // Enter para continuar
       .mockResolvedValueOnce('Ação de teste')
       .mockResolvedValueOnce('n');
 
@@ -277,7 +279,7 @@ describe('GameEngine', () => {
 
     await engine.start();
 
-    const savedState = mockRepo.save.mock.calls.find(
+    const savedState = vi.mocked(mockRepo.save).mock.calls.find(
       (call) => (call[0] as GameState).turnNumber === 2
     )?.[0] as GameState;
     expect(savedState).toBeDefined();
@@ -285,7 +287,7 @@ describe('GameEngine', () => {
   });
 
   it('deve criar novo jogo quando não há save', async () => {
-    mockRepo.load.mockResolvedValue(null);
+    vi.mocked(mockRepo.load).mockResolvedValue(null);
     vi.mocked(mockInput.question)
       .mockResolvedValueOnce('1')       // gênero
       .mockResolvedValueOnce('1')       // tom
@@ -296,13 +298,14 @@ describe('GameEngine', () => {
 
     vi.spyOn(mockLlmService, 'generateInitialContext').mockResolvedValue('Floresta.');
     vi.spyOn(mockLlmService, 'generatePlayerCharacter').mockResolvedValue(['Guerreiro.', 'Bravo.']);
+    vi.spyOn(mockLlmService, 'generateInitialNarrative').mockResolvedValue('A névoa se dissipa...');
     vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Porta range...');
 
     await engine.start();
 
     expect(mockRepo.save).toHaveBeenCalled();
-    const savedState = mockRepo.save.mock.calls.find(
+    const savedState = vi.mocked(mockRepo.save).mock.calls.find(
       (call) => (call[0] as GameState).turnNumber === 2
     )?.[0] as GameState;
     expect(savedState).toBeDefined();

@@ -16,18 +16,37 @@ export class GameEngine {
   public async start() {
     this.output.clear();
     this.output.writeLine("=== INICIANDO MOTOR NARRATIVO ===");
-    let state = await this.repository.load();
+    let state: GameState;
+    let isNewGame = false;
 
-    if (state) {
-      const carregar = await this.input.question("Save anterior encontrado! Deseja continuar de onde parou? (s/n): ");
-      if (carregar.toLowerCase() === 's') {
+    const loadedState = await this.repository.load();
+    if (loadedState) {
+      const shouldLoad = await this.input.question("Save anterior encontrado! Deseja continuar de onde parou? (s/n): ");
+      if (shouldLoad.toLowerCase() === 's') {
+        state = loadedState;
         this.output.writeLine(`\nJogo carregado! Gênero: ${state.narrativeStyle} | Estilo de Escrita: ${state.writingStyle} | Turno atual: ${state.turnNumber}`);
-        this.output.writeLine(`Contexto Atual: ${state.worldContext}\n`);
+        this.output.writeLine(`Contexto Atual: ${state.worldContext}`);
+        const lastNarrative = this.getLastNarrative(state.history);
+        this.output.writeLine(`\n--- Último Prompt ---\n${lastNarrative}`);
+        this.output.writeLine("\n--- Pressione Enter para continuar ---");
+        await this.input.question("");
       } else {
         state = await this.sessionFactory!.setupNewGame();
+        isNewGame = true;
       }
     } else {
       state = await this.sessionFactory!.setupNewGame();
+      isNewGame = true;
+    }
+
+    if (isNewGame) {
+      this.output.writeLine("\n[Gerando narrativa inicial...]\n");
+      const initialNarrative = await this.llmService.generateInitialNarrative(state);
+      state.history.push(`Narrativa Inicial: ${initialNarrative}`);
+      await this.repository.save(state);
+      this.output.writeLine("==================================================");
+      this.output.writeLine(initialNarrative);
+      this.output.writeLine("==================================================\n");
     }
 
     while (true) {
@@ -75,5 +94,15 @@ export class GameEngine {
     }
 
     this.input.close();
+  }
+
+  private getLastNarrative(history: string[]): string {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const linha = history[i]!;
+      if (linha.startsWith("Narrativa Inicial:") || linha.startsWith("Narrativa:")) {
+        return linha.replace(/^(Narrativa Inicial: |Narrativa: )/, "");
+      }
+    }
+    return "(Nenhuma narrativa encontrada no histórico)";
   }
 }

@@ -73,6 +73,29 @@ export function narratorHumanPrompt(state: GameState, actions: string[], logical
   ].join('\n');
 }
 
+// ── Agent 4: Initial Narrative (generateInitialNarrative) ──
+
+export function initialNarrativeSystemPrompt(state: GameState): string {
+  return [
+    `Você é o Narrador Literário de abertura de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
+    `Sua função é escrever a cena de abertura — envolvente, descritiva e dramática — seguindo estritamente a atmosfera, tom e clichês do gênero ${state.narrativeStyle} sob o estilo de escrita ${state.writingStyle}.`,
+    `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições.`,
+    `Apresente o cenário e os personagens, mas não tome decisões por eles.`,
+    'Não use mais que 500 tokens.',
+  ].join('\n');
+}
+
+export function initialNarrativeHumanPrompt(state: GameState): string {
+  return [
+    `Cenário: ${state.worldContext}`,
+    '',
+    'Personagens:',
+    ...state.characters.map(c => `${c.name} — ${c.description}. Personalidade: ${c.personality}`),
+    '',
+    'Escreva a cena de abertura em português, apresentando o local e os personagens, preparando o palco para as primeiras ações dos heróis:',
+  ].join('\n');
+}
+
 // ── New Game Setup (generateInitialContext / generateCompanionDescription) ──
 
 export function initialContextSystemPrompt(writingStyle: string): string {

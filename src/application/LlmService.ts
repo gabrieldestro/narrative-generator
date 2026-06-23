@@ -15,7 +15,12 @@ import {
   playerCharacterHumanPrompt,
   companionDescriptionSystemPrompt,
   companionDescriptionHumanPrompt,
+  initialNarrativeSystemPrompt,
+  initialNarrativeHumanPrompt,
 } from "./prompts.js";
+
+export const MAX_NARRATION_TOKENS = 500;
+export const MAX_INITIAL_NARRATION_TOKENS = 1000;
 
 export class LlmService {
   constructor(private readonly llm: ChatOpenAI) {}
@@ -65,6 +70,15 @@ export class LlmService {
     return response.content as string;
   }
 
+  async generateInitialNarrative(state: GameState): Promise<string> {
+    const messages = [
+      new SystemMessage(initialNarrativeSystemPrompt(state)),
+      new HumanMessage(initialNarrativeHumanPrompt(state)),
+    ];
+    const response = await this.llm.invoke(messages, { maxTokens: MAX_INITIAL_NARRATION_TOKENS } as any);
+    return response.content as string;
+  }
+
   async narrateFiction(state: GameState, actions: string[], logicalResolution: string, output?: IOutputWriter): Promise<string> {
     const messages = [
       new SystemMessage(narratorSystemPrompt(state)),
@@ -72,7 +86,7 @@ export class LlmService {
     ];
 
     let fullResponse = "";
-    const stream = await this.llm.stream(messages);
+    const stream = await this.llm.stream(messages, { maxTokens: MAX_NARRATION_TOKENS } as any);
 
     for await (const chunk of stream) {
       const text = chunk.content as string;
