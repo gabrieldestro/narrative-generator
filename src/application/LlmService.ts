@@ -83,9 +83,15 @@ export class LlmService {
     return response.content as string;
   }
 
-  async narrateFiction(state: GameState, actions: string[], logicalResolution: string, output?: IOutputWriter): Promise<string> {
+  async narrateFiction(
+    state: GameState,
+    actions: string[],
+    logicalResolution: string,
+    output?: IOutputWriter,
+    unexpectedEventTriggered?: boolean
+  ): Promise<string> {
     const messages = [
-      new SystemMessage(narratorSystemPrompt(state)),
+      new SystemMessage(narratorSystemPrompt(state, unexpectedEventTriggered)),
       new HumanMessage(narratorHumanPrompt(state, actions, logicalResolution)),
     ];
 

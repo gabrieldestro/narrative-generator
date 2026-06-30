@@ -4,6 +4,9 @@ import type { IStateRepository } from "../infrastructure/JsonStateRepository.js"
 import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
 
+/** Probabilidade (0 a 1) de um evento inesperado ocorrer a cada turno ("sal e pimenta"). */
+export const UNEXPECTED_EVENT_CHANCE = 0.15;
+
 export class GameEngine {
   constructor(
     private readonly input: IUserInput,
@@ -11,7 +14,8 @@ export class GameEngine {
     private readonly repository: IStateRepository,
     private readonly llmService: LlmService,
     private readonly sessionFactory?: SessionFactory,
-    private readonly memoryWindowSize: number = 10
+    private readonly memoryWindowSize: number = 10,
+    private readonly debug: boolean = false
   ) {}
 
   public async start() {
@@ -55,15 +59,25 @@ export class GameEngine {
       const actions: string[] = [];
 
       for (const char of state.characters) {
+        let action = "";
         if (char.isPlayer) {
-          const action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
-          actions.push(`${char.name} tenta: ${action}`);
+          action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
         } else {
           this.output.write(`[CPU - ${char.name}] está pensando...`);
-          const cpuAction = await this.llmService.decideCpuAction(state, char);
-          this.output.write(`\r[CPU - ${char.name}] tenta: ${cpuAction} \n`);
-          actions.push(`${char.name} tenta: ${cpuAction}`);
+          action = await this.llmService.decideCpuAction(state, char);
+          this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
         }
+
+        // Rola d20
+        const roll = Math.floor(Math.random() * 20) + 1;
+        this.output.writeLine(`\x1b[93m[Dado 🎲] ${char.name} rolou: ${roll}\x1b[0m`);
+        actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
+      }
+
+      // 15% de chance de evento inesperado ("sal e pimenta")
+      const unexpectedEvent = Math.random() < UNEXPECTED_EVENT_CHANCE;
+      if (unexpectedEvent && this.debug) {
+        this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
       }
 
       this.output.writeLine("\n[Árbitro] Calculando as consequências...");
@@ -72,7 +86,7 @@ export class GameEngine {
 
       this.output.writeLine("\n[Narrador] Escrevendo a cena...");
       this.output.writeLine("--------------------------------------------------");
-      const outcome = await this.llmService.narrateFiction(state, actions, logicalResolution, this.output);
+      const outcome = await this.llmService.narrateFiction(state, actions, logicalResolution, this.output, unexpectedEvent);
       this.output.writeLine("\n--------------------------------------------------");
 
       state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);

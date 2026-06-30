@@ -40,22 +40,25 @@ export function arbiterHumanPrompt(state: GameState, actions: string[]): string 
     'Ações intentadas neste turno:',
     actions.join('\n'),
     '',
-    'Instruções:',
-    'Avalie APENAS se o CORPO do personagem é capaz de executar fisicamente a ação.',
-    'NÃO avalie contexto, adequação, bom senso, consequências sociais, lógica do mundo, anacronismo, ou adequação ao cenário.',
-    'NÃO use o gênero da história, o estilo de escrita ou o tom para negar ou aprovar ações.',
-    'O tema, o estilo e a adequação ao cenário NÃO importam — apenas a capacidade física importa.',
-    'Exemplo: "Personagem tenta: Contar uma piada." -> O corpo do personagem é capaz de falar? Sim -> Sucesso.',
-    'Exemplo: "Personagem tenta: Voar batendo os braços." -> O corpo do personagem é capaz de voar? Não -> Falha.',
-    'Se uma pessoa comum poderia fazer aquela ação com o próprio corpo, é Sucesso.',
+    'Instruções — avalie cada ação NESTA ORDEM DE PRIORIDADE:',
+    '',
+    'REGRA 1 — VERIFICAÇÃO FÍSICA ABSOLUTA (prioridade máxima, ignora o dado):',
+    '   Se a ação é fisicamente IMPOSSÍVEL para qualquer ser humano comum (ex: voar batendo os braços, respirar no vácuo sem equipamento), a ação SEMPRE FALHA, independentemente do resultado do dado d20.',
+    '',
+    'REGRA 2 — INFLUÊNCIA DO DADO d20 (aplicar somente se passou na Regra 1):',
+    '   - d20 entre 1 e 5: Azar, distração ou fraqueza momentânea. A ação DEVE FALHAR de forma desajeitada (d20=1 é falha crítica dramática).',
+    '   - d20 entre 15 e 20: Sorte ou esforço excepcional. A ação DEVE TER SUCESSO de forma notável (d20=20 é sucesso crítico perfeito).',
+    '   - d20 entre 6 e 14: Performance física normal. Ações que qualquer pessoa comum faz com o próprio corpo (falar, rir, assobiar, caminhar, pegar objetos, abrir portas) são SUCESSO. Falha apenas se exigir habilidade especial que o personagem nitidamente não possui.',
+    '',
+    'NÃO use o gênero da história ou o estilo de escrita para negar ou aprovar ações.',
     'Responda de forma CRUA e DIRETA, sem literatura.',
-    'Para cada ação diga: [Personagem] tentou [Ação] -> [Sucesso/Falha] porque [Motivo].',
+    'Para cada ação diga: [Personagem] tentou [Ação] -> [Sucesso/Falha] porque [Motivo físico baseado na regra aplicada e no dado d20].',
   ].join('\n');
 }
 
 // ── Agent 3: Narrator (narrateFiction) ──
 
-export function narratorSystemPrompt(state: GameState): string {
+export function narratorSystemPrompt(state: GameState, unexpectedEventTriggered?: boolean): string {
   const promptParts = [
     `Você é o Narrador Literário de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
     `Sua função é transformar as mecânicas frias decididas pelo 'Árbitro' em uma prosa envolvente, descritiva e dramática seguindo estritamente a atmosfera, tom e clichês do gênero ${state.narrativeStyle} sob o estilo de escrita ${state.writingStyle}.`,
@@ -68,6 +71,11 @@ export function narratorSystemPrompt(state: GameState): string {
     `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições (por exemplo, se for cômico/sarcástico, use ironia; se for terror sombrio, use descrições macabras e assustadoras; se for épico, use linguagem nobre e poética).`,
     'Não tome decisões pelos personagens, narre as consequências finais deste turno.'
   );
+  if (unexpectedEventTriggered) {
+    promptParts.push(
+      'REGRA DE INTERVENÇÃO DO DESTINO (SAL E PIMENTA): Um acontecimento totalmente inesperado, fora do ordinário ou uma complicação surpresa DEVE acontecer nesta cena, alterando as circunstâncias de forma surpreendente (ex: a chegada repentina de outro personagem/criatura, um fator ambiental súbito, falha repentina de equipamento, um barulho assustador inexplicável, um achado surpresa, etc.). Introduza este evento de surpresa na narrativa de forma integrada e coerente com o tom.'
+    );
+  }
   return promptParts.join('\n');
 }
 
