@@ -10,7 +10,8 @@ export class GameEngine {
     private readonly output: IOutputWriter,
     private readonly repository: IStateRepository,
     private readonly llmService: LlmService,
-    private readonly sessionFactory?: SessionFactory
+    private readonly sessionFactory?: SessionFactory,
+    private readonly memoryWindowSize: number = 10
   ) {}
 
   public async start() {
@@ -74,14 +75,18 @@ export class GameEngine {
       const outcome = await this.llmService.narrateFiction(state, actions, logicalResolution, this.output);
       this.output.writeLine("\n--------------------------------------------------");
 
-      state.history.push(`Turno ${state.turnNumber}:`);
-      state.history.push(`Ações: ${actions.join(" | ")}`);
-      state.history.push(`Resultado Mecânico: ${logicalResolution}`);
-      state.history.push(`Narrativa: ${outcome}`);
+      state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
 
-      if (state.history.length > 15) {
-        state.history = state.history.slice(state.history.length - 15);
+      if (state.history.length > this.memoryWindowSize) {
+        this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
+        const excessCount = state.history.length - this.memoryWindowSize;
+        const oldestTurns = state.history.slice(0, excessCount);
+        state.longTermSummary = await this.llmService.summarizeMemory(state.longTermSummary, oldestTurns);
+        state.history = state.history.slice(excessCount);
       }
+
+      this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
+      state.worldContext = await this.llmService.updateWorldContext(state.worldContext, outcome);
 
       state.turnNumber++;
       await this.repository.save(state);
@@ -98,9 +103,12 @@ export class GameEngine {
 
   private getLastNarrative(history: string[]): string {
     for (let i = history.length - 1; i >= 0; i--) {
-      const linha = history[i]!;
-      if (linha.startsWith("Narrativa Inicial:") || linha.startsWith("Narrativa:")) {
-        return linha.replace(/^(Narrativa Inicial: |Narrativa: )/, "");
+      const entry = history[i]!;
+      if (entry.includes("Narrativa Inicial:")) {
+        return entry.substring(entry.indexOf("Narrativa Inicial:") + "Narrativa Inicial:".length).trim();
+      }
+      if (entry.includes("Narrativa:")) {
+        return entry.substring(entry.indexOf("Narrativa:") + "Narrativa:".length).trim();
       }
     }
     return "(Nenhuma narrativa encontrada no histórico)";

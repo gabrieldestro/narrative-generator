@@ -36,4 +36,5 @@ export interface GameState extends WorldConfig {
   characters: Character[];
   history: string[];      // O histórico das últimas interações narrativas para dar contexto ao LLM
   turnNumber: number;
+  longTermSummary?: string; // Memória de longo prazo sumarizada (opcional)
 }

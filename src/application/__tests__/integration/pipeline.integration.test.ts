@@ -42,7 +42,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     );
     await saveOutput('cyberpunk', '3-narrator', narratorResponse);
     expect(narratorResponse.length).toBeGreaterThan(50);
-  }, 60000);
+  }, 180000);
 
   it('deve executar o pipeline NPC → Árbitro → Narrador para Fantasia Medieval', async () => {
     const state = buildState({
@@ -79,7 +79,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     );
     await saveOutput('fantasia', '3-narrator', narratorResponse);
     expect(narratorResponse.length).toBeGreaterThan(50);
-  }, 60000);
+  }, 180000);
 
   it('deve executar o pipeline NPC → Árbitro → Narrador para Terror', async () => {
     const state = buildState({
@@ -116,5 +116,5 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     );
     await saveOutput('terror', '3-narrator', narratorResponse);
     expect(narratorResponse.length).toBeGreaterThan(50);
-  }, 60000);
+  }, 180000);
 });

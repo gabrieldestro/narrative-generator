@@ -17,6 +17,10 @@ import {
   companionDescriptionHumanPrompt,
   initialNarrativeSystemPrompt,
   initialNarrativeHumanPrompt,
+  summarizeSystemPrompt,
+  summarizeHumanPrompt,
+  updateWorldContextSystemPrompt,
+  updateWorldContextHumanPrompt,
 } from "./prompts.js";
 
 export const MAX_NARRATION_TOKENS = 500;
@@ -95,6 +99,24 @@ export class LlmService {
     }
 
     return fullResponse;
+  }
+
+  async summarizeMemory(longTermSummary: string | undefined, oldestTurns: string[]): Promise<string> {
+    const messages = [
+      new SystemMessage(summarizeSystemPrompt()),
+      new HumanMessage(summarizeHumanPrompt(longTermSummary, oldestTurns)),
+    ];
+    const response = await this.llm.invoke(messages);
+    return response.content as string;
+  }
+
+  async updateWorldContext(currentContext: string, lastNarration: string): Promise<string> {
+    const messages = [
+      new SystemMessage(updateWorldContextSystemPrompt()),
+      new HumanMessage(updateWorldContextHumanPrompt(currentContext, lastNarration)),
+    ];
+    const response = await this.llm.invoke(messages);
+    return response.content as string;
   }
 
   private parseCharacterResponse(text: string): [string, string] {

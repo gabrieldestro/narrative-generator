@@ -241,7 +241,7 @@ describe('GameEngine', () => {
   });
 
   it('deve carregar save e executar um turno', async () => {
-    vi.mocked(mockRepo.load).mockResolvedValue(existingState);
+    vi.mocked(mockRepo.load).mockResolvedValue(JSON.parse(JSON.stringify(existingState)));
     vi.mocked(mockInput.question)
       .mockResolvedValueOnce('s')        // carregar save
       .mockResolvedValueOnce('')         // Enter para continuar
@@ -262,9 +262,13 @@ describe('GameEngine', () => {
     expect(savedState.turnNumber).toBe(4);
   });
 
-  it('deve limitar o histórico a 15 entradas', async () => {
-    const longHistory = Array.from({ length: 14 }, (_, i) => `Entrada ${i + 1}`);
-    const loadedState: GameState = { ...existingState, turnNumber: 1, history: longHistory };
+  it('deve limitar o histórico ao memoryWindowSize e disparar sumarização', async () => {
+    // Definimos uma engine com memoryWindowSize = 2 para este teste
+    const localEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockSessionFactory, 2);
+
+    const longHistory = ['Turno 1:\nAções: ...\nNarrativa: ...', 'Turno 2:\nAções: ...\nNarrativa: ...'];
+    const baseState = JSON.parse(JSON.stringify(existingState));
+    const loadedState: GameState = { ...baseState, turnNumber: 3, history: longHistory, longTermSummary: 'Resumo inicial.' };
     vi.mocked(mockRepo.load).mockResolvedValue(loadedState);
 
     vi.mocked(mockInput.question)
@@ -276,14 +280,24 @@ describe('GameEngine', () => {
     vi.spyOn(mockLlmService, 'decideCpuAction').mockResolvedValue('Elara age.');
     vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
+    
+    const summarizeSpy = vi.spyOn(mockLlmService, 'summarizeMemory').mockResolvedValue('Novo resumo consolidado.');
+    const updateCtxSpy = vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
 
-    await engine.start();
+    await localEngine.start();
 
     const savedState = vi.mocked(mockRepo.save).mock.calls.find(
-      (call) => (call[0] as GameState).turnNumber === 2
+      (call) => (call[0] as GameState).turnNumber === 4
     )?.[0] as GameState;
+    
     expect(savedState).toBeDefined();
-    expect(savedState.history.length).toBeLessThanOrEqual(15);
+    expect(savedState.history).toHaveLength(2);
+    expect(summarizeSpy).toHaveBeenCalledWith('Resumo inicial.', [
+      'Turno 1:\nAções: ...\nNarrativa: ...'
+    ]);
+    expect(savedState.longTermSummary).toBe('Novo resumo consolidado.');
+    expect(updateCtxSpy).toHaveBeenCalledWith('Uma floresta sombria.', 'Cena narrada.');
+    expect(savedState.worldContext).toBe('Cenário atualizado.');
   });
 
   it('deve criar novo jogo quando não há save', async () => {
