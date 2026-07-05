@@ -1,6 +1,7 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
-import type { GameState, Character } from "../domain/types.js";
+import type { GameState, Character, GameSettings } from "../domain/types.js";
+import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IOutputWriter } from "../domain/ports.js";
 import {
   arbiterSystemPrompt,
@@ -21,11 +22,15 @@ import {
   updateWorldContextHumanPrompt,
 } from "./prompts.js";
 
-export const MAX_NARRATION_TOKENS = 150;
-export const MAX_INITIAL_NARRATION_TOKENS = 500;
-
 export class LlmService {
-  constructor(private readonly llm: ChatOpenAI) {}
+  private readonly settings: GameSettings;
+
+  constructor(
+    private readonly llm: ChatOpenAI,
+    settings: Partial<GameSettings> = {},
+  ) {
+    this.settings = { ...DEFAULT_SETTINGS, ...settings };
+  }
 
   async generateInitialContext(style: string, writingStyle: string): Promise<string> {
     const messages = [
@@ -84,8 +89,7 @@ export class LlmService {
       new SystemMessage(initialNarrativeSystemPrompt(state)),
       new HumanMessage(initialNarrativeHumanPrompt(state)),
     ];
-    const bound = this.llm.bind({ maxTokens: MAX_INITIAL_NARRATION_TOKENS });
-    const response = await bound.invoke(messages);
+    const response = await this.llm.invoke(messages);
     return response.content as string;
   }
 
@@ -96,14 +100,13 @@ export class LlmService {
     output?: IOutputWriter,
     unexpectedEventTriggered?: boolean
   ): Promise<string> {
+    const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
     const messages = [
-      new SystemMessage(narratorSystemPrompt(state, unexpectedEventTriggered)),
+      new SystemMessage(narratorSystemPrompt(state, sizePrompt, unexpectedEventTriggered)),
       new HumanMessage(narratorHumanPrompt(state, actions, logicalResolution)),
     ];
-
-    const bound = this.llm.bind({ maxTokens: MAX_NARRATION_TOKENS });
     let fullResponse = "";
-    const stream = await bound.stream(messages);
+    const stream = await this.llm.stream(messages);
 
     for await (const chunk of stream) {
       const text = chunk.content as string;

@@ -1,4 +1,5 @@
-import type { Character, CpuAgentDecision, GameState, ScratchpadEntry } from '../../domain/types.js';
+import type { Character, CpuAgentDecision, GameState, ScratchpadEntry, GameSettings } from '../../domain/types.js';
+import { DEFAULT_SETTINGS } from '../../domain/types.js';
 import type { IOutputWriter } from '../../domain/ports.js';
 import type { LlmService } from '../LlmService.js';
 import {
@@ -6,15 +7,15 @@ import {
   cpuReflectionHumanPrompt,
 } from './CpuAgentPrompts.js';
 
-const MAX_SCRATCHPAD_SIZE = 5;
-const MAX_RETRIES = 3;
-
 export class CpuReflectionService {
+  private readonly settings: GameSettings;
+
   constructor(
     private readonly llmService: LlmService,
-    private readonly maxScratchpadSize: number = MAX_SCRATCHPAD_SIZE,
-    private readonly maxRetries: number = MAX_RETRIES,
-  ) {}
+    settings: Partial<GameSettings> = {},
+  ) {
+    this.settings = { ...DEFAULT_SETTINGS, ...settings };
+  }
 
   async reflectAndAct(state: GameState, char: Character, output?: IOutputWriter): Promise<CpuAgentDecision> {
     const systemPrompt = cpuReflectionSystemPrompt(state, char);
@@ -22,7 +23,7 @@ export class CpuReflectionService {
 
     let lastError: Error | undefined;
 
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= this.settings.maxCpuRetries; attempt++) {
       try {
         const raw = await this.llmService.invokePrompts(systemPrompt, attempt > 1
           ? `${humanPrompt}\n\nATENÇÃO: Sua resposta anterior não era um JSON válido. Responda APENAS com o JSON no formato especificado, sem texto extra.`
@@ -33,7 +34,7 @@ export class CpuReflectionService {
 
         char.currentObjective = parsed.updatedObjective;
 
-        if (output && this.maxRetries > 0) {
+        if (output && this.settings.maxCpuRetries > 0) {
           output.writeLine(`\x1b[90m[Raciocínio] ${char.name}: ${parsed.reasoning}\x1b[0m`);
         }
 
@@ -41,13 +42,13 @@ export class CpuReflectionService {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         if (output) {
-          output.writeLine(`\x1b[91m[Agente] ${char.name}: tentativa ${attempt}/${this.maxRetries} falhou — ${lastError.message}\x1b[0m`);
+          output.writeLine(`\x1b[91m[Agente] ${char.name}: tentativa ${attempt}/${this.settings.maxCpuRetries} falhou — ${lastError.message}\x1b[0m`);
         }
       }
     }
 
     throw new Error(
-      `CpuReflectionService.reflectAndAct falhou após ${this.maxRetries} tentativas para "${char.name}": ${lastError?.message}`,
+      `CpuReflectionService.reflectAndAct falhou após ${this.settings.maxCpuRetries} tentativas para "${char.name}": ${lastError?.message}`,
     );
   }
 
@@ -82,8 +83,8 @@ export class CpuReflectionService {
     }
     char.scratchpad.push(entry);
 
-    if (char.scratchpad.length > this.maxScratchpadSize) {
-      char.scratchpad = char.scratchpad.slice(-this.maxScratchpadSize);
+    if (char.scratchpad.length > this.settings.maxScratchpadSize) {
+      char.scratchpad = char.scratchpad.slice(-this.settings.maxScratchpadSize);
     }
   }
 

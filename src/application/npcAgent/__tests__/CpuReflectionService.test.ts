@@ -43,7 +43,7 @@ describe('CpuReflectionService', () => {
   beforeEach(() => {
     mockLlm = { invoke: vi.fn(), stream: vi.fn() };
     llmService = new LlmService(mockLlm as any);
-    service = new CpuReflectionService(llmService, 5, 3);
+    service = new CpuReflectionService(llmService, { maxScratchpadSize: 5, maxCpuRetries: 3 });
   });
 
   describe('reflectAndAct', () => {
@@ -187,7 +187,7 @@ describe('CpuReflectionService — integração com LlmService real mockado', ()
   it('deve funcionar com retry e saída visível no output mock', async () => {
     const mockLlm = { invoke: vi.fn(), stream: vi.fn() };
     const llmService = new LlmService(mockLlm as any);
-    const service = new CpuReflectionService(llmService, 5, 3);
+    const service = new CpuReflectionService(llmService, { maxScratchpadSize: 5, maxCpuRetries: 3 });
     const output = { write: vi.fn(), writeLine: vi.fn(), clear: vi.fn() };
 
     // Falha na primeira, sucesso na segunda

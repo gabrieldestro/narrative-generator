@@ -42,7 +42,11 @@ export function arbiterHumanPrompt(state: GameState, actions: string[], recentHi
 
 // ── Agent 3: Narrator (narrateFiction) ──
 
-export function narratorSystemPrompt(state: GameState, unexpectedEventTriggered?: boolean): string {
+export function narratorSystemPrompt(
+  state: GameState,
+  narrationSizePrompt: string,
+  unexpectedEventTriggered?: boolean,
+): string {
   const promptParts = [
     `Você é o Narrador Literário de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
     `Sua função é transformar as mecânicas frias decididas pelo 'Árbitro' em uma prosa envolvente, descritiva e dramática seguindo estritamente a atmosfera, tom e clichês do gênero ${state.narrativeStyle} sob o estilo de escrita ${state.writingStyle}.`,
@@ -60,9 +64,7 @@ export function narratorSystemPrompt(state: GameState, unexpectedEventTriggered?
       'REGRA DE INTERVENÇÃO DO DESTINO (SAL E PIMENTA): Um acontecimento totalmente inesperado, fora do ordinário ou uma complicação surpresa DEVE acontecer nesta cena, alterando as circunstâncias de forma surpreendente (ex: a chegada repentina de outro personagem/criatura, um fator ambiental súbito, falha repentina de equipamento, um barulho assustador inexplicável, um achado surpresa, etc.). Introduza este evento de surpresa na narrativa de forma integrada e coerente com o tom.'
     );
   }
-  promptParts.push(
-    'Seja extremamente conciso(a). Escreva APENAS 2 a 3 frases curtas e COMPLETAS (máximo ~150 tokens). Finalize a cena com ponto final — nunca pare no meio de uma frase ou pensamento.'
-  );
+  promptParts.push(narrationSizePrompt);
   return promptParts.join('\n');
 }
 

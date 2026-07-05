@@ -6,9 +6,6 @@ import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
 import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
 
-/** Probabilidade (0 a 1) de um evento inesperado ocorrer a cada turno ("sal e pimenta"). */
-export const UNEXPECTED_EVENT_CHANCE = 0.15;
-
 export class GameEngine {
   private readonly settings: GameSettings;
 
@@ -89,8 +86,8 @@ export class GameEngine {
         actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
       }
 
-      // 15% de chance de evento inesperado ("sal e pimenta")
-      const unexpectedEvent = Math.random() < UNEXPECTED_EVENT_CHANCE;
+      // Chance de evento inesperado ("sal e pimenta") vinda das settings centralizadas
+      const unexpectedEvent = Math.random() < this.settings.unexpectedEventChance;
       if (unexpectedEvent && this.settings.debug) {
         this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
       }

@@ -49,19 +49,42 @@ export interface WorldTemplate extends WorldConfig {
   characters: CharacterTemplate[];
 }
 
-// Configurações ajustáveis do motor de jogo
+// Templates de prompt para cada tamanho de narração
+export interface NarrationSizePrompts {
+  concise: string;
+  balanced: string;
+  descriptive: string;
+}
+
+// Configurações ajustáveis e centralizadas do motor de jogo
 export interface GameSettings {
   memoryWindowSize: number;
   debug: boolean;
   godMode: boolean;
   arbiterHistoryTurns: number;
+  unexpectedEventChance: number;
+  maxScratchpadSize: number;
+  maxCpuRetries: number;
+  narrationSize: 'concise' | 'balanced' | 'descriptive';
+  narrationSizePrompts: NarrationSizePrompts;
 }
+
+export const DEFAULT_NARRATION_SIZE_PROMPTS: NarrationSizePrompts = {
+  concise: 'Seja conciso(a). Escreva APENAS 1 a 2 parágrafos curtos e COMPLETOS (máximo ~100 tokens). Finalize a cena com ponto final — nunca pare no meio de uma frase.',
+  balanced: 'Escreva de forma equilibrada, com 3 a 4 parágrafos descritivos (máximo ~250 tokens). Mantenha a fluência narrativa e finalize a cena com ponto final.',
+  descriptive: 'Seja detalhista e imersivo(a). Escreva 5 ou mais parágrafos ricos em detalhes sensoriais, emoções e expansão de cena (máximo ~500 tokens). Finalize a cena com ponto final.',
+};
 
 export const DEFAULT_SETTINGS: GameSettings = {
   memoryWindowSize: 5,
   debug: true,
   godMode: false,
   arbiterHistoryTurns: 3,
+  unexpectedEventChance: 0.15,
+  maxScratchpadSize: 5,
+  maxCpuRetries: 3,
+  narrationSize: 'balanced',
+  narrationSizePrompts: DEFAULT_NARRATION_SIZE_PROMPTS,
 };
 
 // Representa o Estado global do nosso jogo em um dado momento

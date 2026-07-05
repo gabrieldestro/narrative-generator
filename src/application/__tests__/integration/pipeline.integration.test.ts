@@ -10,7 +10,10 @@ import {
   narratorHumanPrompt,
 } from '../../prompts.js';
 import type { Character } from '../../../domain/types.js';
+import { DEFAULT_NARRATION_SIZE_PROMPTS, DEFAULT_SETTINGS } from '../../../domain/types.js';
 import { buildState, invokeLlm, saveOutput, describeIf } from './helpers.js';
+
+const NARRATION_SIZE_PROMPT = DEFAULT_NARRATION_SIZE_PROMPTS[DEFAULT_SETTINGS.narrationSize];
 
 describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
   it('deve executar o pipeline NPC → Árbitro → Narrador para Cyberpunk', async () => {
@@ -41,7 +44,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     expect(arbiterResponse.length).toBeGreaterThan(10);
 
     const narratorResponse = await invokeLlm(
-      narratorSystemPrompt(state),
+      narratorSystemPrompt(state, NARRATION_SIZE_PROMPT),
       narratorHumanPrompt(state, actions, arbiterResponse)
     );
     await saveOutput('cyberpunk', '3-narrator', narratorResponse);
@@ -78,7 +81,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     expect(arbiterResponse.length).toBeGreaterThan(10);
 
     const narratorResponse = await invokeLlm(
-      narratorSystemPrompt(state),
+      narratorSystemPrompt(state, NARRATION_SIZE_PROMPT),
       narratorHumanPrompt(state, actions, arbiterResponse)
     );
     await saveOutput('fantasia', '3-narrator', narratorResponse);
@@ -115,7 +118,7 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     expect(arbiterResponse.length).toBeGreaterThan(10);
 
     const narratorResponse = await invokeLlm(
-      narratorSystemPrompt(state),
+      narratorSystemPrompt(state, NARRATION_SIZE_PROMPT),
       narratorHumanPrompt(state, actions, arbiterResponse)
     );
     await saveOutput('terror', '3-narrator', narratorResponse);
