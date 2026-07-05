@@ -9,11 +9,12 @@ import type { GameState } from '../../../domain/types.js';
 export const LLM_BASE_URL = process.env.OPENAI_API_BASE || 'http://localhost:1234/v1';
 export const LLM_API_KEY = process.env.OPENAI_API_KEY || 'lm-studio';
 
-export async function invokeLlm(systemPrompt: string, humanPrompt: string): Promise<string> {
+export async function invokeLlm(systemPrompt: string, humanPrompt: string, maxTokens?: number): Promise<string> {
   const judge = new ChatOpenAI({
     temperature: 0,
     model: 'gemma-4b',
     apiKey: LLM_API_KEY,
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
     configuration: { baseURL: LLM_BASE_URL },
   });
   const messages = [

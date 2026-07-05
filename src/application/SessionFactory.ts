@@ -33,13 +33,20 @@ export class SessionFactory {
   }
 
   async createNewGame(style: string, writingStyle: string, context: string, chars: CharacterTemplate[]): Promise<GameState> {
-    const characters: Character[] = chars.map((c, i) => ({
-      id: String(i + 1),
-      name: c.name,
-      description: c.description,
-      personality: c.personality,
-      isPlayer: c.isPlayer ?? false,
-    }));
+    const characters: Character[] = chars.map((c, i) => {
+      const character: Character = {
+        id: String(i + 1),
+        name: c.name,
+        description: c.description,
+        personality: c.personality,
+        isPlayer: c.isPlayer ?? false,
+      };
+      if (c.longTermObjective !== undefined) {
+        character.longTermObjective = c.longTermObjective;
+        character.currentObjective = c.longTermObjective;
+      }
+      return character;
+    });
 
     const state: GameState = {
       worldContext: context,

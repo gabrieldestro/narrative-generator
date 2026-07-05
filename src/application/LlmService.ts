@@ -3,8 +3,6 @@ import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { GameState, Character } from "../domain/types.js";
 import type { IOutputWriter } from "../domain/ports.js";
 import {
-  cpuActionSystemPrompt,
-  cpuActionHumanPrompt,
   arbiterSystemPrompt,
   arbiterHumanPrompt,
   narratorSystemPrompt,
@@ -23,8 +21,8 @@ import {
   updateWorldContextHumanPrompt,
 } from "./prompts.js";
 
-export const MAX_NARRATION_TOKENS = 500;
-export const MAX_INITIAL_NARRATION_TOKENS = 1000;
+export const MAX_NARRATION_TOKENS = 150;
+export const MAX_INITIAL_NARRATION_TOKENS = 500;
 
 export class LlmService {
   constructor(private readonly llm: ChatOpenAI) {}
@@ -56,19 +54,26 @@ export class LlmService {
     return this.parseCharacterResponse(response.content as string);
   }
 
-  async decideCpuAction(state: GameState, char: Character): Promise<string> {
+  async invokePrompts(systemPrompt: string, humanPrompt: string): Promise<string> {
     const messages = [
-      new SystemMessage(cpuActionSystemPrompt(state, char)),
-      new HumanMessage(cpuActionHumanPrompt(state)),
+      new SystemMessage(systemPrompt),
+      new HumanMessage(humanPrompt),
     ];
     const response = await this.llm.invoke(messages);
     return response.content as string;
   }
 
-  async arbitrateLogic(state: GameState, actions: string[]): Promise<string> {
+  async decideCpuAction(state: GameState, char: Character): Promise<string> {
+    return this.invokePrompts(
+      `Você é ${char.name}. Aja.`,
+      `Contexto: ${state.worldContext}. O que você faz?`,
+    );
+  }
+
+  async arbitrateLogic(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): Promise<string> {
     const messages = [
       new SystemMessage(arbiterSystemPrompt),
-      new HumanMessage(arbiterHumanPrompt(state, actions)),
+      new HumanMessage(arbiterHumanPrompt(state, actions, recentHistory, longTermSummary)),
     ];
     const response = await this.llm.invoke(messages);
     return response.content as string;
@@ -79,7 +84,8 @@ export class LlmService {
       new SystemMessage(initialNarrativeSystemPrompt(state)),
       new HumanMessage(initialNarrativeHumanPrompt(state)),
     ];
-    const response = await this.llm.invoke(messages, { maxTokens: MAX_INITIAL_NARRATION_TOKENS } as any);
+    const bound = this.llm.bind({ maxTokens: MAX_INITIAL_NARRATION_TOKENS });
+    const response = await bound.invoke(messages);
     return response.content as string;
   }
 
@@ -95,8 +101,9 @@ export class LlmService {
       new HumanMessage(narratorHumanPrompt(state, actions, logicalResolution)),
     ];
 
+    const bound = this.llm.bind({ maxTokens: MAX_NARRATION_TOKENS });
     let fullResponse = "";
-    const stream = await this.llm.stream(messages, { maxTokens: MAX_NARRATION_TOKENS } as any);
+    const stream = await bound.stream(messages);
 
     for await (const chunk of stream) {
       const text = chunk.content as string;

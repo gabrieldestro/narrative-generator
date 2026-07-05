@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GameEngine } from '../GameEngine.js';
 import { SessionFactory } from '../SessionFactory.js';
 import { LlmService } from '../LlmService.js';
-import type { GameState, CharacterTemplate } from '../../domain/types.js';
+import { CpuReflectionService } from '../npcAgent/CpuReflectionService.js';
+import type { GameState, CharacterTemplate, CpuAgentDecision } from '../../domain/types.js';
 import type { IUserInput, IOutputWriter } from '../../domain/ports.js';
 import type { IStateRepository } from '../../infrastructure/JsonStateRepository.js';
 
@@ -213,8 +214,15 @@ describe('GameEngine', () => {
   let mockOutput: IOutputWriter;
   let mockRepo: IStateRepository;
   let mockLlmService: LlmService;
+  let mockCpuReflection: CpuReflectionService;
   let mockSessionFactory: SessionFactory;
   let engine: GameEngine;
+
+  const defaultDecision: CpuAgentDecision = {
+    reasoning: 'Preciso agir conforme minha natureza.',
+    updatedObjective: 'Explorar a área em busca de pistas.',
+    action: 'Elara segue em silêncio.',
+  };
 
   const existingState: GameState = {
     worldContext: 'Uma floresta sombria.',
@@ -236,8 +244,14 @@ describe('GameEngine', () => {
     const mockLlm = { invoke: vi.fn().mockResolvedValue({ content: 'mock' }), stream: vi.fn() };
     mockLlmService = new LlmService(mockLlm as any);
 
+    // Mock CpuReflectionService
+    mockCpuReflection = {
+      reflectAndAct: vi.fn<(...args: any[]) => Promise<CpuAgentDecision>>().mockResolvedValue(defaultDecision),
+      recordArbiterResult: vi.fn(),
+    } as unknown as CpuReflectionService;
+
     mockSessionFactory = new SessionFactory(mockInput, mockOutput, mockRepo, mockLlmService);
-    engine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockSessionFactory);
+    engine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 });
   });
 
   it('deve carregar save e executar um turno', async () => {
@@ -248,7 +262,6 @@ describe('GameEngine', () => {
       .mockResolvedValueOnce('Explorar a caverna')  // ação do jogador
       .mockResolvedValueOnce('n');       // continuar? → não
 
-    vi.spyOn(mockLlmService, 'decideCpuAction').mockResolvedValue('Elara segue em silêncio.');
     vi.spyOn(mockLlmService, 'arbitrateLogic')
       .mockResolvedValue('Aric explorou -> Sucesso. Elara seguiu -> Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Aric avança corajosamente...');
@@ -260,11 +273,11 @@ describe('GameEngine', () => {
     )?.[0] as GameState;
     expect(savedState).toBeDefined();
     expect(savedState.turnNumber).toBe(4);
+    expect(mockCpuReflection.reflectAndAct).toHaveBeenCalledOnce();
   });
 
   it('deve limitar o histórico ao memoryWindowSize e disparar sumarização', async () => {
-    // Definimos uma engine com memoryWindowSize = 2 para este teste
-    const localEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockSessionFactory, 2);
+    const localEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { memoryWindowSize: 2, arbiterHistoryTurns: 0 });
 
     const longHistory = ['Turno 1:\nAções: ...\nNarrativa: ...', 'Turno 2:\nAções: ...\nNarrativa: ...'];
     const baseState = JSON.parse(JSON.stringify(existingState));
@@ -277,7 +290,6 @@ describe('GameEngine', () => {
       .mockResolvedValueOnce('Ação de teste')
       .mockResolvedValueOnce('n');
 
-    vi.spyOn(mockLlmService, 'decideCpuAction').mockResolvedValue('Elara age.');
     vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
     

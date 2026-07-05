@@ -4,13 +4,13 @@ Motor narrativo de RPG multi-agentes (Narrador, Árbitro, NPCs) em Node.js + Typ
 
 ## Stack Tecnológica
 
-| Camada | Tecnologia | Paralelo C# |
-|---|---|---|
-| Runtime | Node.js + TypeScript ESM | .NET runtime + C# |
-| Compilação | `tsx` (TypeScript Execute) | `dotnet run` |
-| Pacotes | npm / `package.json` | NuGet / `.csproj` |
-| Testes | Vitest | xUnit + Moq |
-| IA | LangChain (`@langchain/openai`) | --- |
+| Camada | Tecnologia |
+|---|---|
+| Runtime | Node.js + TypeScript ESM |
+| Compilação | `tsx` (TypeScript Execute) |
+| Pacotes | npm / `package.json` |
+| Testes | Vitest |
+| IA | LangChain (`@langchain/openai`) |
 
 ## Arquitetura (Clean Architecture / Ports & Adapters)
 
@@ -40,14 +40,11 @@ src/
 └── index.ts                  # Composition Root (DI)
 ```
 
-**Paralelo C#:** Essa estrutura é idêntica a um projeto .NET com pastas `Domain/`, `Application/`, `Infrastructure/`. O `index.ts` faz o papel do **Composition Root** (equivalente ao `Program.cs` que registra serviços no DI container).
-
 ### Injeção de Dependência
 
 O `GameEngine` recebe tudo por construtor — nada de `new` dentro da classe:
 
 ```typescript
-// C# equivalente: public GameEngine(IUserInput input, IOutputWriter output, ...)
 constructor(
   private readonly input: IUserInput,
   private readonly output: IOutputWriter,
@@ -97,8 +94,6 @@ npx vitest run --config vitest.integration.config.ts pipeline
   - `integration/arbiter.integration.test.ts` (2 cenários) — valida que o Árbitro não nega ações por estilo/tema/gênero, apenas por capacidade física.
   - `integration/pipeline.integration.test.ts` (3 cenários) — pipeline completo NPC→Árbitro→Narrador para Cyberpunk, Fantasia Medieval e Terror.
 
-**Paralelo C#:** Os mocks com `vi.fn()` são o equivalente a `Mock<IUserInput>.Setup(x => x.Question(...)).ReturnsAsync(...)` do Moq. A diferença é que no Vitest os mocks são objetos literais, sem necessidade de uma biblioteca separada como Moq/NSubstitute — o próprio test runner já fornece `vi.fn()`.
-
 ## Próximos Passos (Roadmap)
 
 1. CLI & Core refinado (atual)
@@ -106,4 +101,4 @@ npx vitest run --config vitest.integration.config.ts pipeline
 3. Front-end Angular
 4. Banco NoSQL + Memória longa (ChromaDB)
 
-Veja `docs/` para o detalhamento de cada fase e paralelos com o ecossistema C#.
+Veja `docs/` para o detalhamento de cada fase.

@@ -1,22 +1,28 @@
-import type { GameState, Character } from "../domain/types.js";
+import type { GameState, Character, GameSettings } from "../domain/types.js";
+import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IUserInput, IOutputWriter } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
+import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
 
 /** Probabilidade (0 a 1) de um evento inesperado ocorrer a cada turno ("sal e pimenta"). */
 export const UNEXPECTED_EVENT_CHANCE = 0.15;
 
 export class GameEngine {
+  private readonly settings: GameSettings;
+
   constructor(
     private readonly input: IUserInput,
     private readonly output: IOutputWriter,
     private readonly repository: IStateRepository,
     private readonly llmService: LlmService,
+    private readonly cpuReflectionService: CpuReflectionService,
     private readonly sessionFactory?: SessionFactory,
-    private readonly memoryWindowSize: number = 10,
-    private readonly debug: boolean = false
-  ) {}
+    settings: Partial<GameSettings> = {}
+  ) {
+    this.settings = { ...DEFAULT_SETTINGS, ...settings };
+  }
 
   public async start() {
     this.output.clear();
@@ -63,26 +69,45 @@ export class GameEngine {
         if (char.isPlayer) {
           action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
         } else {
-          this.output.write(`[CPU - ${char.name}] está pensando...`);
-          action = await this.llmService.decideCpuAction(state, char);
-          this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
+          this.output.write(`[CPU - ${char.name}] está refletindo...`);
+          try {
+            const decision = await this.cpuReflectionService.reflectAndAct(state, char, this.output);
+            action = decision.action;
+            this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
+            action = `${char.name} observa os arredores e reconsidera suas opções.`;
+            this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
+          }
         }
 
         // Rola d20
-        const roll = Math.floor(Math.random() * 20) + 1;
-        this.output.writeLine(`\x1b[93m[Dado 🎲] ${char.name} rolou: ${roll}\x1b[0m`);
+        const roll = this.settings.godMode ? 20 : Math.floor(Math.random() * 20) + 1;
+        const prefix = this.settings.godMode ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
+        this.output.writeLine(`${prefix} ${char.name} rolou: ${roll}\x1b[0m`);
         actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
       }
 
       // 15% de chance de evento inesperado ("sal e pimenta")
       const unexpectedEvent = Math.random() < UNEXPECTED_EVENT_CHANCE;
-      if (unexpectedEvent && this.debug) {
+      if (unexpectedEvent && this.settings.debug) {
         this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
       }
 
       this.output.writeLine("\n[Árbitro] Calculando as consequências...");
-      const logicalResolution = await this.llmService.arbitrateLogic(state, actions);
+      const recentHistory = this.settings.arbiterHistoryTurns > 0
+        ? state.history.slice(-this.settings.arbiterHistoryTurns)
+        : undefined;
+      const logicalResolution = await this.llmService.arbitrateLogic(state, actions, recentHistory, state.longTermSummary);
       this.output.writeLine(`\x1b[90m(Resolução Mecânica: ${logicalResolution.replace(/\n/g, ' - ')})\x1b[0m`);
+
+      // Atualiza scratchpad dos NPCs com base na resolução do árbitro
+      for (const char of state.characters) {
+        if (!char.isPlayer) {
+          this.cpuReflectionService.recordArbiterResult(char, state.turnNumber, logicalResolution);
+        }
+      }
 
       this.output.writeLine("\n[Narrador] Escrevendo a cena...");
       this.output.writeLine("--------------------------------------------------");
@@ -91,9 +116,9 @@ export class GameEngine {
 
       state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
 
-      if (state.history.length > this.memoryWindowSize) {
+      if (state.history.length > this.settings.memoryWindowSize) {
         this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
-        const excessCount = state.history.length - this.memoryWindowSize;
+        const excessCount = state.history.length - this.settings.memoryWindowSize;
         const oldestTurns = state.history.slice(0, excessCount);
         state.longTermSummary = await this.llmService.summarizeMemory(state.longTermSummary, oldestTurns);
         state.history = state.history.slice(excessCount);
@@ -127,4 +152,5 @@ export class GameEngine {
     }
     return "(Nenhuma narrativa encontrada no histórico)";
   }
+
 }

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  cpuActionSystemPrompt,
-  cpuActionHumanPrompt,
+  cpuReflectionSystemPrompt,
+  cpuReflectionHumanPrompt,
+} from '../../npcAgent/CpuAgentPrompts.js';
+import {
   arbiterSystemPrompt,
   arbiterHumanPrompt,
   narratorSystemPrompt,
@@ -19,11 +21,13 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
       description: 'Uma netrunner com cabelo roxo neon, implantes neurais obsoletos e um senso de humor ácido.',
       personality: 'Furtiva, desconfiada, sarcástica.',
       isPlayer: false,
+      longTermObjective: 'Infiltrar o sistema da Arasaka.',
+      currentObjective: 'Infiltrar o sistema da Arasaka.',
     };
 
     const npxResponse = await invokeLlm(
-      cpuActionSystemPrompt(state, npc),
-      cpuActionHumanPrompt(state)
+      cpuReflectionSystemPrompt(state, npc),
+      cpuReflectionHumanPrompt(state)
     );
     await saveOutput('cyberpunk', '1-npc', npxResponse);
     expect(npxResponse.length).toBeGreaterThan(10);
@@ -59,8 +63,8 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     };
 
     const npxResponse = await invokeLlm(
-      cpuActionSystemPrompt(state, npc),
-      cpuActionHumanPrompt(state)
+      cpuReflectionSystemPrompt(state, npc),
+      cpuReflectionHumanPrompt(state)
     );
     await saveOutput('fantasia', '1-npc', npxResponse);
     expect(npxResponse.length).toBeGreaterThan(10);
@@ -96,8 +100,8 @@ describeIf('Pipeline Multi-Agente com LLM real (LM Studio)', () => {
     };
 
     const npxResponse = await invokeLlm(
-      cpuActionSystemPrompt(state, npc),
-      cpuActionHumanPrompt(state)
+      cpuReflectionSystemPrompt(state, npc),
+      cpuReflectionHumanPrompt(state)
     );
     await saveOutput('terror', '1-npc', npxResponse);
     expect(npxResponse.length).toBeGreaterThan(10);

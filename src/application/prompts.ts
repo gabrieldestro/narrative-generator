@@ -1,42 +1,25 @@
-import type { GameState, Character } from '../domain/types.js';
+import type { GameState } from '../domain/types.js';
 
-// ── Agent 1: NPC Action (decideCpuAction) ──
-
-export function cpuActionSystemPrompt(state: GameState, char: Character): string {
-  const promptParts = [
-    `Você é o personagem ${char.name}.`,
-    `Sua descrição: ${char.description}.`,
-    `Sua personalidade: ${char.personality}.`,
-    `Gênero da história: ${state.narrativeStyle}.`,
-    `Estilo de escrita/tom: ${state.writingStyle}.`,
-    `Cenário atual: ${state.worldContext}.`,
-  ];
-  if (state.longTermSummary) {
-    promptParts.push(`Memória de Longo Prazo (Resumo dos eventos anteriores): ${state.longTermSummary}`);
-  }
-  promptParts.push(
-    'Regra 1: Você NÃO controla as consequências, apenas sua vontade.',
-    'Regra 2: Responda usando verbos de intenção (Ex: "Eu tento hackear o terminal", "Eu saco minha espada", "Eu busco um lugar para me esconder").',
-    `Regra 3: Suas ações devem refletir a atmosfera do tom ${state.writingStyle} (seja tenso no terror, irônico no cômico, etc).`,
-    `Responda de forma coerente com o gênero ${state.narrativeStyle} e tom ${state.writingStyle}.`,
-    'Responda APENAS a ação em português de forma curta.'
-  );
-  return promptParts.join('\n');
-}
-
-export function cpuActionHumanPrompt(state: GameState): string {
-  return `Contexto Recente: \n${state.history.join('\n\n')}\n\nQual a sua intenção de ação agora?`;
-}
-
-// ── Agent 2: Arbiter (arbitrateLogic) ──
+// ── Agent: Arbiter (arbitrateLogic) ──
 
 export const arbiterSystemPrompt =
   'Você é uma máquina de regras de RPG. Apenas retorne a avaliação lógica de sucesso ou falha, ignorando a narrativa.';
 
-export function arbiterHumanPrompt(state: GameState, actions: string[]): string {
-  return [
+export function arbiterHumanPrompt(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): string {
+  const promptParts = [
     `Cenário atual: ${state.worldContext}`,
     '',
+  ];
+  if (recentHistory && recentHistory.length > 0) {
+    promptParts.push('Histórico recente:');
+    promptParts.push(recentHistory.join('\n'));
+    promptParts.push('');
+  }
+  if (longTermSummary) {
+    promptParts.push(`Memória de longo prazo (resumo dos eventos anteriores): ${longTermSummary}`);
+    promptParts.push('');
+  }
+  promptParts.push(
     'Ações intentadas neste turno:',
     actions.join('\n'),
     '',
@@ -53,7 +36,8 @@ export function arbiterHumanPrompt(state: GameState, actions: string[]): string 
     'NÃO use o gênero da história ou o estilo de escrita para negar ou aprovar ações.',
     'Responda de forma CRUA e DIRETA, sem literatura.',
     'Para cada ação diga: [Personagem] tentou [Ação] -> [Sucesso/Falha] porque [Motivo físico baseado na regra aplicada e no dado d20].',
-  ].join('\n');
+  );
+  return promptParts.join('\n');
 }
 
 // ── Agent 3: Narrator (narrateFiction) ──
@@ -76,6 +60,9 @@ export function narratorSystemPrompt(state: GameState, unexpectedEventTriggered?
       'REGRA DE INTERVENÇÃO DO DESTINO (SAL E PIMENTA): Um acontecimento totalmente inesperado, fora do ordinário ou uma complicação surpresa DEVE acontecer nesta cena, alterando as circunstâncias de forma surpreendente (ex: a chegada repentina de outro personagem/criatura, um fator ambiental súbito, falha repentina de equipamento, um barulho assustador inexplicável, um achado surpresa, etc.). Introduza este evento de surpresa na narrativa de forma integrada e coerente com o tom.'
     );
   }
+  promptParts.push(
+    'Seja extremamente conciso(a). Escreva APENAS 2 a 3 frases curtas e COMPLETAS (máximo ~150 tokens). Finalize a cena com ponto final — nunca pare no meio de uma frase ou pensamento.'
+  );
   return promptParts.join('\n');
 }
 

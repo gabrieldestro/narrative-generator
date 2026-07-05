@@ -7,6 +7,7 @@ import { ConsoleOutput } from "./infrastructure/ConsoleOutput.js";
 import { LlmService } from "./application/LlmService.js";
 import { SessionFactory } from "./application/SessionFactory.js";
 import { GameEngine } from "./application/GameEngine.js";
+import { CpuReflectionService } from "./application/npcAgent/CpuReflectionService.js";
 
 dotenv.config();
 
@@ -26,8 +27,9 @@ async function main() {
     const repository = new JsonStateRepository('savegame.json');
     const worldRepo = new WorldTemplateRepository();
     const llmService = new LlmService(llm);
+    const cpuReflectionService = new CpuReflectionService(llmService);
     const sessionFactory = new SessionFactory(input, output, repository, llmService, worldRepo);
-    const engine = new GameEngine(input, output, repository, llmService, sessionFactory);
+    const engine = new GameEngine(input, output, repository, llmService, cpuReflectionService, sessionFactory, { godMode: true });
     await engine.start();
   } catch (error) {
     console.error("Um erro grave ocorreu e interrompeu o motor:", error);
