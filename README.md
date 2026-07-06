@@ -16,28 +16,29 @@ Motor narrativo de RPG multi-agentes (Narrador, Árbitro, NPCs) em Node.js + Typ
 
 ```
 src/
-├── domain/                   # Entidades e interfaces (Ports)
-│   ├── types.ts              # WorldConfig, WorldTemplate, GameState, Character
-│   ├── ports.ts              # IUserInput, IOutputWriter
-│   └── (__tests__/)
-├── application/              # Casos de uso (GameEngine)
-│   ├── GameEngine.ts
-│   ├── prompts.ts
+├── domain/                     # Entidades e interfaces (Ports)
+│   ├── types.ts                # WorldConfig, WorldTemplate, GameState, Character
+│   └── ports.ts                # IUserInput, IOutputWriter
+├── application/                # Casos de uso
+│   ├── GameEngine.ts           # Loop principal do jogo
+│   ├── LlmService.ts           # Integração com LLM (narrador, árbitro, extração)
+│   ├── SessionFactory.ts       # Setup de novo jogo (template ou custom)
+│   ├── prompts.ts              # Templates de prompt para todos os agentes
+│   ├── npcAgent/
+│   │   ├── CpuReflectionService.ts   # Decisão autônoma dos NPCs
+│   │   ├── CpuAgentPrompts.ts        # Prompts do agente NPC
+│   │   ├── SceneContext.ts           # Helper de cena (local + personagens presentes)
+│   │   └── __tests__/
 │   └── __tests__/
-│       ├── GameEngine.test.ts
 │       └── integration/
-│           ├── helpers.ts
-│           ├── arbiter.integration.test.ts
-│           └── pipeline.integration.test.ts
-├── infrastructure/           # Adaptadores concretos (Adapters)
+├── infrastructure/             # Adaptadores concretos (Adapters)
 │   ├── ConsoleInput.ts
 │   ├── ConsoleOutput.ts
 │   ├── JsonStateRepository.ts
 │   ├── WorldTemplateRepository.ts
 │   └── __tests__/
-│       ├── JsonStateRepository.test.ts
-│       └── WorldTemplateRepository.test.ts
-└── index.ts                  # Composition Root (DI)
+├── worlds/                     # Templates de mundo pré-configurados (JSON)
+└── index.ts                    # Composition Root (DI)
 ```
 
 ### Injeção de Dependência
@@ -71,28 +72,54 @@ Isso é o **Dependency Inversion Principle** do SOLID: o domínio (`domain/ports
 ## Testes
 
 ```bash
-npm test                   # Unitários + Repositório (rápido ~1s)
+npm test                   # Unitários (rápido ~1s)
 npm run test:watch         # Modo watch (desenvolvimento)
-npm run test:integration   # Todos os testes de integração (LLM real, ~3min)
+npm run test:coverage      # Unitários + relatório de cobertura
+npm run test:integration   # Integração com LLM real (~3min)
+```
+
+### Cobertura
+
+Gera relatório HTML em `coverage/index.html` e resumo no terminal:
+
+```bash
+npm run test:coverage
 ```
 
 ### Rodar testes de integração individualmente
 
 ```bash
-# Apenas testes do Árbitro (ações fora do tema)
+# Apenas testes do Árbitro
 npx vitest run --config vitest.integration.config.ts arbiter
 
 # Apenas testes do pipeline NPC → Árbitro → Narrador
 npx vitest run --config vitest.integration.config.ts pipeline
+
+# Apenas testes de extração de localização
+npx vitest run --config vitest.integration.config.ts location
 ```
+
+**Nota:** Os testes de integração exigem o LM Studio rodando em `http://localhost:1234`. Pule com `SKIP_LMSTUDIO_CHECK=1`.
 
 ### O que cobre
 
-- **Unitários (10 testes):** `application/__tests__/GameEngine.test.ts` — mocks de `IUserInput`, `IOutputWriter`, `IStateRepository` e `ChatOpenAI`. Valida criação de personagens (jogador + N NPCs manuais ou gerados por IA), ciclo de jogo e limitação de histórico.
-- **Infraestrutura (12 testes):** `infrastructure/__tests__/JsonStateRepository.test.ts` (4 — arquivo real) + `WorldTemplateRepository.test.ts` (8 — templates `worlds/`).
-- **Integração com LLM real:**
-  - `integration/arbiter.integration.test.ts` (2 cenários) — valida que o Árbitro não nega ações por estilo/tema/gênero, apenas por capacidade física.
-  - `integration/pipeline.integration.test.ts` (3 cenários) — pipeline completo NPC→Árbitro→Narrador para Cyberpunk, Fantasia Medieval e Terror.
+**Unitários (45 testes):**
+| Arquivo | Testes | O que valida |
+|---------|--------|-------------|
+| `GameEngine.test.ts` | 3 | Ciclo completo, save/load, sumarização, extração de local |
+| `SessionFactory` (no mesmo arquivo) | 8 | Criação de jogo, personagens, propagação de `initialLocation` |
+| `CpuReflectionService.test.ts` | 14 | Parse JSON, retry, scratchpad |
+| `SceneContext.test.ts` | 6 | Agrupamento por local, descrição de cena |
+| `JsonStateRepository.test.ts` | 4 | Save/load, integridade |
+| `WorldTemplateRepository.test.ts` | 8 | Leitura de diretório, fallbacks, JSONs reais |
+
+**Integração com LLM real:**
+| Cenário | Testes | Descrição |
+|---------|--------|-----------|
+| Pipeline multi-agente | 3 | NPC→Árbitro→Narrador (Cyberpunk, Fantasia, Terror) |
+| Memória narrativa | 2 | Sumarização e update de contexto do mundo |
+| Extração de localização | 5 | Movimento individual, mesmo local, todos juntos, destinos diferentes, sem local anterior |
+| Reflexão de NPC | 2 | Cyberpunk e Fantasia com scratchpad |
 
 ## Próximos Passos (Roadmap)
 
