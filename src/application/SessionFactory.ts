@@ -40,6 +40,7 @@ export class SessionFactory {
         description: c.description,
         personality: c.personality,
         isPlayer: c.isPlayer ?? false,
+        currentLocation: c.initialLocation ?? 'Ponto de Partida',
       };
       if (c.longTermObjective !== undefined) {
         character.longTermObjective = c.longTermObjective;

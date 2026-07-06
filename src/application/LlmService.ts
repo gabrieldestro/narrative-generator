@@ -20,6 +20,8 @@ import {
   summarizeHumanPrompt,
   updateWorldContextSystemPrompt,
   updateWorldContextHumanPrompt,
+  extractLocationSystemPrompt,
+  extractLocationHumanPrompt,
 } from "./prompts.js";
 
 export class LlmService {
@@ -68,11 +70,26 @@ export class LlmService {
     return response.content as string;
   }
 
-  async decideCpuAction(state: GameState, char: Character): Promise<string> {
-    return this.invokePrompts(
-      `Você é ${char.name}. Aja.`,
-      `Contexto: ${state.worldContext}. O que você faz?`,
+  async extractCharacterLocations(state: GameState, narration: string): Promise<Record<string, string>> {
+    const system = extractLocationSystemPrompt();
+    const human = extractLocationHumanPrompt(
+      state.characters.map(c => ({ id: c.id, name: c.name, currentLocation: c.currentLocation })),
+      narration,
     );
+
+    try {
+      const raw = await this.invokePrompts(system, human);
+      const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+      const parsed = JSON.parse(cleaned);
+      const result: Record<string, string> = {};
+      for (const char of state.characters) {
+        const location = parsed[char.name];
+        result[char.name] = typeof location === 'string' && location.length > 0 ? location : char.currentLocation ?? 'local desconhecido';
+      }
+      return result;
+    } catch {
+      return {};
+    }
   }
 
   async arbitrateLogic(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): Promise<string> {

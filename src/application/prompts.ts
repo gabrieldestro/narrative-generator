@@ -6,8 +6,13 @@ export const arbiterSystemPrompt =
   'Você é uma máquina de regras de RPG. Apenas retorne a avaliação lógica de sucesso ou falha, ignorando a narrativa.';
 
 export function arbiterHumanPrompt(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): string {
+  const locations = state.characters
+    .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
+    .join('\n');
   const promptParts = [
     `Cenário atual: ${state.worldContext}`,
+    '',
+    `Locais dos personagens:\n${locations}`,
     '',
   ];
   if (recentHistory && recentHistory.length > 0) {
@@ -69,8 +74,14 @@ export function narratorSystemPrompt(
 }
 
 export function narratorHumanPrompt(state: GameState, actions: string[], logicalResolution: string): string {
+  const locations = state.characters
+    .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
+    .join('\n');
   return [
     `Contexto Histórico: \n${state.history.join('\n\n')}`,
+    '',
+    'Localização atual dos personagens:',
+    locations,
     '',
     'O que tentaram fazer:',
     actions.join('\n'),
@@ -78,7 +89,7 @@ export function narratorHumanPrompt(state: GameState, actions: string[], logical
     'Resolução do Árbitro:',
     logicalResolution,
     '',
-    'Escreva a cena em português (apenas o texto da narração):',
+    'Escreva a cena em português, considerando onde cada personagem está e como seus locais mudam (ou não) durante a ação (apenas o texto da narração):',
   ].join('\n');
 }
 
@@ -95,11 +106,16 @@ export function initialNarrativeSystemPrompt(state: GameState): string {
 }
 
 export function initialNarrativeHumanPrompt(state: GameState): string {
+  const chars = state.characters.map(c => {
+    let line = `${c.name} — ${c.description}. Personalidade: ${c.personality}`;
+    if (c.currentLocation) line += `. Local inicial: ${c.currentLocation}`;
+    return line;
+  }).join('\n');
   return [
     `Cenário: ${state.worldContext}`,
     '',
     'Personagens:',
-    ...state.characters.map(c => `${c.name} — ${c.description}. Personalidade: ${c.personality}`),
+    chars,
     '',
     'Escreva a cena de abertura em português, apresentando o local e os personagens, preparando o palco para as primeiras ações dos heróis:',
   ].join('\n');
@@ -138,6 +154,30 @@ export function companionDescriptionHumanPrompt(style: string, writingStyle: str
     'Responda APENAS no formato abaixo (sem texto extra):',
     `Descrição: <ocupação, visual e atitude do(a) ${npcName}, uma ou duas frases>`,
     'Personalidade: <traços de personalidade, poucas palavras>',
+  ].join('\n');
+}
+
+// ── Location Extraction ──
+
+export function extractLocationSystemPrompt(): string {
+  return 'Você é um assistente de RPG que extrai a localização atual dos personagens com base na narração.';
+}
+
+export function extractLocationHumanPrompt(characters: { id: string; name: string; currentLocation: string | undefined }[], narration: string): string {
+  const chars = characters.map(c => `- ${c.name} (local atual: ${c.currentLocation ?? 'desconhecido'})`).join('\n');
+  return [
+    'Com base na narração abaixo, determine o local/ambiente onde cada personagem terminou este turno.',
+    'Se um personagem não mudou de local, mantenha o local anterior.',
+    'Se houver dúvida, mantenha o local anterior do personagem.',
+    'Retorne APENAS um JSON válido com o nome de cada personagem como chave e o local como valor.',
+    '',
+    'Personagens:',
+    chars,
+    '',
+    'Narração:',
+    narration,
+    '',
+    'JSON:',
   ].join('\n');
 }
 

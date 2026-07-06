@@ -124,6 +124,23 @@ export class GameEngine {
       this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
       state.worldContext = await this.llmService.updateWorldContext(state.worldContext, outcome);
 
+      this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
+      const locations = await this.llmService.extractCharacterLocations(state, outcome);
+      if (Object.keys(locations).length > 0) {
+        for (const char of state.characters) {
+          const loc = locations[char.name];
+          if (loc) {
+            char.currentLocation = loc;
+          }
+        }
+      } else {
+        for (const char of state.characters) {
+          if (!char.currentLocation) {
+            char.currentLocation = state.worldContext.slice(0, 60);
+          }
+        }
+      }
+
       state.turnNumber++;
       await this.repository.save(state);
 

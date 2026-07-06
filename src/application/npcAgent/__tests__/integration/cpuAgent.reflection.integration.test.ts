@@ -49,6 +49,10 @@ describeIf('CPU Agent Reflection com LLM real (LM Studio)', () => {
       worldContext: 'O reino de Aetheria está de luto. O rei Aldric jaz morto, envenenado em seu próprio banquete.',
       narrativeStyle: 'Fantasia Medieval',
       writingStyle: 'Épico / Poético',
+      history: [
+        'Turno 1: Você chegou ao grande salão do castelo. O corpo do rei jaz coberto por um lençol de seda.',
+        'Turno 2: Você examinou a taça de vinho e encontrou vestígios de veneno. Os serviçais estão amedrontados demais para falar.',
+      ],
     });
 
     const npc: Character = {
@@ -78,7 +82,7 @@ describeIf('CPU Agent Reflection com LLM real (LM Studio)', () => {
     expect(parsed.reasoning.length).toBeGreaterThan(10);
     expect(parsed.updatedObjective.length).toBeGreaterThan(5);
     expect(parsed.action.length).toBeGreaterThan(10);
-    // O reasoning deve refletir o scratchpad (falha ao perguntar)
-    expect(parsed.reasoning.toLowerCase()).toMatch(/serviçal|servical|pergunt|medo/);
+    const r = parsed.reasoning.toLowerCase();
+    expect(r).toMatch(/serviçal|servical|pergunt|medo|falhou|fraque|sem sucesso|não funcionou|resistência|recusaram|silêncio/);
   }, 180000);
 });

@@ -265,6 +265,7 @@ describe('GameEngine', () => {
     vi.spyOn(mockLlmService, 'arbitrateLogic')
       .mockResolvedValue('Aric explorou -> Sucesso. Elara seguiu -> Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Aric avança corajosamente...');
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({ Aric: 'Caverna', Elara: 'Caverna' });
 
     await engine.start();
 
@@ -292,7 +293,8 @@ describe('GameEngine', () => {
 
     vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
-    
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({ Aric: 'Floresta', Elara: 'Floresta' });
+
     const summarizeSpy = vi.spyOn(mockLlmService, 'summarizeMemory').mockResolvedValue('Novo resumo consolidado.');
     const updateCtxSpy = vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
 
@@ -327,6 +329,7 @@ describe('GameEngine', () => {
     vi.spyOn(mockLlmService, 'generateInitialNarrative').mockResolvedValue('A névoa se dissipa...');
     vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
     vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Porta range...');
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({ Aric: 'Floresta' });
 
     await engine.start();
 

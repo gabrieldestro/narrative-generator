@@ -24,6 +24,7 @@ export interface Character {
   longTermObjective?: string; // Objetivo macro do personagem (vindo do template ou gerado por IA)
   currentObjective?: string;  // Objetivo de curto prazo (refinado a cada turno via reflexão do NPC)
   scratchpad?: ScratchpadEntry[]; // Diário de bordo: últimas tentativas para o NPC raciocinar
+  currentLocation?: string; // Local/ambiente atual onde o personagem se encontra
 }
 
 // Template de personagem usado em arquivos de mundo e cenários customizados
@@ -33,6 +34,7 @@ export interface CharacterTemplate {
   personality: string;
   isPlayer?: boolean;  // Se omitido, assume false
   longTermObjective?: string; // Objetivo macro vindo do template de mundo
+  initialLocation?: string; // Local inicial do personagem no template de mundo
 }
 
 // Configuração base do mundo — compartilhada entre template inicial e estado em jogo
