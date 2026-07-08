@@ -14,6 +14,15 @@ export interface CpuAgentDecision {
   action: string;
 }
 
+export interface Location {
+  id: string;
+  name: string;
+  description: string;
+  connectedTo: string[]; // IDs de outras localizações conectadas
+}
+
+export type CharacterStatus = 'active' | 'dead' | 'lost';
+
 // Representa um personagem na nossa história
 export interface Character {
   id: string;
@@ -25,6 +34,8 @@ export interface Character {
   currentObjective?: string;  // Objetivo de curto prazo (refinado a cada turno via reflexão do NPC)
   scratchpad?: ScratchpadEntry[]; // Diário de bordo: últimas tentativas para o NPC raciocinar
   currentLocation?: string; // Local/ambiente atual onde o personagem se encontra
+  inventory?: string[]; // Itens carregados pelo personagem
+  status?: CharacterStatus; // Controle de ciclo de vida
 }
 
 // Template de personagem usado em arquivos de mundo e cenários customizados
@@ -35,6 +46,7 @@ export interface CharacterTemplate {
   isPlayer?: boolean;  // Se omitido, assume false
   longTermObjective?: string; // Objetivo macro vindo do template de mundo
   initialLocation?: string; // Local inicial do personagem no template de mundo
+  inventory?: string[]; // Inventário inicial opcional
 }
 
 // Configuração base do mundo — compartilhada entre template inicial e estado em jogo
@@ -49,6 +61,7 @@ export interface WorldTemplate extends WorldConfig {
   name: string;
   description: string;
   characters: CharacterTemplate[];
+  locations?: Location[]; // Configuração de mapa inicial (opcional)
 }
 
 // Templates de prompt para cada tamanho de narração
@@ -95,4 +108,5 @@ export interface GameState extends WorldConfig {
   history: string[];      // O histórico das últimas interações narrativas para dar contexto ao LLM
   turnNumber: number;
   longTermSummary?: string; // Memória de longo prazo sumarizada (opcional)
+  locations?: Location[]; // Lista de localizações do mundo atual
 }

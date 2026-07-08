@@ -43,6 +43,9 @@ export function buildState(overrides: Partial<GameState> = {}): GameState {
 }
 
 export async function saveOutput(scenario: string, phase: string, content: string) {
+  const writeOutput = process.env.WRITE_TEST_OUTPUT === '1';
+  if (!writeOutput) return;
+
   const dir = path.join(process.cwd(), 'test-output');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `${timestamp}_${scenario}_${phase}.md`;

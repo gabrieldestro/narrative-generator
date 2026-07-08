@@ -9,6 +9,8 @@ import { SessionFactory } from "./application/SessionFactory.js";
 import { GameEngine } from "./application/GameEngine.js";
 import { CpuReflectionService } from "./application/npcAgent/CpuReflectionService.js";
 
+import { GameManagementService } from "./application/GameManagementService.js";
+
 dotenv.config();
 
 const llm = new ChatOpenAI({
@@ -27,9 +29,19 @@ async function main() {
     const repository = new JsonStateRepository('savegame.json');
     const worldRepo = new WorldTemplateRepository();
     const llmService = new LlmService(llm);
+    const gameManagementService = new GameManagementService(llmService);
     const cpuReflectionService = new CpuReflectionService(llmService);
     const sessionFactory = new SessionFactory(input, output, repository, llmService, worldRepo);
-    const engine = new GameEngine(input, output, repository, llmService, cpuReflectionService, sessionFactory, { godMode: true });
+    const engine = new GameEngine(
+      input,
+      output,
+      repository,
+      llmService,
+      cpuReflectionService,
+      sessionFactory,
+      { godMode: true },
+      gameManagementService
+    );
     await engine.start();
   } catch (error) {
     console.error("Um erro grave ocorreu e interrompeu o motor:", error);

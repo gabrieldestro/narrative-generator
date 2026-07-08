@@ -218,3 +218,71 @@ export function updateWorldContextHumanPrompt(currentContext: string, lastNarrat
     'Gere a descrição concisa do local/estado atual atualizado:'
   ].join('\n');
 }
+
+// ── World State Incremental Extractor (LlmStateExtractor) ──
+
+export function extractStateChangesSystemPrompt(): string {
+  return [
+    'Você é um parser analítico de RPG especializado em extrair mutações estruturais de estado a partir de narrativas textuais literárias.',
+    'Sua resposta deve ser estritamente um objeto JSON válido, sem texto explicativo antes ou depois, sem blocos markdown extras se possível, ou encapsulado em ```json ```.',
+    'Siga atentamente as seguintes regras para identificar alterações:',
+    '',
+    '1. ALTERAÇÃO DE INVENTÁRIO (inventoryChanges):',
+    '   - Detecte se algum personagem obteve/pegou (action: "add") ou descartou/perdeu/usou até acabar (action: "remove") itens tangíveis.',
+    '   - Exemplo: "Elias pega a chave" -> add "Chave de Bronze" (ou similar); "Morgana joga fora sua lanterna quebrada" -> remove "Lanterna Quebrada".',
+    '',
+    '2. DESCOBERTA DE LOCAIS (locationChanges):',
+    '   - Se a narrativa revelar explicitamente uma nova área física conectada (ex: uma porta secreta se abre para o "Porão", ou eles descem para o "Túnel Sombrio"), adicione essa área em "discovered" com um id descritivo (camelCase), o nome legível, descrição concisa e conectividade inicial.',
+    '   - Adicione também conexões bidirecionais se apropriado em "newConnections" (ex: de local_atual para novo_local).',
+    '',
+    '3. CICLO DE VIDA DE PERSONAGENS (characterLifecycle):',
+    '   - Morte ou Desaparecimento: Se um personagem ativo morreu, foi pulverizado, desintegrou-se ou sumiu/perdeu-se na neblina sem rumo, defina seu status como "dead" ou "lost".',
+    '   - Novo Personagem: Se um novo NPC apareceu ativamente e interagiu ou foi introduzido em detalhes, defina seu status como "discovered" e preencha descrição, personalidade e a localização inicial dele.',
+    '',
+    'Qualquer campo não modificado não deve constar na resposta JSON. Mantenha os arrays vazios se não houver modificações correspondentes.'
+  ].join('\n');
+}
+
+export function extractStateChangesHumanPrompt(state: GameState, lastNarration: string): string {
+  const charsInfo = state.characters
+    .map(c => `- ${c.name} (Status: ${c.status || 'active'}, Local: ${c.currentLocation ?? 'Ponto de Partida'}, Inventário: [${c.inventory ? c.inventory.join(', ') : ''}])`)
+    .join('\n');
+  const locationsInfo = (state.locations || [])
+    .map(l => `- ID: ${l.id} ("${l.name}", Conecta com: [${l.connectedTo ? l.connectedTo.join(', ') : ''}])`)
+    .join('\n');
+
+  return [
+    '### ESTADO ATUAL DO JOGO:',
+    'Personagens:',
+    charsInfo,
+    '',
+    'Mapa de Localizações Conhecidas:',
+    locationsInfo,
+    '',
+    '### ÚLTIMA NARRATIVA LITERÁRIA DO TURNO:',
+    lastNarration,
+    '',
+    '### INSTRUÇÕES:',
+    'Gere o JSON com as alterações incrementais do estado do jogo com base APENAS na Última Narrativa Literária acima.',
+    'Formato esperado:',
+    '{',
+    '  "inventoryChanges": [',
+    '    { "characterName": "Nome", "action": "add" | "remove", "item": "Nome do Item" }',
+    '  ],',
+    '  "locationChanges": {',
+    '    "discovered": [',
+    '      { "id": "id_unico", "name": "Nome", "description": "Breve descrição", "connectedTo": ["ids_vizinhos"] }',
+    '    ],',
+    '    "newConnections": [',
+    '      { "from": "id_origem", "to": "id_destino" }',
+    '    ]',
+    '  },',
+    '  "characterLifecycle": [',
+    '    { "characterName": "Nome", "status": "dead" | "lost" | "active" | "discovered", "description": "Se discovered", "personality": "Se discovered", "location": "ID do local se discovered" }',
+    '  ]',
+    '}',
+    '',
+    'JSON:'
+  ].join('\n');
+}
+

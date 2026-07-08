@@ -22,6 +22,8 @@ import {
   updateWorldContextHumanPrompt,
   extractLocationSystemPrompt,
   extractLocationHumanPrompt,
+  extractStateChangesSystemPrompt,
+  extractStateChangesHumanPrompt,
 } from "./prompts.js";
 
 export class LlmService {
@@ -91,6 +93,37 @@ export class LlmService {
       return {};
     }
   }
+
+  async extractStateChanges(state: GameState, narration: string): Promise<any> {
+    const system = extractStateChangesSystemPrompt();
+    const human = extractStateChangesHumanPrompt(state, narration);
+
+    try {
+      const raw = await this.invokePrompts(system, human);
+      const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+      const parsed = JSON.parse(cleaned);
+
+      // Garantir estrutura mínima padrão
+      return {
+        inventoryChanges: Array.isArray(parsed.inventoryChanges) ? parsed.inventoryChanges : [],
+        locationChanges: {
+          discovered: Array.isArray(parsed.locationChanges?.discovered) ? parsed.locationChanges.discovered : [],
+          newConnections: Array.isArray(parsed.locationChanges?.newConnections) ? parsed.locationChanges.newConnections : [],
+        },
+        characterLifecycle: Array.isArray(parsed.characterLifecycle) ? parsed.characterLifecycle : [],
+      };
+    } catch (err) {
+      if (this.settings.debug) {
+        console.error("[LLM Extraction Error] Falha ao extrair modificações de estado:", err);
+      }
+      return {
+        inventoryChanges: [],
+        locationChanges: { discovered: [], newConnections: [] },
+        characterLifecycle: [],
+      };
+    }
+  }
+
 
   async arbitrateLogic(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): Promise<string> {
     const messages = [

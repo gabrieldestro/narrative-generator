@@ -1,13 +1,15 @@
-import type { GameState, Character, GameSettings } from "../domain/types.js";
+import type { GameState, Character, GameSettings, Location } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IUserInput, IOutputWriter } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
 import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
+import { GameManagementService } from "./GameManagementService.js";
 
 export class GameEngine {
   private readonly settings: GameSettings;
+  private readonly gameManagementService: GameManagementService;
 
   constructor(
     private readonly input: IUserInput,
@@ -16,9 +18,11 @@ export class GameEngine {
     private readonly llmService: LlmService,
     private readonly cpuReflectionService: CpuReflectionService,
     private readonly sessionFactory?: SessionFactory,
-    settings: Partial<GameSettings> = {}
+    settings: Partial<GameSettings> = {},
+    gameManagementService?: GameManagementService
   ) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
+    this.gameManagementService = gameManagementService ?? new GameManagementService(this.llmService);
   }
 
   public async start() {
@@ -62,9 +66,19 @@ export class GameEngine {
       const actions: string[] = [];
 
       for (const char of state.characters) {
+        if (char.status && char.status !== 'active') {
+          continue; // Pula personagens mortos ou perdidos
+        }
         let action = "";
         if (char.isPlayer) {
-          action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
+          while (true) {
+            action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
+            if (action.startsWith("/")) {
+              await this.handleCliCommand(state, action);
+              continue;
+            }
+            break;
+          }
         } else {
           this.output.write(`[CPU - ${char.name}] está refletindo...`);
           try {
@@ -101,7 +115,7 @@ export class GameEngine {
 
       // Atualiza scratchpad dos NPCs com base na resolução do árbitro
       for (const char of state.characters) {
-        if (!char.isPlayer) {
+        if (!char.isPlayer && char.status === 'active') {
           this.cpuReflectionService.recordArbiterResult(char, state.turnNumber, logicalResolution);
         }
       }
@@ -112,6 +126,14 @@ export class GameEngine {
       this.output.writeLine("\n--------------------------------------------------");
 
       state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
+
+      // Executa a extração automática pós-narração pelo LLM
+      this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
+      const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, outcome);
+      state.characters = stateWithUpdates.characters;
+      if (stateWithUpdates.locations) {
+        state.locations = stateWithUpdates.locations;
+      }
 
       if (state.history.length > this.settings.memoryWindowSize) {
         this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
@@ -152,6 +174,122 @@ export class GameEngine {
     }
 
     this.input.close();
+  }
+
+  private async handleCliCommand(state: GameState, commandText: string): Promise<void> {
+    const parts = commandText.trim().split(" ");
+    const command = parts[0]!.toLowerCase();
+    const args = parts.slice(1);
+
+    switch (command) {
+      case "/help":
+        this.output.writeLine("\n--- Comandos Administrativos Disponíveis ---");
+        this.output.writeLine("/help - Mostra este menu de ajuda.");
+        this.output.writeLine("/status ou /chars - Mostra os personagens, locais, inventários e status.");
+        this.output.writeLine("/map - Mostra o mapa de localizações conhecidas.");
+        this.output.writeLine("/add-item <personagem> <item> - Adiciona um item ao inventário.");
+        this.output.writeLine("/remove-item <personagem> <item> - Remove um item do inventário.");
+        this.output.writeLine("/add-char - Cria interativamente um novo personagem.");
+        this.output.writeLine("/remove-char <personagem> - Marca o personagem como perdido ('lost').");
+        this.output.writeLine("/extract - Extrai mudanças de estado automaticamente usando o LLM.");
+        break;
+
+      case "/status":
+      case "/chars":
+        this.output.writeLine("\n--- Status dos Personagens ---");
+        for (const char of state.characters) {
+          this.output.writeLine(`- ${char.name} [Status: ${char.status || 'active'}]`);
+          this.output.writeLine(`  Local: ${char.currentLocation || 'Desconhecido'}`);
+          this.output.writeLine(`  Inventário: [${char.inventory ? char.inventory.join(', ') : ''}]`);
+          this.output.writeLine(`  Descrição: ${char.description}`);
+        }
+        break;
+
+      case "/map":
+        this.output.writeLine("\n--- Mapa de Localizações ---");
+        if (!state.locations || state.locations.length === 0) {
+          this.output.writeLine("(Sem localizações cadastradas)");
+        } else {
+          for (const loc of state.locations) {
+            this.output.writeLine(`- ${loc.name} (ID: ${loc.id})`);
+            this.output.writeLine(`  Descrição: ${loc.description}`);
+            this.output.writeLine(`  Conexões: [${loc.connectedTo.join(', ')}]`);
+          }
+        }
+        break;
+
+      case "/add-item": {
+        if (args.length < 2) {
+          this.output.writeLine("Uso: /add-item <personagem> <nome do item>");
+          break;
+        }
+        const charName = args[0]!;
+        const item = args.slice(1).join(" ");
+        const updated = this.gameManagementService.addItemToCharacter(state, charName, item);
+        state.characters = updated.characters;
+        this.output.writeLine(`Item "${item}" adicionado ao inventário de ${charName}.`);
+        break;
+      }
+
+      case "/remove-item": {
+        if (args.length < 2) {
+          this.output.writeLine("Uso: /remove-item <personagem> <nome do item>");
+          break;
+        }
+        const charName = args[0]!;
+        const item = args.slice(1).join(" ");
+        const updated = this.gameManagementService.removeItemFromCharacter(state, charName, item);
+        state.characters = updated.characters;
+        this.output.writeLine(`Item "${item}" removido do inventário de ${charName}.`);
+        break;
+      }
+
+      case "/add-char": {
+        const name = await this.input.question("Nome do novo personagem: ");
+        const description = await this.input.question("Descrição: ");
+        const personality = await this.input.question("Personalidade: ");
+        const location = await this.input.question("Localização inicial: ");
+        const updated = this.gameManagementService.addCharacter(state, {
+          name,
+          description,
+          personality,
+          currentLocation: location,
+          isPlayer: false,
+          inventory: [],
+          status: 'active'
+        });
+        state.characters = updated.characters;
+        this.output.writeLine(`Personagem "${name}" adicionado com sucesso!`);
+        break;
+      }
+
+      case "/remove-char": {
+        if (args.length < 1) {
+          this.output.writeLine("Uso: /remove-char <personagem>");
+          break;
+        }
+        const charName = args.join(" ");
+        const updated = this.gameManagementService.setCharacterStatus(state, charName, "lost");
+        state.characters = updated.characters;
+        this.output.writeLine(`Personagem "${charName}" marcado como perdido (lost).`);
+        break;
+      }
+
+      case "/extract": {
+        this.output.writeLine("[LLM] Executando extração automática baseada nas últimas narrativas...");
+        const lastNarrative = this.getLastNarrative(state.history);
+        const updated = await this.gameManagementService.applyAutomaticStateUpdates(state, lastNarrative);
+        state.characters = updated.characters;
+        if (updated.locations) {
+          state.locations = updated.locations;
+        }
+        this.output.writeLine("Extração concluída e estado atualizado!");
+        break;
+      }
+
+      default:
+        this.output.writeLine(`Comando desconhecido: ${command}. Digite /help para ajuda.`);
+    }
   }
 
   private getLastNarrative(history: string[]): string {

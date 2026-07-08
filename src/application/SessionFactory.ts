@@ -1,4 +1,4 @@
-import type { GameState, WorldTemplate, CharacterTemplate, Character } from "../domain/types.js";
+import type { GameState, WorldTemplate, CharacterTemplate, Character, Location } from "../domain/types.js";
 import type { IUserInput, IOutputWriter } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { WorldTemplateRepository } from "../infrastructure/WorldTemplateRepository.js";
@@ -32,7 +32,13 @@ export class SessionFactory {
     return this.createCustomScenario();
   }
 
-  async createNewGame(style: string, writingStyle: string, context: string, chars: CharacterTemplate[]): Promise<GameState> {
+  async createNewGame(
+    style: string,
+    writingStyle: string,
+    context: string,
+    chars: CharacterTemplate[],
+    locations: Location[] = []
+  ): Promise<GameState> {
     const characters: Character[] = chars.map((c, i) => {
       const character: Character = {
         id: String(i + 1),
@@ -41,6 +47,8 @@ export class SessionFactory {
         personality: c.personality,
         isPlayer: c.isPlayer ?? false,
         currentLocation: c.initialLocation ?? 'Ponto de Partida',
+        inventory: c.inventory ?? [],
+        status: 'active',
       };
       if (c.longTermObjective !== undefined) {
         character.longTermObjective = c.longTermObjective;
@@ -56,6 +64,7 @@ export class SessionFactory {
       turnNumber: 1,
       history: [],
       characters,
+      locations,
     };
     await this.repository.save(state);
     return state;
@@ -83,7 +92,8 @@ export class SessionFactory {
       selected.narrativeStyle,
       selected.writingStyle,
       selected.worldContext,
-      selected.characters
+      selected.characters,
+      selected.locations ?? []
     );
     this.output.writeLine(`\n==================================================`);
     this.output.writeLine(`Contexto Inicial: ${state.worldContext}`);
