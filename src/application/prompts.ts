@@ -286,3 +286,40 @@ export function extractStateChangesHumanPrompt(state: GameState, lastNarration: 
   ].join('\n');
 }
 
+// ── Character Sheet Extraction from History ──
+
+export function extractCharacterFromHistorySystemPrompt(): string {
+  return [
+    'Você é um parser de RPG especializado em criar fichas de personagens a partir de textos narrativos.',
+    'Sua tarefa é analisar um trecho de história e extrair dados estruturados de um personagem específico mencionado nela.',
+    'Responda APENAS com um JSON válido, sem texto antes ou depois.',
+  ].join('\n');
+}
+
+export function extractCharacterFromHistoryHumanPrompt(
+  characterName: string,
+  historyExcerpt: string,
+  narrativeStyle: string,
+): string {
+  return [
+    `Analise o texto abaixo e extraia os dados do personagem chamado "${characterName}".`,
+    `A história é do gênero: ${narrativeStyle}.`,
+    '',
+    '### TRECHO DO HISTÓRICO:',
+    historyExcerpt,
+    '',
+    '### INSTRUÇÕES:',
+    `Com base APENAS no texto acima, gere a ficha do personagem "${characterName}".`,
+    'Se algum campo não puder ser inferido do texto, invente algo coerente com o gênero da história.',
+    '',
+    'Responda APENAS com o JSON no formato:',
+    '{',
+    '  "name": "Nome exato do personagem",',
+    '  "description": "Aparência, ocupação e background (1-2 frases)",',
+    '  "personality": "Traços de personalidade observados no texto (poucas palavras)",',
+    '  "currentLocation": "Último local onde o personagem foi visto no texto"',
+    '}',
+    '',
+    'JSON:',
+  ].join('\n');
+}

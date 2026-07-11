@@ -24,6 +24,8 @@ import {
   extractLocationHumanPrompt,
   extractStateChangesSystemPrompt,
   extractStateChangesHumanPrompt,
+  extractCharacterFromHistorySystemPrompt,
+  extractCharacterFromHistoryHumanPrompt,
 } from "./prompts.js";
 
 export class LlmService {
@@ -183,6 +185,33 @@ export class LlmService {
     ];
     const response = await this.llm.invoke(messages);
     return response.content as string;
+  }
+
+  async extractCharacterFromHistory(
+    characterName: string,
+    historyExcerpt: string,
+    narrativeStyle: string,
+  ): Promise<{ name: string; description: string; personality: string; currentLocation: string } | null> {
+    const system = extractCharacterFromHistorySystemPrompt();
+    const human = extractCharacterFromHistoryHumanPrompt(characterName, historyExcerpt, narrativeStyle);
+
+    try {
+      const raw = await this.invokePrompts(system, human);
+      const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+      const parsed = JSON.parse(cleaned);
+
+      return {
+        name: typeof parsed.name === 'string' && parsed.name.length > 0 ? parsed.name : characterName,
+        description: typeof parsed.description === 'string' ? parsed.description : 'Personagem recém-descoberto.',
+        personality: typeof parsed.personality === 'string' ? parsed.personality : 'Personalidade desconhecida.',
+        currentLocation: typeof parsed.currentLocation === 'string' ? parsed.currentLocation : 'Local desconhecido',
+      };
+    } catch (err) {
+      if (this.settings.debug) {
+        console.error('[LLM] Falha ao extrair ficha do personagem do histórico:', err);
+      }
+      return null;
+    }
   }
 
   private parseCharacterResponse(text: string): [string, string] {

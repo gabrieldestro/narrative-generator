@@ -119,8 +119,8 @@ describe("GameManagementService", () => {
 
     const elias = newState.characters.find((c) => c.name === "Elias");
     const morgana = newState.characters.find((c) => c.name === "Morgana");
-    const caverna = newState.locations.find((l) => l.id === "caverna");
-    const floresta = newState.locations.find((l) => l.id === "floresta");
+    const caverna = newState.locations!.find((l) => l.id === "caverna");
+    const floresta = newState.locations!.find((l) => l.id === "floresta");
 
     expect(elias?.inventory).toContain("Chave de Bronze");
     expect(elias?.inventory).not.toContain("Espada");

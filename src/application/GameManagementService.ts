@@ -104,6 +104,55 @@ export class GameManagementService {
   }
 
   /**
+   * Adiciona manualmente uma localização ao grafo do mundo.
+   * Ignora silenciosamente se o ID já existir.
+   * Também cria as conexões bidirecionais com os locais existentes informados em connectedTo.
+   */
+  public addLocation(
+    state: GameState,
+    loc: Location
+  ): GameState {
+    const locations = [...(state.locations ?? [])];
+
+    // Evita duplicados pelo ID
+    if (locations.some((l) => l.id === loc.id)) {
+      return state;
+    }
+
+    // Adiciona o novo local
+    const newLocations = [...locations, { ...loc }];
+
+    // Cria conexões bidirecionais: cada local já existente que esteja em loc.connectedTo
+    // passa a ter loc.id na sua própria lista connectedTo
+    const wired = newLocations.map((l) => {
+      if (l.id !== loc.id && loc.connectedTo.includes(l.id) && !l.connectedTo.includes(loc.id)) {
+        return { ...l, connectedTo: [...l.connectedTo, loc.id] };
+      }
+      return l;
+    });
+
+    return { ...state, locations: wired };
+  }
+
+  /**
+   * Remove uma localização do grafo pelo ID.
+   * Também limpa todas as referências a esse ID nos connectedTo dos demais locais.
+   */
+  public removeLocation(
+    state: GameState,
+    locationId: string
+  ): GameState {
+    const locations = (state.locations ?? [])
+      .filter((l) => l.id !== locationId)
+      .map((l) => ({
+        ...l,
+        connectedTo: l.connectedTo.filter((id) => id !== locationId),
+      }));
+
+    return { ...state, locations };
+  }
+
+  /**
    * Executa a extração automática pós-narração usando o LLM e aplica as mutações ao estado
    */
   public async applyAutomaticStateUpdates(
