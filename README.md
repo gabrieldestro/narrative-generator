@@ -17,47 +17,58 @@ Motor narrativo de RPG multi-agentes (Narrador, Árbitro, NPCs) em Node.js + Typ
 ```
 src/
 ├── domain/                     # Entidades e interfaces (Ports)
-│   ├── types.ts                # WorldConfig, WorldTemplate, GameState, Character
+│   ├── types.ts                # WorldConfig, WorldTemplate, GameState, Character, GameSettings
 │   └── ports.ts                # IUserInput, IOutputWriter
 ├── application/                # Casos de uso
-│   ├── GameEngine.ts           # Loop principal do jogo
+│   ├── GameEngine.ts           # Loop principal do jogo (paralelismo de NPCs)
 │   ├── GameManagementService.ts# Mutações de estado (inventário, personagens, locais)
 │   ├── LlmService.ts           # Integração com LLM (narrador, árbitro, extração)
 │   ├── SessionFactory.ts       # Setup de novo jogo (template ou custom)
 │   ├── prompts.ts              # Templates de prompt para todos os agentes
 │   ├── npcAgent/
-│   │   ├── CpuReflectionService.ts   # Decisão autônoma dos NPCs
+│   │   ├── CpuReflectionService.ts   # Decisão autônoma dos NPCs (reflexão + scratchpad)
 │   │   ├── CpuAgentPrompts.ts        # Prompts do agente NPC
 │   │   ├── SceneContext.ts           # Helper de cena (local + personagens presentes)
 │   │   └── __tests__/
 │   └── __tests__/
 │       ├── integration/
 │       └── e2e/
+├── benchmark/
+│   └── simulatedTurn.ts        # Script de metrificação de performance (N turnos)
 ├── infrastructure/             # Adaptadores concretos (Adapters)
 │   ├── ConsoleInput.ts
 │   ├── ConsoleOutput.ts
 │   ├── JsonStateRepository.ts
 │   ├── WorldTemplateRepository.ts
+│   ├── LlmCallLogger.ts        # Instrumentação de chamadas LLM (JSON Lines)
 │   └── __tests__/
 ├── worlds/                     # Templates de mundo pré-configurados (JSON)
 └── index.ts                    # Composition Root (DI)
 ```
 
-### Injeção de Dependência
+### Fluxo de um turno
 
-O `GameEngine` recebe tudo por construtor — nada de `new` dentro da classe:
+Cada turno segue **3 passos com dependências respeitadas**:
 
-```typescript
-constructor(
-  private readonly input: IUserInput,
-  private readonly output: IOutputWriter,
-  private readonly repository: IStateRepository,
-  private readonly llm: ChatOpenAI,
-  private readonly worldTemplateRepo?: WorldTemplateRepository  // opcional
-) {}
+```
+1. [Jogador]  → input sequencial (exige interação humana)
+       ↓
+2. [NPC 1]  ─┐
+   [NPC 2]  ─┼─ Promise.allSettled() → reflexões em PARALELO
+   [NPC N]  ─┘
+       ↓
+3. [Árbitro]  → avalia todas as ações + resultado dos dados d20
+       ↓
+   [Narrador]  → gera a cena literária (streaming)
+       ↓
+   [Pós-turno] → extração de estado, sumarização, update de contexto
 ```
 
-Isso é o **Dependency Inversion Principle** do SOLID: o domínio (`domain/ports.ts`) define as abstrações, a infraestrutura as implementa (`ConsoleInput`, `ConsoleOutput`), e o motor (`GameEngine`) só conhece as interfaces.
+NPCs são independentes entre si (leem o estado, não escrevem nele) — podem rodar em paralelo com segurança. Árbitro e Narrador dependem de todas as ações, portanto permanecem sequenciais.
+
+### Injeção de Dependência
+
+O `GameEngine` recebe tudo por construtor — nada de `new` dentro da classe. Isso é o **Dependency Inversion Principle** do SOLID: o domínio (`domain/ports.ts`) define as abstrações, a infraestrutura as implementa, e o motor só conhece interfaces.
 
 ## Como Executar
 
@@ -70,6 +81,8 @@ Isso é o **Dependency Inversion Principle** do SOLID: o domínio (`domain/ports
    ```bash
    npm start
    ```
+
+Durante a execução, todas as chamadas LLM são registradas automaticamente em `logs/llm_calls.jsonl` para análise posterior.
 
 ## Testes
 
@@ -125,7 +138,7 @@ npx vitest run --config vitest.integration.config.ts narration.tokenLimit
 **Unitários (50 testes):**
 | Arquivo | Testes | O que valida |
 |---------|--------|-------------|
-| `GameEngine.test.ts` | 3 | Ciclo completo, save/load, sumarização, extração de local |
+| `GameEngine.test.ts` | 11 | Ciclo completo, save/load, sumarização, extração de local, paralelismo de NPCs |
 | `GameManagementService.test.ts` | 5 | Mutações de inventário, status, auto-update de estado |
 | `SessionFactory` (no mesmo arquivo) | 8 | Criação de jogo, personagens, propagação de `initialLocation` |
 | `CpuReflectionService.test.ts` | 14 | Parse JSON, retry, scratchpad |
@@ -150,6 +163,35 @@ npx vitest run --config vitest.integration.config.ts narration.tokenLimit
 
 > **Dica:** Os relatórios E2E são gravados em `test-output/` no formato  
 > `<timestamp>_e2e_narration_complex_coherence.md` e incluem métricas de performance por turno e o parecer do LLM Juiz.
+
+## Benchmark de Performance
+
+O projeto inclui um script de metrificação que roda turnos completos sem input humano e coleta métricas por fase:
+
+```bash
+npm run benchmark:5    # 5 turnos simulados
+npm run benchmark:10   # 10 turnos simulados
+npm run benchmark      # 5 turnos (padrão)
+```
+
+### O que é medido
+
+| Fase | O que representa |
+|------|-----------------|
+| `npcParallelMs` | Wall-clock total de todos os NPCs (benefício do paralelismo visível aqui) |
+| `arbiterMs` | Tempo da chamada ao Árbitro |
+| `narratorMs` | Tempo da narração (streaming) |
+| `postTurnMs` | Sumarização + update de contexto + extração de locais |
+| `totalTurnMs` | Tempo total do turno do ponto de vista do jogador |
+
+### Saídas geradas
+
+- `logs/benchmark_llm_calls.jsonl` — log detalhado de cada chamada LLM (agente, duração, tokens, status)
+- `logs/benchmark_report.json` — relatório consolidado com média/min/max por fase e breakdown por agente
+
+### Instrumentação em produção
+
+Toda sessão normal (`npm start`) também gera `logs/llm_calls.jsonl` automaticamente — o mesmo formato do benchmark. Útil para comparar comportamento real vs. simulado.
 
 ## Próximos Passos (Roadmap)
 

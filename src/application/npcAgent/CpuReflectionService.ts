@@ -25,10 +25,11 @@ export class CpuReflectionService {
 
     for (let attempt = 1; attempt <= this.settings.maxCpuRetries; attempt++) {
       try {
-        const raw = await this.llmService.invokePrompts(systemPrompt, attempt > 1
+        const agentLabel = `NPC:${char.name}`;
+        const humanPromptFinal = attempt > 1
           ? `${humanPrompt}\n\nATENÇÃO: Sua resposta anterior não era um JSON válido. Responda APENAS com o JSON no formato especificado, sem texto extra.`
-          : humanPrompt,
-        );
+          : humanPrompt;
+        const raw = await this.llmService.invokePrompts(systemPrompt, humanPromptFinal, agentLabel, state.turnNumber, attempt);
 
         const parsed = this.parseResponse(raw);
 

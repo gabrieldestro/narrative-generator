@@ -3,6 +3,7 @@ import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { GameState, Character, GameSettings } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IOutputWriter } from "../domain/ports.js";
+import type { LlmCallLogger } from "../infrastructure/LlmCallLogger.js";
 import {
   arbiterSystemPrompt,
   arbiterHumanPrompt,
@@ -34,6 +35,7 @@ export class LlmService {
   constructor(
     private readonly llm: ChatOpenAI,
     settings: Partial<GameSettings> = {},
+    private readonly logger?: LlmCallLogger,
   ) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
   }
@@ -65,11 +67,17 @@ export class LlmService {
     return this.parseCharacterResponse(response.content as string);
   }
 
-  async invokePrompts(systemPrompt: string, humanPrompt: string): Promise<string> {
+  async invokePrompts(systemPrompt: string, humanPrompt: string, agent?: string, turn = 0, attempt = 1): Promise<string> {
     const messages = [
       new SystemMessage(systemPrompt),
       new HumanMessage(humanPrompt),
     ];
+
+    if (this.logger && agent) {
+      const response = await this.logger.measure(agent, turn, () => this.llm.invoke(messages), attempt);
+      return response.content as string;
+    }
+
     const response = await this.llm.invoke(messages);
     return response.content as string;
   }
@@ -82,7 +90,7 @@ export class LlmService {
     );
 
     try {
-      const raw = await this.invokePrompts(system, human);
+      const raw = await this.invokePrompts(system, human, 'Extrator:Localização', state.turnNumber);
       const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
       const parsed = JSON.parse(cleaned);
       const result: Record<string, string> = {};
@@ -101,7 +109,7 @@ export class LlmService {
     const human = extractStateChangesHumanPrompt(state, narration);
 
     try {
-      const raw = await this.invokePrompts(system, human);
+      const raw = await this.invokePrompts(system, human, 'Extrator:Estado', state.turnNumber);
       const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
       const parsed = JSON.parse(cleaned);
 
@@ -132,6 +140,12 @@ export class LlmService {
       new SystemMessage(arbiterSystemPrompt),
       new HumanMessage(arbiterHumanPrompt(state, actions, recentHistory, longTermSummary)),
     ];
+
+    if (this.logger) {
+      const response = await this.logger.measure('Árbitro', state.turnNumber, () => this.llm.invoke(messages));
+      return response.content as string;
+    }
+
     const response = await this.llm.invoke(messages);
     return response.content as string;
   }
@@ -158,6 +172,8 @@ export class LlmService {
       new HumanMessage(narratorHumanPrompt(state, actions, logicalResolution)),
     ];
     let fullResponse = "";
+
+    const start = Date.now();
     const stream = await this.llm.stream(messages);
 
     for await (const chunk of stream) {
@@ -166,23 +182,44 @@ export class LlmService {
       fullResponse += text;
     }
 
+    this.logger?.record({
+      timestamp: new Date().toISOString(),
+      agent: 'Narrador',
+      turnNumber: state.turnNumber,
+      durationMs: Date.now() - start,
+      attempt: 1,
+      status: 'success',
+    });
+
     return fullResponse;
   }
 
-  async summarizeMemory(longTermSummary: string | undefined, oldestTurns: string[]): Promise<string> {
+  async summarizeMemory(longTermSummary: string | undefined, oldestTurns: string[], turn = 0): Promise<string> {
     const messages = [
       new SystemMessage(summarizeSystemPrompt()),
       new HumanMessage(summarizeHumanPrompt(longTermSummary, oldestTurns)),
     ];
+
+    if (this.logger) {
+      const response = await this.logger.measure('Sumarizador', turn, () => this.llm.invoke(messages));
+      return response.content as string;
+    }
+
     const response = await this.llm.invoke(messages);
     return response.content as string;
   }
 
-  async updateWorldContext(currentContext: string, lastNarration: string): Promise<string> {
+  async updateWorldContext(currentContext: string, lastNarration: string, turn = 0): Promise<string> {
     const messages = [
       new SystemMessage(updateWorldContextSystemPrompt()),
       new HumanMessage(updateWorldContextHumanPrompt(currentContext, lastNarration)),
     ];
+
+    if (this.logger) {
+      const response = await this.logger.measure('Atualizador:Contexto', turn, () => this.llm.invoke(messages));
+      return response.content as string;
+    }
+
     const response = await this.llm.invoke(messages);
     return response.content as string;
   }

@@ -10,7 +10,10 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "benchmark": "tsx src/benchmark/simulatedTurn.ts",
+    "benchmark:5": "tsx src/benchmark/simulatedTurn.ts 5",
+    "benchmark:10": "tsx src/benchmark/simulatedTurn.ts 10"
   },
   "keywords": [],
   "author": "",

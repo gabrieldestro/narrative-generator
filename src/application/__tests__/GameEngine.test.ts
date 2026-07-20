@@ -308,9 +308,9 @@ describe('GameEngine', () => {
     expect(savedState.history).toHaveLength(2);
     expect(summarizeSpy).toHaveBeenCalledWith('Resumo inicial.', [
       'Turno 1:\nAções: ...\nNarrativa: ...'
-    ]);
+    ], expect.any(Number));
     expect(savedState.longTermSummary).toBe('Novo resumo consolidado.');
-    expect(updateCtxSpy).toHaveBeenCalledWith('Uma floresta sombria.', 'Cena narrada.');
+    expect(updateCtxSpy).toHaveBeenCalledWith('Uma floresta sombria.', 'Cena narrada.', expect.any(Number));
     expect(savedState.worldContext).toBe('Cenário atualizado.');
   });
 

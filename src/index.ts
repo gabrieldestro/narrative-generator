@@ -5,6 +5,7 @@ import { WorldTemplateRepository } from "./infrastructure/WorldTemplateRepositor
 import { ConsoleInput } from "./infrastructure/ConsoleInput.js";
 import { ConsoleOutput } from "./infrastructure/ConsoleOutput.js";
 import { LlmService } from "./application/LlmService.js";
+import { LlmCallLogger } from "./infrastructure/LlmCallLogger.js";
 import { SessionFactory } from "./application/SessionFactory.js";
 import { GameEngine } from "./application/GameEngine.js";
 import { CpuReflectionService } from "./application/npcAgent/CpuReflectionService.js";
@@ -28,7 +29,7 @@ async function main() {
     const output = new ConsoleOutput();
     const repository = new JsonStateRepository('savegame.json');
     const worldRepo = new WorldTemplateRepository();
-    const llmService = new LlmService(llm);
+    const llmService = new LlmService(llm, {}, new LlmCallLogger('logs/llm_calls.jsonl'));
     const gameManagementService = new GameManagementService(llmService);
     const cpuReflectionService = new CpuReflectionService(llmService);
     const sessionFactory = new SessionFactory(input, output, repository, llmService, worldRepo);

@@ -65,29 +65,60 @@ export class GameEngine {
       this.output.writeLine(`\n--- TURNO ${state.turnNumber} ---`);
       const actions: string[] = [];
 
-      for (const char of state.characters) {
-        if (char.status && char.status !== 'active') {
-          continue; // Pula personagens mortos ou perdidos
-        }
+      // ── Passo 1: coleta a ação do(s) personagem(ns) do jogador (sequencial — exige input) ──
+      const playerChars = state.characters.filter(c => c.isPlayer && (!c.status || c.status === 'active'));
+      const playerActions: Map<string, string> = new Map();
+      for (const char of playerChars) {
         let action = "";
-        if (char.isPlayer) {
-          while (true) {
-            action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
-            if (action.startsWith("/")) {
-              await this.handleCliCommand(state, action);
-              continue;
-            }
-            break;
+        while (true) {
+          action = await this.input.question(`[Você - ${char.name}]: O que você tenta fazer? `);
+          if (action.startsWith("/")) {
+            await this.handleCliCommand(state, action);
+            continue;
           }
-        } else {
-          this.output.write(`[CPU - ${char.name}] está refletindo...`);
-          try {
-            const decision = await this.cpuReflectionService.reflectAndAct(state, char, this.output);
-            action = decision.action;
-            this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
-          } catch (err) {
+          break;
+        }
+        playerActions.set(char.name, action);
+      }
+
+      // ── Passo 2: dispara reflexões de TODOS os NPCs em paralelo ──
+      const npcChars = state.characters.filter(c => !c.isPlayer && (!c.status || c.status === 'active'));
+      if (npcChars.length > 0) {
+        this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em paralelo...`);
+      }
+
+      const npcTasks = npcChars.map(char =>
+        this.cpuReflectionService
+          .reflectAndAct(state, char, this.output)
+          .then(decision => ({ char, action: decision.action, ok: true as const }))
+          .catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
+            return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, ok: false as const };
+          }),
+      );
+
+      const npcResults = await Promise.allSettled(npcTasks);
+
+      // ── Passo 3: consolida ações (player + NPC) e rola dados ──
+      for (const char of state.characters) {
+        if (char.status && char.status !== 'active') continue;
+
+        let action: string;
+        if (char.isPlayer) {
+          action = playerActions.get(char.name) ?? `${char.name} hesita por um momento.`;
+        } else {
+          const settled = npcResults.find(
+            r => r.status === 'fulfilled' && r.value.char.name === char.name,
+          );
+          if (settled && settled.status === 'fulfilled') {
+            action = settled.value.action;
+            if (!settled.value.ok) {
+              this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
+            } else {
+              this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
+            }
+          } else {
             action = `${char.name} observa os arredores e reconsidera suas opções.`;
             this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
           }
@@ -139,12 +170,12 @@ export class GameEngine {
         this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
         const excessCount = state.history.length - this.settings.memoryWindowSize;
         const oldestTurns = state.history.slice(0, excessCount);
-        state.longTermSummary = await this.llmService.summarizeMemory(state.longTermSummary, oldestTurns);
+        state.longTermSummary = await this.llmService.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
         state.history = state.history.slice(excessCount);
       }
 
       this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
-      state.worldContext = await this.llmService.updateWorldContext(state.worldContext, outcome);
+      state.worldContext = await this.llmService.updateWorldContext(state.worldContext, outcome, state.turnNumber);
 
       this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
       const locations = await this.llmService.extractCharacterLocations(state, outcome);
