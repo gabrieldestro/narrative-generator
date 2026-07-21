@@ -7,22 +7,39 @@ import type { SessionFactory } from "./SessionFactory.js";
 import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
 import { GameManagementService } from "./GameManagementService.js";
 
+class DummyInput implements IUserInput {
+  async question(_prompt: string): Promise<string> {
+    return "";
+  }
+  close(): void {}
+}
+
+class DummyOutput implements IOutputWriter {
+  write(_text: string): void {}
+  writeLine(_text: string): void {}
+  clear(): void {}
+}
+
 export class GameEngine {
   private readonly settings: GameSettings;
   private readonly gameManagementService: GameManagementService;
+  private readonly input: IUserInput;
+  private readonly output: IOutputWriter;
 
   constructor(
-    private readonly input: IUserInput,
-    private readonly output: IOutputWriter,
-    private readonly repository: IStateRepository,
-    private readonly llmService: LlmService,
-    private readonly cpuReflectionService: CpuReflectionService,
+    input?: IUserInput,
+    output?: IOutputWriter,
+    private readonly repository?: IStateRepository,
+    private readonly llmService?: LlmService,
+    private readonly cpuReflectionService?: CpuReflectionService,
     private readonly sessionFactory?: SessionFactory,
     settings: Partial<GameSettings> = {},
     gameManagementService?: GameManagementService
   ) {
+    this.input = input ?? new DummyInput();
+    this.output = output ?? new DummyOutput();
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
-    this.gameManagementService = gameManagementService ?? new GameManagementService(this.llmService);
+    this.gameManagementService = gameManagementService ?? new GameManagementService(this.llmService!);
   }
 
   public async start() {
@@ -30,6 +47,10 @@ export class GameEngine {
     this.output.writeLine("=== INICIANDO MOTOR NARRATIVO ===");
     let state: GameState;
     let isNewGame = false;
+
+    if (!this.repository) {
+      throw new Error("Repository é necessário para iniciar a CLI.");
+    }
 
     const loadedState = await this.repository.load();
     if (loadedState) {
@@ -53,7 +74,7 @@ export class GameEngine {
 
     if (isNewGame) {
       this.output.writeLine("\n[Gerando narrativa inicial...]\n");
-      const initialNarrative = await this.llmService.generateInitialNarrative(state);
+      const initialNarrative = await this.llmService!.generateInitialNarrative(state);
       state.history.push(`Narrativa Inicial: ${initialNarrative}`);
       await this.repository.save(state);
       this.output.writeLine("==================================================");
@@ -63,9 +84,8 @@ export class GameEngine {
 
     while (true) {
       this.output.writeLine(`\n--- TURNO ${state.turnNumber} ---`);
-      const actions: string[] = [];
 
-      // ── Passo 1: coleta a ação do(s) personagem(ns) do jogador (sequencial — exige input) ──
+      // ── Passo 1: coleta a ação do(s) personagem(ns) do jogador em CLI ──
       const playerChars = state.characters.filter(c => c.isPlayer && (!c.status || c.status === 'active'));
       const playerActions: Map<string, string> = new Map();
       for (const char of playerChars) {
@@ -81,121 +101,12 @@ export class GameEngine {
         playerActions.set(char.name, action);
       }
 
-      // ── Passo 2: dispara reflexões de TODOS os NPCs em paralelo ──
-      const npcChars = state.characters.filter(c => !c.isPlayer && (!c.status || c.status === 'active'));
-      if (npcChars.length > 0) {
-        this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em paralelo...`);
+      const turnResult = await this.processTurn(state, playerActions);
+      state = turnResult.state;
+
+      if (this.repository) {
+        await this.repository.save(state);
       }
-
-      const npcTasks = npcChars.map(char =>
-        this.cpuReflectionService
-          .reflectAndAct(state, char, this.output)
-          .then(decision => ({ char, action: decision.action, ok: true as const }))
-          .catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
-            return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, ok: false as const };
-          }),
-      );
-
-      const npcResults = await Promise.allSettled(npcTasks);
-
-      // ── Passo 3: consolida ações (player + NPC) e rola dados ──
-      for (const char of state.characters) {
-        if (char.status && char.status !== 'active') continue;
-
-        let action: string;
-        if (char.isPlayer) {
-          action = playerActions.get(char.name) ?? `${char.name} hesita por um momento.`;
-        } else {
-          const settled = npcResults.find(
-            r => r.status === 'fulfilled' && r.value.char.name === char.name,
-          );
-          if (settled && settled.status === 'fulfilled') {
-            action = settled.value.action;
-            if (!settled.value.ok) {
-              this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
-            } else {
-              this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
-            }
-          } else {
-            action = `${char.name} observa os arredores e reconsidera suas opções.`;
-            this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
-          }
-        }
-
-        // Rola d20
-        const roll = this.settings.godMode ? 20 : Math.floor(Math.random() * 20) + 1;
-        const prefix = this.settings.godMode ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
-        this.output.writeLine(`${prefix} ${char.name} rolou: ${roll}\x1b[0m`);
-        actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
-      }
-
-      // Chance de evento inesperado ("sal e pimenta") vinda das settings centralizadas
-      const unexpectedEvent = Math.random() < this.settings.unexpectedEventChance;
-      if (unexpectedEvent && this.settings.debug) {
-        this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
-      }
-
-      this.output.writeLine("\n[Árbitro] Calculando as consequências...");
-      const recentHistory = this.settings.arbiterHistoryTurns > 0
-        ? state.history.slice(-this.settings.arbiterHistoryTurns)
-        : undefined;
-      const logicalResolution = await this.llmService.arbitrateLogic(state, actions, recentHistory, state.longTermSummary);
-      this.output.writeLine(`\x1b[90m(Resolução Mecânica: ${logicalResolution.replace(/\n/g, ' - ')})\x1b[0m`);
-
-      // Atualiza scratchpad dos NPCs com base na resolução do árbitro
-      for (const char of state.characters) {
-        if (!char.isPlayer && char.status === 'active') {
-          this.cpuReflectionService.recordArbiterResult(char, state.turnNumber, logicalResolution);
-        }
-      }
-
-      this.output.writeLine("\n[Narrador] Escrevendo a cena...");
-      this.output.writeLine("--------------------------------------------------");
-      const outcome = await this.llmService.narrateFiction(state, actions, logicalResolution, this.output, unexpectedEvent);
-      this.output.writeLine("\n--------------------------------------------------");
-
-      state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
-
-      // Executa a extração automática pós-narração pelo LLM
-      this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
-      const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, outcome);
-      state.characters = stateWithUpdates.characters;
-      if (stateWithUpdates.locations) {
-        state.locations = stateWithUpdates.locations;
-      }
-
-      if (state.history.length > this.settings.memoryWindowSize) {
-        this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
-        const excessCount = state.history.length - this.settings.memoryWindowSize;
-        const oldestTurns = state.history.slice(0, excessCount);
-        state.longTermSummary = await this.llmService.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
-        state.history = state.history.slice(excessCount);
-      }
-
-      this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
-      state.worldContext = await this.llmService.updateWorldContext(state.worldContext, outcome, state.turnNumber);
-
-      this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
-      const locations = await this.llmService.extractCharacterLocations(state, outcome);
-      if (Object.keys(locations).length > 0) {
-        for (const char of state.characters) {
-          const loc = locations[char.name];
-          if (loc) {
-            char.currentLocation = loc;
-          }
-        }
-      } else {
-        for (const char of state.characters) {
-          if (!char.currentLocation) {
-            char.currentLocation = state.worldContext.slice(0, 60);
-          }
-        }
-      }
-
-      state.turnNumber++;
-      await this.repository.save(state);
 
       const continuar = await this.input.question("\nContinuar para o próximo turno? (s/n) ");
       if (continuar.toLowerCase() !== 's') {
@@ -207,7 +118,147 @@ export class GameEngine {
     this.input.close();
   }
 
-  private async handleCliCommand(state: GameState, commandText: string): Promise<void> {
+  public async processTurn(
+    state: GameState,
+    playerActions: Map<string, string>,
+    onToken?: (token: string) => void
+  ): Promise<{ narrative: string; logicalResolution: string; state: GameState }> {
+    const actions: string[] = [];
+
+    // ── Passo 1: dispara reflexões de TODOS os NPCs em paralelo ──
+    const npcChars = state.characters.filter(c => !c.isPlayer && (!c.status || c.status === 'active'));
+    if (npcChars.length > 0) {
+      this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em paralelo...`);
+    }
+
+    const npcTasks = npcChars.map(char =>
+      this.cpuReflectionService!
+        .reflectAndAct(state, char, this.output)
+        .then(decision => ({ char, action: decision.action, ok: true as const }))
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
+          return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, ok: false as const };
+        }),
+    );
+
+    const npcResults = await Promise.allSettled(npcTasks);
+
+    // ── Passo 2: consolida ações (player + NPC) e rola dados ──
+    for (const char of state.characters) {
+      if (char.status && char.status !== 'active') continue;
+
+      let action: string;
+      if (char.isPlayer) {
+        action = playerActions.get(char.name) ?? `${char.name} hesita por um momento.`;
+      } else {
+        const settled = npcResults.find(
+          r => r.status === 'fulfilled' && r.value.char.name === char.name,
+        );
+        if (settled && settled.status === 'fulfilled') {
+          action = settled.value.action;
+          if (!settled.value.ok) {
+            this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
+          } else {
+            this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
+          }
+        } else {
+          action = `${char.name} observa os arredores e reconsidera suas opções.`;
+          this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
+        }
+      }
+
+      // Rola d20
+      const roll = this.settings.godMode ? 20 : Math.floor(Math.random() * 20) + 1;
+      const prefix = this.settings.godMode ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
+      this.output.writeLine(`${prefix} ${char.name} rolou: ${roll}\x1b[0m`);
+      actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
+    }
+
+    // Chance de evento inesperado
+    const unexpectedEvent = Math.random() < this.settings.unexpectedEventChance;
+    if (unexpectedEvent && this.settings.debug) {
+      this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
+    }
+
+    this.output.writeLine("\n[Árbitro] Calculando as consequências...");
+    const recentHistory = this.settings.arbiterHistoryTurns > 0
+      ? state.history.slice(-this.settings.arbiterHistoryTurns)
+      : undefined;
+    const logicalResolution = await this.llmService!.arbitrateLogic(state, actions, recentHistory, state.longTermSummary);
+    this.output.writeLine(`\x1b[90m(Resolução Mecânica: ${logicalResolution.replace(/\n/g, ' - ')})\x1b[0m`);
+
+    // Atualiza scratchpad dos NPCs com base na resolução do árbitro
+    for (const char of state.characters) {
+      if (!char.isPlayer && char.status === 'active') {
+        this.cpuReflectionService!.recordArbiterResult(char, state.turnNumber, logicalResolution);
+      }
+    }
+
+    this.output.writeLine("\n[Narrador] Escrevendo a cena...");
+    this.output.writeLine("--------------------------------------------------");
+    const streamWriter: IOutputWriter = {
+      write: (text: string) => {
+        this.output.write(text);
+        if (onToken) onToken(text);
+      },
+      writeLine: (text: string) => {
+        this.output.writeLine(text);
+        if (onToken) onToken(text + "\n");
+      },
+      clear: () => this.output.clear(),
+    };
+    const outcome = await this.llmService!.narrateFiction(state, actions, logicalResolution, streamWriter, unexpectedEvent);
+    this.output.writeLine("\n--------------------------------------------------");
+
+    state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
+
+    // Executa a extração automática pós-narração pelo LLM
+    this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
+    const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, outcome);
+    state.characters = stateWithUpdates.characters;
+    if (stateWithUpdates.locations) {
+      state.locations = stateWithUpdates.locations;
+    }
+
+    if (state.history.length > this.settings.memoryWindowSize) {
+      this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
+      const excessCount = state.history.length - this.settings.memoryWindowSize;
+      const oldestTurns = state.history.slice(0, excessCount);
+      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+      state.history = state.history.slice(excessCount);
+    }
+
+    this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
+    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, outcome, state.turnNumber);
+
+    this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
+    const locations = await this.llmService!.extractCharacterLocations(state, outcome);
+    if (Object.keys(locations).length > 0) {
+      for (const char of state.characters) {
+        const loc = locations[char.name];
+        if (loc) {
+          char.currentLocation = loc;
+        }
+      }
+    } else {
+      for (const char of state.characters) {
+        if (!char.currentLocation) {
+          char.currentLocation = state.worldContext.slice(0, 60);
+        }
+      }
+    }
+
+    state.turnNumber++;
+
+    return {
+      narrative: outcome,
+      logicalResolution,
+      state
+    };
+  }
+
+  public async handleCliCommand(state: GameState, commandText: string): Promise<void> {
     const parts = commandText.trim().split(" ");
     const command = parts[0]!.toLowerCase();
     const args = parts.slice(1);
@@ -384,7 +435,7 @@ export class GameEngine {
           : state.history.slice(-turnsCount).join("\n\n");
 
         this.output.writeLine(`[LLM] Gerando ficha de "${charName}" a partir do histórico...`);
-        const sheet = await this.llmService.extractCharacterFromHistory(
+        const sheet = await this.llmService!.extractCharacterFromHistory(
           charName,
           excerpt,
           state.narrativeStyle,
@@ -437,5 +488,4 @@ export class GameEngine {
     }
     return "(Nenhuma narrativa encontrada no histórico)";
   }
-
 }

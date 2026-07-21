@@ -1,0 +1,77 @@
+### ------------------------------------------------------------------
+### Arquivo de Requisições HTTP para o Gerador Narrativo (Fastify API)
+### Utilização: Plugin 'REST Client' no VS Code ou HTTP Client do WebStorm/IntelliJ
+### ------------------------------------------------------------------
+
+@baseUrl = http://localhost:3000
+
+### 1. Listar Templates de Mundos Disponíveis
+GET {{baseUrl}}/api/worlds
+Content-Type: application/json
+
+###
+
+### 2. Iniciar um Novo Jogo via Template Pré-Configurado (Fantasia)
+# @name createGameTemplate
+POST {{baseUrl}}/api/games/new
+Content-Type: application/json
+
+{
+  "mode": "template",
+  "templateName": "fantasia_masmorra"
+}
+
+###
+
+### 3. Armazenar a SessionId gerada acima (Cole o ID retornado na variável abaixo para testar os próximos endpoints)
+@sessionId = {{createGameTemplate.response.body.sessionId}}
+
+###
+
+### 4. Consultar o Estado Atual do Jogo (Personagens, Inventários e Mapa)
+GET {{baseUrl}}/api/games/{{sessionId}}/state
+Content-Type: application/json
+
+###
+
+### 5. Processar 1 Turno do Jogo (Ação Simples — Padrão sem Enriquecimento)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn
+Content-Type: application/json
+
+{
+  "playerText": "Olho ao redor procurando por alavancas ou inscrições secretas na parede."
+}
+
+###
+
+### 6. Processar 1 Turno do Jogo (Ação Estruturada com Skills / Intenção Opcional)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn
+Content-Type: application/json
+
+{
+  "actionType": "speak",
+  "actionIntent": "intimidating",
+  "playerText": "Diga-me imediatamente quem roubou o artefato!",
+  "characterName": "Darian"
+}
+
+###
+
+### 7. Processar 1 Turno via Streaming em Tempo Real (SSE - Server-Sent Events)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/stream
+Content-Type: application/json
+
+{
+  "playerText": "Examino cuidadosamente os baús no centro da sala."
+}
+
+###
+
+### 8. Iniciar um Novo Jogo Customizado via IA
+POST {{baseUrl}}/api/games/new
+Content-Type: application/json
+
+{
+  "mode": "custom",
+  "customPrompt": "Um cenário de ficção científica noir em uma estação espacial abandonada nas argolas de Saturno."
+}

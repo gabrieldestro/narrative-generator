@@ -1,0 +1,68 @@
+flowchart TD
+    START(["INÍCIO DO TURNO"]) --> COLETA["COLETA DE AÇÕES<br/>para cada personagem ativo"]
+    
+    COLETA --> PLAYER{"É o<br/>player?"}
+    PLAYER -->|Sim| INPUT["Usuário digita a ação<br/>(ConsoleInput)"]
+    PLAYER -->|Não| NPC["CPU Reflection (LLM)<br/>decide ação do NPC"]
+    
+    INPUT --> D20["d20: godMode? 20 : random(1-20)"]
+    NPC --> D20
+    
+    D20 --> EVENTO{"Evento<br/>inesperado?"}
+    EVENTO -->|"15% de chance"| FLAG["flag = true<br/>(passada ao Narrador)"]
+    EVENTO -->|"85%"| FLAG2["flag = false"]
+    
+    FLAG --> ARBITER
+    FLAG2 --> ARBITER
+    
+    subgraph ARBITRAGEM["ARBITRAGEM (Agente Juiz - LLM)"]
+        direction TB
+        A1["Regra 1: ação impossível<br/>fisicamente = falha"]
+        A2["Regra 2: d20 ≤5 = falha<br/>d20 ≥15 = sucesso<br/>d20 6-14 = critério do LLM"]
+        A3["Regra 3: não julgar por<br/>gênero/estilo narrativo"]
+        A1 --> A2 --> A3
+    end
+    
+    ARBITRAGEM --> RESOLUTION["resolution:<br/>'[Personagem] tentou [Ação] → Sucesso/Falha porque [Motivo]'"]
+    
+    RESOLUTION --> SCRATCHPAD["ATUALIZA SCRATCHPAD DOS NPCs<br/>registra resultado no diário<br/>(últimos 5 turnos)"]
+    
+    SCRATCHPAD --> NARRACAO
+    
+    subgraph NARRACAO["NARRAÇÃO (Agente Escritor - LLM streamado)"]
+        direction TB
+        N1["Nunca contradizer o árbitro"]
+        N2["Adotar estilo narrativo<br/>(sombrio/cômico/épico/realista)"]
+        N3["Tamanho: conciso / balanceado / descritivo"]
+        N4["Opcional: evento inesperado"]
+        N1 --> N2 --> N3 --> N4
+    end
+    
+    NARRACAO --> OUTCOME["outcome: texto literário<br/>exibido ao usuário em tempo real"]
+    
+    OUTCOME --> HISTORY["ATUALIZA HISTÓRICO<br/>state.history.push(...)<br/>'Turno N: Ações | Narrativa'"]
+    
+    HISTORY --> EXTRACAO
+    
+    subgraph EXTRACAO["EXTRAÇÃO DE ESTADO (Agente Extrator - LLM JSON)"]
+        direction TB
+        E1["inventoryChanges:<br/>{characterName, action, item}"]
+        E2["locationChanges:<br/>{discovered[], newConnections[]}"]
+        E3["characterLifecycle:<br/>{characterName, status, ...}<br/>(dead/lost/active/discovered)"]
+    end
+    
+    EXTRACAO --> MUTATION["Aplica mutações no GameState<br/>inventário + locais + vida/morte"]
+    
+    MUTATION --> SUMMARIZE{"history.length ><br/>memoryWindowSize?<br/>(padrão: 5)"}
+    
+    SUMMARIZE -->|Sim| SUMMARIZE_LLM["LLM condensa turnos antigos<br/>em longTermSummary<br/>+ trim do history"]
+    SUMMARIZE -->|Não| CONTEXT
+    
+    SUMMARIZE_LLM --> CONTEXT["ATUALIZA CONTEXTO DO MUNDO (LLM)<br/>→ worldContext (≤3 frases do ambiente)"]
+    
+    CONTEXT --> LOCATIONS["EXTRAI LOCALIZAÇÕES (LLM JSON)<br/>mapeia personagens → locais<br/>→ atualiza currentLocation"]
+    
+    LOCATIONS --> END["FIM DO TURNO<br/>turnNumber++<br/>persiste savegame.json<br/>'Continuar? (s/n)'"]
+    
+    END -->|s| START
+    END -->|n| EXIT(["FIM DO JOGO"])

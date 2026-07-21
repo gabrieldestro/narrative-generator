@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "start:api": "tsx src/server.ts",
+    "dev:api": "tsx watch src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -19,9 +21,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/sensible": "^6.0.4",
     "@langchain/core": "^1.2.0",
     "@langchain/openai": "^1.5.1",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "fastify": "^5.10.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

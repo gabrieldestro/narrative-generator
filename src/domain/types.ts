@@ -23,6 +23,17 @@ export interface Location {
 
 export type CharacterStatus = 'active' | 'dead' | 'lost';
 
+export type ActionType = 'observe' | 'speak' | 'attack' | 'sneak' | 'use_item' | 'interact' | 'flee' | 'free';
+
+export type ActionIntent = 'curious' | 'aggressive' | 'cautious' | 'friendly' | 'intimidating' | 'desperate' | 'neutral';
+
+export interface PlayerActionPayload {
+  actionType?: ActionType;
+  actionIntent?: ActionIntent;
+  playerText: string;
+  characterName?: string;
+}
+
 // Representa um personagem na nossa história
 export interface Character {
   id: string;
@@ -58,6 +69,7 @@ export interface WorldConfig {
 
 // Representa um template de mundo pré-configurado carregado da pasta /worlds/
 export interface WorldTemplate extends WorldConfig {
+  id?: string;
   name: string;
   description: string;
   characters: CharacterTemplate[];

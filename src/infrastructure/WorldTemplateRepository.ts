@@ -14,12 +14,13 @@ export class WorldTemplateRepository {
       const files = await fs.readdir(this.worldsDir);
       const jsonFiles = files.filter(f => f.endsWith('.json'));
 
-      const templates: WorldTemplate[] = [];
+      const templates: (WorldTemplate & { id: string })[] = [];
       for (const file of jsonFiles) {
         const data = await fs.readFile(path.join(this.worldsDir, file), 'utf-8');
         const template = JSON.parse(data) as WorldTemplate;
-        template.name = template.name || file.replace('.json', '');
-        templates.push(template);
+        const id = file.replace('.json', '');
+        template.name = template.name || id;
+        templates.push({ ...template, id });
       }
       return templates;
     } catch (error: any) {

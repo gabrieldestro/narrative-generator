@@ -6,14 +6,85 @@ import type { LlmService } from "./LlmService.js";
 
 export class SessionFactory {
   constructor(
-    private readonly input: IUserInput,
-    private readonly output: IOutputWriter,
-    private readonly repository: IStateRepository,
-    private readonly llmService: LlmService,
+    private readonly input?: IUserInput,
+    private readonly output?: IOutputWriter,
+    private readonly repository?: IStateRepository,
+    private readonly llmService?: LlmService,
     private readonly worldTemplateRepo?: WorldTemplateRepository
   ) {}
 
+  public buildFromTemplate(template: WorldTemplate): GameState {
+    const characters: Character[] = template.characters.map((c, i) => {
+      const character: Character = {
+        id: String(i + 1),
+        name: c.name,
+        description: c.description,
+        personality: c.personality,
+        isPlayer: c.isPlayer ?? false,
+        currentLocation: c.initialLocation ?? 'Ponto de Partida',
+        inventory: c.inventory ?? [],
+        status: 'active',
+      };
+      if (c.longTermObjective !== undefined) {
+        character.longTermObjective = c.longTermObjective;
+        character.currentObjective = c.longTermObjective;
+      }
+      return character;
+    });
+
+    return {
+      worldContext: template.worldContext,
+      narrativeStyle: template.narrativeStyle,
+      writingStyle: template.writingStyle,
+      turnNumber: 1,
+      history: [],
+      characters,
+      locations: template.locations ?? [],
+    };
+  }
+
+  public async buildCustomScenario(
+    promptText: string,
+    style = "Aventura Customizada",
+    writingStyle = "Equilibrado"
+  ): Promise<GameState> {
+    const worldContext = this.llmService
+      ? await this.llmService.generateInitialContext(style, writingStyle)
+      : promptText;
+
+    const [playerDesc, playerPersonality] = this.llmService
+      ? await this.llmService.generatePlayerCharacter(style, writingStyle, "Heroi")
+      : ["Um aventureiro determinado.", "Pragmático e corajoso."];
+
+    const characters: Character[] = [
+      {
+        id: "1",
+        name: "Heroi",
+        description: playerDesc,
+        personality: playerPersonality,
+        isPlayer: true,
+        currentLocation: "Ponto de Partida",
+        inventory: [],
+        status: "active"
+      }
+    ];
+
+    return {
+      worldContext,
+      narrativeStyle: style,
+      writingStyle,
+      turnNumber: 1,
+      history: [],
+      characters,
+      locations: []
+    };
+  }
+
   async setupNewGame(): Promise<GameState> {
+    if (!this.input || !this.output) {
+      throw new Error("CLI Input/Output são necessários para setupNewGame interativo.");
+    }
+
     const templates: WorldTemplate[] = this.worldTemplateRepo
       ? await this.worldTemplateRepo.listAll()
       : [];
@@ -29,7 +100,7 @@ export class SessionFactory {
       }
     }
 
-    return this.createCustomScenario();
+    return this.createInteractiveCustomScenario();
   }
 
   async createNewGame(
@@ -66,11 +137,17 @@ export class SessionFactory {
       characters,
       locations,
     };
-    await this.repository.save(state);
+    if (this.repository) {
+      await this.repository.save(state);
+    }
     return state;
   }
 
   private async selectPreconfiguredWorld(templates: WorldTemplate[]): Promise<GameState> {
+    if (!this.input || !this.output) {
+      throw new Error("CLI Input/Output são necessários.");
+    }
+
     this.output.writeLine("\n--- Mundos Pré-Configurados ---");
     for (let i = 0; i < templates.length; i++) {
       const t = templates[i]!;
@@ -84,7 +161,7 @@ export class SessionFactory {
 
     if (!selected) {
       this.output.writeLine("Opção inválida. Usando configuração personalizada.");
-      return this.createCustomScenario();
+      return this.createInteractiveCustomScenario();
     }
 
     this.output.writeLine(`\nMundo selecionado: ${selected.name}`);
@@ -101,7 +178,11 @@ export class SessionFactory {
     return state;
   }
 
-  private async createCustomScenario(): Promise<GameState> {
+  private async createInteractiveCustomScenario(): Promise<GameState> {
+    if (!this.input || !this.output || !this.llmService) {
+      throw new Error("CLI e LLMService são necessários para o cenário interativo.");
+    }
+
     this.output.writeLine("\nEscolha o gênero/estilo narrativo da história:");
     this.output.writeLine("1. Fantasia Medieval");
     this.output.writeLine("2. Terror de Sobrevivência (Suspense/Monstros)");

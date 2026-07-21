@@ -1,4 +1,4 @@
-import { ChatOpenAI } from "@langchain/openai";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { GameState, Character, GameSettings } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
@@ -33,7 +33,7 @@ export class LlmService {
   private readonly settings: GameSettings;
 
   constructor(
-    private readonly llm: ChatOpenAI,
+    private readonly llm: BaseChatModel,
     settings: Partial<GameSettings> = {},
     private readonly logger?: LlmCallLogger,
   ) {
