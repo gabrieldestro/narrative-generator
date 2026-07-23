@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { startServer } from './infrastructure/http/server.js';
+import { startServer } from './api/server.js';
 
 dotenv.config();
 

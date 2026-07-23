@@ -1,12 +1,12 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
-import type { GameState, PlayerActionPayload } from '../../../domain/types.js';
-import type { WorldTemplateRepository } from '../../WorldTemplateRepository.js';
-import type { SessionFactory } from '../../../application/SessionFactory.js';
-import type { GameEngine } from '../../../application/GameEngine.js';
-import type { LlmService } from '../../../application/LlmService.js';
-import type { SessionRepository } from '../SessionRepository.js';
-import { ActionBuilderService } from '../../../application/ActionBuilderService.js';
+import type { GameState, PlayerActionPayload } from '../../domain/types.js';
+import type { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
+import type { SessionFactory } from '../../application/SessionFactory.js';
+import type { GameEngine } from '../../application/GameEngine.js';
+import type { LlmService } from '../../application/LlmService.js';
+import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
+import { ActionBuilderService } from '../../application/ActionBuilderService.js';
 
 export interface CreateGameRequestBody {
   mode: 'template' | 'custom';
@@ -89,7 +89,7 @@ export class GameController {
     const enrichedAction = ActionBuilderService.buildActionString(payload);
 
     // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
-    const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+    const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
     const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
 
     const playerActionsMap = new Map<string, string>();
@@ -138,7 +138,7 @@ export class GameController {
     };
 
     const enrichedAction = ActionBuilderService.buildActionString(payload);
-    const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+    const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
     const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
 
     const playerActionsMap = new Map<string, string>();

@@ -1,0 +1,36 @@
+@use '@angular/material' as mat;
+
+$dark-primary: (
+  0: #000000,
+  10: #1a1200,
+  20: #2e2400,
+  25: #3a2f00,
+  30: #463a00,
+  35: #534500,
+  40: #605100,
+  50: #7b6700,
+  60: #977e00,
+  70: #b49600,
+  80: #d2ae00,
+  90: #f0c800,
+  95: #ffe185,
+  98: #fff3d0,
+  99: #fffae6,
+  100: #ffffff,
+  secondary: #c9a84c,
+);
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+      theme-type: dark,
+    ),
+    typography: (
+      plain-family: 'Inter, "Segoe UI", Roboto, system-ui, sans-serif',
+      brand-family: 'Georgia, Merriweather, Palatino Linotype, serif',
+    ),
+    density: 0,
+  ));
+}

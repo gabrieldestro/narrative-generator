@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { buildApp } from '../server.js';
-import { SessionRepository } from '../SessionRepository.js';
-import { WorldTemplateRepository } from '../../WorldTemplateRepository.js';
+import { SessionRepository } from '../../infrastructure/SessionRepository.js';
+import { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
 
 describe('Fastify Game API', () => {
   let app: ReturnType<typeof buildApp>;

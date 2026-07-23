@@ -1,0 +1,34 @@
+.world-list__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.world-list__skeleton {
+  padding: 1.5rem;
+  background: #2a2a2a;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #2a2a2a 25%, #333 50%, #2a2a2a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton--circle { width: 48px; height: 48px; border-radius: 50%; }
+.skeleton--text { height: 14px; width: 100%; }
+.skeleton--text__title { width: 60%; }
+.skeleton--text__subtitle { width: 80%; }
+.skeleton--chip { height: 24px; width: 80px; border-radius: 12px; }
+
+.world-list__error {
+  text-align: center;
+  padding: 2rem;
+  color: #e53935;
+}

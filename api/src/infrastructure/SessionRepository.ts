@@ -1,4 +1,4 @@
-import type { GameState } from "../../domain/types.js";
+import type { GameState } from "../domain/types.js";
 
 export class SessionRepository {
   private readonly sessions = new Map<string, GameState>();

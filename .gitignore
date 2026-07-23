@@ -1,12 +1,23 @@
-node_modules/
-.env
-savegame.json
-docs/
-dist/
-worlds/
-coverage/
-test-output/
-*.log
+# ─── Backend (api/) ───
+api/node_modules/
+api/.env
+api/savegame.json
+api/dist/
+api/worlds/
+api/coverage/
+api/test-output/
+api/*.log
+api/logs/
+
+# ─── Frontend (app/) ───
+app/node_modules/
+app/dist/
+app/.angular/
+
+# ─── OS ───
 .DS_Store
 Thumbs.db
+
+# ─── Root ───
+docs/
 next_steps.md

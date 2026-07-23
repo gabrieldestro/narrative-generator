@@ -1,0 +1,35 @@
+@use './tokens' as *;
+
+.narrative-text {
+  font-family: $font-narrative;
+  font-size: $text-lg;
+  line-height: $line-height-relaxed;
+  max-width: $max-reading-width;
+  color: $text-primary;
+}
+
+.ui-text {
+  font-family: $font-ui;
+  font-size: $text-base;
+  line-height: $line-height-normal;
+  color: $text-primary;
+}
+
+.ui-text--secondary {
+  color: $text-secondary;
+  font-size: $text-sm;
+}
+
+.ui-text--mono {
+  font-family: $font-mono;
+  font-size: $text-sm;
+}
+
+.section-title {
+  font-family: $font-ui;
+  font-size: $text-xs;
+  font-weight: $weight-semibold;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-secondary;
+}

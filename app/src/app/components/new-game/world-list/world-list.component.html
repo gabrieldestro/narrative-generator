@@ -1,0 +1,24 @@
+@if (loading()) {
+  <div class="world-list__grid" aria-label="Carregando mundos">
+    @for (_ of [1,2,3,4]; track $index) {
+      <div class="world-list__skeleton" aria-hidden="true">
+        <div class="skeleton skeleton--circle"></div>
+        <div class="skeleton skeleton--text skeleton--text__title"></div>
+        <div class="skeleton skeleton--text skeleton--text__subtitle"></div>
+        <div class="skeleton skeleton--chip"></div>
+        <div class="skeleton skeleton--chip"></div>
+      </div>
+    }
+  </div>
+} @else if (error()) {
+  <div class="world-list__error" role="alert">
+    <p>{{ error() }}</p>
+    <button (click)="loadWorlds()" aria-label="Tentar carregar mundos novamente">Tentar novamente</button>
+  </div>
+} @else {
+  <div class="world-list__grid" role="list" aria-label="Lista de mundos disponíveis">
+    @for (world of worlds(); track world.id) {
+      <ng-game-card [world]="world" (play)="onPlayWorld($event)" (useAsBase)="onUseAsBase($event)"/>
+    }
+  </div>
+}

@@ -82,6 +82,33 @@ export class LlmService {
     return response.content as string;
   }
 
+  private tryParseJson(raw: string): any {
+    const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+
+    const parseAttempts: string[] = [
+      stripped,
+    ];
+
+    const firstBrace = stripped.indexOf('{');
+    const lastBrace = stripped.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      parseAttempts.push(stripped.slice(firstBrace, lastBrace + 1));
+    }
+
+    for (const str of parseAttempts) {
+      try {
+        return JSON.parse(str);
+      } catch {
+        continue;
+      }
+    }
+
+    if (this.settings.debug) {
+      console.error("[LLM Parse Fallback] Nenhum JSON válido encontrado em:", stripped);
+    }
+    return {};
+  }
+
   async extractCharacterLocations(state: GameState, narration: string): Promise<Record<string, string>> {
     const system = extractLocationSystemPrompt();
     const human = extractLocationHumanPrompt(
@@ -91,8 +118,7 @@ export class LlmService {
 
     try {
       const raw = await this.invokePrompts(system, human, 'Extrator:Localização', state.turnNumber);
-      const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = this.tryParseJson(raw);
       const result: Record<string, string> = {};
       for (const char of state.characters) {
         const location = parsed[char.name];
@@ -110,10 +136,8 @@ export class LlmService {
 
     try {
       const raw = await this.invokePrompts(system, human, 'Extrator:Estado', state.turnNumber);
-      const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = this.tryParseJson(raw);
 
-      // Garantir estrutura mínima padrão
       return {
         inventoryChanges: Array.isArray(parsed.inventoryChanges) ? parsed.inventoryChanges : [],
         locationChanges: {

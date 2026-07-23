@@ -1,0 +1,117 @@
+// ─── Design Tokens ───
+
+// Backgrounds
+$bg-primary:     #1a1a1a;
+$bg-secondary:   #222222;
+$bg-elevated:    #2a2a2a;
+$bg-hover:       #333333;
+
+// Texto
+$text-primary:   #e0e0e0;
+$text-secondary: #a0a0a0;
+$text-muted:     #666666;
+$text-inverse:   #1a1a1a;
+
+// Acento (dourado suave)
+$accent:         #c9a84c;
+$accent-hover:   #dbb85e;
+$accent-muted:   #8a7a3a;
+
+// Bordas
+$border:         #333333;
+$border-light:   #3a3a3a;
+$divider:        #2a2a2a;
+
+// Estados semânticos
+$success:        #4caf50;
+$warning:        #ff9800;
+$error:          #e53935;
+$info:           #42a5f5;
+
+// Painel debug
+$debug-bg:       #1e1e2e;
+$debug-border:   #2a2a3e;
+
+// Fontes
+$font-narrative: 'Georgia', 'Merriweather', 'Palatino Linotype', serif;
+$font-ui:        'Inter', 'Segoe UI', 'Roboto', system-ui, sans-serif;
+$font-mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+// Tamanhos
+$text-xs:   0.75rem;
+$text-sm:   0.875rem;
+$text-base: 1rem;
+$text-lg:   1.125rem;
+$text-xl:   1.25rem;
+$text-2xl:  1.5rem;
+$text-3xl:  2rem;
+
+// Altura de linha
+$line-height-tight:   1.25;
+$line-height-normal:  1.5;
+$line-height-relaxed: 1.75;
+$line-height-loose:   2;
+
+// Largura de leitura
+$max-reading-width: 72ch;
+
+// Pesos
+$weight-regular: 400;
+$weight-medium:  500;
+$weight-semibold: 600;
+$weight-bold:    700;
+
+// Espaçamento
+$space-1:  0.25rem;
+$space-2:  0.5rem;
+$space-3:  0.75rem;
+$space-4:  1rem;
+$space-5:  1.25rem;
+$space-6:  1.5rem;
+$space-8:  2rem;
+$space-10: 2.5rem;
+$space-12: 3rem;
+
+// Raios de borda
+$radius-sm:  4px;
+$radius-md:  8px;
+$radius-lg:  12px;
+$radius-xl:  16px;
+$radius-full: 9999px;
+
+// Sombras
+$shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.3);
+$shadow-md:  0 4px 6px rgba(0, 0, 0, 0.4);
+$shadow-lg:  0 10px 25px rgba(0, 0, 0, 0.5);
+
+// Transições
+$transition-fast:   150ms ease;
+$transition-normal: 250ms ease;
+$transition-slow:   400ms ease;
+
+// CSS custom properties para consumo em componentes
+:root {
+  --bg-primary: #{$bg-primary};
+  --bg-secondary: #{$bg-secondary};
+  --bg-elevated: #{$bg-elevated};
+  --bg-hover: #{$bg-hover};
+  --text-primary: #{$text-primary};
+  --text-secondary: #{$text-secondary};
+  --text-muted: #{$text-muted};
+  --accent: #{$accent};
+  --accent-hover: #{$accent-hover};
+  --accent-muted: #{$accent-muted};
+  --border: #{$border};
+  --border-light: #{$border-light};
+  --divider: #{$divider};
+  --success: #{$success};
+  --warning: #{$warning};
+  --error: #{$error};
+  --info: #{$info};
+  --debug-bg: #{$debug-bg};
+  --debug-border: #{$debug-border};
+  --font-narrative: #{$font-narrative};
+  --font-ui: #{$font-ui};
+  --font-mono: #{$font-mono};
+  --max-reading-width: #{$max-reading-width};
+}

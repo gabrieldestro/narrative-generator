@@ -1,0 +1,58 @@
+@use '@angular/material' as mat;
+@use './app/shared/styles/tokens' as *;
+@use './app/shared/styles/theme';
+@use './app/shared/styles/typography';
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: $bg-primary;
+  color: $text-primary;
+  font-family: $font-ui;
+  margin: 0;
+  min-height: 100vh;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+// ─── Global Animations ───
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+// ─── Utility Classes ───
+
+.fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+
+// ─── Scrollbar Styles ───
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: $bg-primary;
+}
+::-webkit-scrollbar-thumb {
+  background: $border;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: $text-muted;
+}
