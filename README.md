@@ -49,12 +49,16 @@ ng serve
 
 Acessar `http://localhost:4200`.
 
-### CLI (console)
+### CLI (console interativo)
+
+Roda o `GameEngine` diretamente no terminal com `ConsoleInput`/`ConsoleOutput`, executando o loop completo de turnos com input do jogador, reflexão de NPCs, arbiter e narração via LLM.
 
 ```bash
 cd api
 npm start
 ```
+
+Comandos disponíveis durante o jogo: `/help`, `/status`, `/map`, `/add-item`, `/remove-item`, `/add-char`, `/remove-char`, `/add-location`, `/remove-location`, `/extract`, `/extract-char`.
 
 ---
 

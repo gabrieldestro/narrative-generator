@@ -1,5 +1,6 @@
 import { Component, inject, Output, EventEmitter, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
+import { LoggingService } from '../../../core/services/logging.service';
 import { GameCardComponent } from '../../../shared/components/game-card/game-card.component';
 import type { WorldTemplate } from '../../../core/models/world-template.model';
 
@@ -13,6 +14,7 @@ import type { WorldTemplate } from '../../../core/models/world-template.model';
 })
 export class WorldListComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly log = inject(LoggingService);
   @Output() selectWorld = new EventEmitter<string>();
   @Output() useAsBase = new EventEmitter<WorldTemplate>();
 
@@ -25,15 +27,18 @@ export class WorldListComponent implements OnInit {
   }
 
   loadWorlds(): void {
+    this.log.info('Carregando mundos');
     this.loading.set(true);
     this.error.set(null);
     this.api.listWorlds().subscribe({
       next: (worlds) => {
+        this.log.info('Mundos carregados', { count: worlds.length });
         this.worlds.set(worlds);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err) => {
         this.loading.set(false);
+        this.log.error('Falha ao carregar mundos', err);
         this.error.set('Não foi possível carregar os mundos. Verifique se a API está rodando.');
       },
     });

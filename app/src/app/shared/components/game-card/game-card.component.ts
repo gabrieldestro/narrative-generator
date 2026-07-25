@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
-import type { WorldTemplate } from '../../core/models/world-template.model';
+import type { WorldTemplate } from '../../../core/models/world-template.model';
 
 @Component({
   selector: 'ng-game-card',

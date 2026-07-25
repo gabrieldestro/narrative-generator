@@ -4,6 +4,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { GameStateService } from '../../../core/services/game-state.service';
 import { SseService } from '../../../core/services/sse.service';
+import { LoggingService } from '../../../core/services/logging.service';
 import { ActionTypeSelectorComponent } from './action-type-selector/action-type-selector.component';
 import { ActionIntentSelectorComponent } from './action-intent-selector/action-intent-selector.component';
 import { ActionTextInputComponent } from './action-text-input/action-text-input.component';
@@ -55,6 +56,7 @@ export class ActionInputComponent {
   readonly gameState = inject(GameStateService);
   private readonly sse = inject(SseService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly log = inject(LoggingService);
 
   readonly actionType = signal<ActionType>('free');
   readonly actionIntent = signal<ActionIntent>('neutral');
@@ -74,9 +76,12 @@ export class ActionInputComponent {
       characterName: this.gameState.playerCharacter()?.name,
     };
 
+    this.log.info('Turno submetido', { actionType: payload.actionType, intent: payload.actionIntent, playerText: text, charName: payload.characterName });
+
     try {
       this.sse.connectStream(sessionId, payload);
-    } catch {
+    } catch (err) {
+      this.log.error('Erro ao processar turno', err instanceof Error ? err : new Error(String(err)));
       this.snackBar.open('Erro ao processar turno. Verifique a conexão com o servidor.', 'Fechar', { duration: 5000 });
     }
   }

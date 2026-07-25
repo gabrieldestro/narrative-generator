@@ -11,7 +11,7 @@ import { MatSliderModule } from '@angular/material/slider';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SettingsService } from '../../core/services/settings.service';
-import type { GameSettings } from '../core/models/game-settings.model';
+import type { GameSettings } from '../../core/models/game-settings.model';
 
 @Component({
   selector: 'ng-settings',
@@ -126,8 +126,8 @@ export class SettingsComponent {
   readonly settingsService = inject(SettingsService);
   private readonly snackBar = inject(MatSnackBar);
 
-  update<K extends keyof GameSettings>(key: K, value: GameSettings[K]): void {
-    this.settingsService.updateSetting(key, value);
+  update(key: string, value: unknown): void {
+    this.settingsService.updateSetting(key as keyof GameSettings, value as never);
   }
 
   saveSettings(): void {

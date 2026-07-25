@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { resolveLogPath } from './LoggerPaths.js';
 
 export interface LlmCallRecord {
   timestamp: string;       // ISO 8601
@@ -17,7 +18,7 @@ export interface LlmCallRecord {
 export class LlmCallLogger {
   private readonly logPath: string;
 
-  constructor(logPath = 'logs/llm_calls.jsonl') {
+  constructor(logPath = resolveLogPath('llm_calls.jsonl')) {
     this.logPath = logPath;
     mkdirSync(dirname(logPath), { recursive: true });
   }

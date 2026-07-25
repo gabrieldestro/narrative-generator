@@ -5,9 +5,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiService } from '../../core/services/api.service';
+import { LoggingService } from '../../core/services/logging.service';
 import { WorldListComponent } from './world-list/world-list.component';
 import { CustomScenarioComponent, type CustomScenarioData } from './custom-scenario/custom-scenario.component';
-import type { WorldTemplate } from '../core/models/world-template.model';
+import type { WorldTemplate } from '../../core/models/world-template.model';
 
 @Component({
   selector: 'ng-new-game',
@@ -54,6 +55,7 @@ export class NewGameComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly log = inject(LoggingService);
 
   readonly isCreating = signal(false);
 
@@ -61,6 +63,7 @@ export class NewGameComponent {
   readonly baseTemplate = signal<WorldTemplate | null>(null);
 
   onUseAsBase(world: WorldTemplate): void {
+    this.log.info('Template usado como base', { worldName: world.name });
     this.baseTemplate.set(world);
   }
 
@@ -69,27 +72,33 @@ export class NewGameComponent {
   }
 
   onSelectWorld(templateName: string): void {
+    this.log.info('Criando jogo a partir de template', { templateName });
     this.isCreating.set(true);
     this.api.createGame({ mode: 'template', templateName }).subscribe({
       next: (res) => {
+        this.log.info('Jogo criado com sucesso', { sessionId: res.sessionId });
         this.router.navigate(['/game', res.sessionId]);
       },
       error: (err) => {
         this.isCreating.set(false);
+        this.log.error('Erro ao criar jogo (template)', err, { templateName });
         this.snackBar.open('Erro ao criar jogo: ' + (err.message ?? 'Erro desconhecido'), 'Fechar', { duration: 5000 });
       },
     });
   }
 
   onCreateCustom(data: CustomScenarioData): void {
+    this.log.info('Criando jogo a partir de cenário customizado', { narrativeStyle: data.narrativeStyle, writingStyle: data.writingStyle });
     this.isCreating.set(true);
     const customPrompt = `Gênero: ${data.narrativeStyle || 'Personalizado'}\nEstilo: ${data.writingStyle || 'Livre'}\nContexto: ${data.worldContext}`;
     this.api.createGame({ mode: 'custom', customPrompt }).subscribe({
       next: (res) => {
+        this.log.info('Jogo customizado criado com sucesso', { sessionId: res.sessionId });
         this.router.navigate(['/game', res.sessionId]);
       },
       error: (err) => {
         this.isCreating.set(false);
+        this.log.error('Erro ao criar jogo (custom)', err);
         this.snackBar.open('Erro ao criar jogo: ' + (err.message ?? 'Erro desconhecido'), 'Fechar', { duration: 5000 });
       },
     });

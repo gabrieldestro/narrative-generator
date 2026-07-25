@@ -2,8 +2,9 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { GameState, Character, GameSettings } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
-import type { IOutputWriter } from "../domain/ports.js";
+import type { IOutputWriter, ILogger } from "../domain/ports.js";
 import type { LlmCallLogger } from "../infrastructure/LlmCallLogger.js";
+import type { LlmContentLogger } from "../infrastructure/LlmContentLogger.js";
 import {
   arbiterSystemPrompt,
   arbiterHumanPrompt,
@@ -29,41 +30,61 @@ import {
   extractCharacterFromHistoryHumanPrompt,
 } from "./prompts.js";
 
+class NullLogger implements ILogger {
+  trace(_msg: string, ..._args: unknown[]): void {}
+  debug(_msg: string, ..._args: unknown[]): void {}
+  info(_msg: string, ..._args: unknown[]): void {}
+  warn(_msg: string, ..._args: unknown[]): void {}
+  error(_msg: string, ..._args: unknown[]): void {}
+  fatal(_msg: string, ..._args: unknown[]): void {}
+  child(_bindings: Record<string, unknown>): ILogger { return this; }
+}
+
 export class LlmService {
   private readonly settings: GameSettings;
+  private readonly appLogger: ILogger;
 
   constructor(
     private readonly llm: BaseChatModel,
     settings: Partial<GameSettings> = {},
     private readonly logger?: LlmCallLogger,
+    appLogger?: ILogger,
+    private readonly contentLogger?: LlmContentLogger,
   ) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
+    this.appLogger = appLogger ?? new NullLogger();
   }
 
   async generateInitialContext(style: string, writingStyle: string): Promise<string> {
+    const start = Date.now();
     const messages = [
       new SystemMessage(initialContextSystemPrompt(writingStyle)),
       new HumanMessage(initialContextHumanPrompt(style, writingStyle)),
     ];
     const response = await this.llm.invoke(messages);
+    this.appLogger.info('[ContextoInicial] gerado', { style, writingStyle, durationMs: Date.now() - start });
     return response.content as string;
   }
 
   async generatePlayerCharacter(style: string, writingStyle: string, playerName: string): Promise<[string, string]> {
+    const start = Date.now();
     const messages = [
       new SystemMessage(playerCharacterSystemPrompt(writingStyle)),
       new HumanMessage(playerCharacterHumanPrompt(style, writingStyle, playerName)),
     ];
     const response = await this.llm.invoke(messages);
+    this.appLogger.info('[PersonagemJogador] gerado', { playerName, durationMs: Date.now() - start });
     return this.parseCharacterResponse(response.content as string);
   }
 
   async generateCompanionDetails(style: string, writingStyle: string, npcName: string): Promise<[string, string]> {
+    const start = Date.now();
     const messages = [
       new SystemMessage(companionDescriptionSystemPrompt(writingStyle)),
       new HumanMessage(companionDescriptionHumanPrompt(style, writingStyle, npcName)),
     ];
     const response = await this.llm.invoke(messages);
+    this.appLogger.info('[Acompanhante] detalhes gerados', { npcName, durationMs: Date.now() - start });
     return this.parseCharacterResponse(response.content as string);
   }
 
@@ -73,12 +94,20 @@ export class LlmService {
       new HumanMessage(humanPrompt),
     ];
 
-    if (this.logger && agent) {
-      const response = await this.logger.measure(agent, turn, () => this.llm.invoke(messages), attempt);
+    const doInvoke = () => {
+      if (this.logger && agent) {
+        return this.logger.measure(agent, turn, () => this.llm.invoke(messages), attempt);
+      }
+      return this.llm.invoke(messages);
+    };
+
+    if (this.contentLogger && agent) {
+      const fullPrompt = systemPrompt + '\n' + humanPrompt;
+      const response = await this.contentLogger.measure(agent, turn, fullPrompt, doInvoke);
       return response.content as string;
     }
 
-    const response = await this.llm.invoke(messages);
+    const response = await doInvoke();
     return response.content as string;
   }
 
@@ -103,9 +132,7 @@ export class LlmService {
       }
     }
 
-    if (this.settings.debug) {
-      console.error("[LLM Parse Fallback] Nenhum JSON válido encontrado em:", stripped);
-    }
+    this.appLogger.error('[LLM Parse Fallback] Nenhum JSON válido encontrado', { raw: stripped.slice(0, 200) });
     return {};
   }
 
@@ -147,9 +174,7 @@ export class LlmService {
         characterLifecycle: Array.isArray(parsed.characterLifecycle) ? parsed.characterLifecycle : [],
       };
     } catch (err) {
-      if (this.settings.debug) {
-        console.error("[LLM Extraction Error] Falha ao extrair modificações de estado:", err);
-      }
+      this.appLogger.error('[LLM Extraction Error] Falha ao extrair modificações de estado', err instanceof Error ? err : new Error(String(err)));
       return {
         inventoryChanges: [],
         locationChanges: { discovered: [], newConnections: [] },
@@ -191,9 +216,11 @@ export class LlmService {
     unexpectedEventTriggered?: boolean
   ): Promise<string> {
     const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
+    const systemMsg = narratorSystemPrompt(state, sizePrompt, unexpectedEventTriggered);
+    const humanMsg = narratorHumanPrompt(state, actions, logicalResolution);
     const messages = [
-      new SystemMessage(narratorSystemPrompt(state, sizePrompt, unexpectedEventTriggered)),
-      new HumanMessage(narratorHumanPrompt(state, actions, logicalResolution)),
+      new SystemMessage(systemMsg),
+      new HumanMessage(humanMsg),
     ];
     let fullResponse = "";
 
@@ -214,6 +241,16 @@ export class LlmService {
       attempt: 1,
       status: 'success',
     });
+
+    this.contentLogger?.record({
+      timestamp: new Date().toISOString(),
+      turnNumber: state.turnNumber,
+      agent: 'Narrador',
+      fullPrompt: systemMsg + '\n' + humanMsg,
+      fullResponse,
+      status: 'success',
+      durationMs: Date.now() - start,
+    } as any);
 
     return fullResponse;
   }
@@ -253,6 +290,7 @@ export class LlmService {
     historyExcerpt: string,
     narrativeStyle: string,
   ): Promise<{ name: string; description: string; personality: string; currentLocation: string } | null> {
+    const start = Date.now();
     const system = extractCharacterFromHistorySystemPrompt();
     const human = extractCharacterFromHistoryHumanPrompt(characterName, historyExcerpt, narrativeStyle);
 
@@ -261,6 +299,8 @@ export class LlmService {
       const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
       const parsed = JSON.parse(cleaned);
 
+      this.appLogger.info('[Extrator:Ficha] personagem extraído', { characterName, durationMs: Date.now() - start });
+
       return {
         name: typeof parsed.name === 'string' && parsed.name.length > 0 ? parsed.name : characterName,
         description: typeof parsed.description === 'string' ? parsed.description : 'Personagem recém-descoberto.',
@@ -268,9 +308,7 @@ export class LlmService {
         currentLocation: typeof parsed.currentLocation === 'string' ? parsed.currentLocation : 'Local desconhecido',
       };
     } catch (err) {
-      if (this.settings.debug) {
-        console.error('[LLM] Falha ao extrair ficha do personagem do histórico:', err);
-      }
+      this.appLogger.error('[LLM] Falha ao extrair ficha do personagem do histórico', err instanceof Error ? err : new Error(String(err)));
       return null;
     }
   }

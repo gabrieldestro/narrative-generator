@@ -11,7 +11,11 @@ import { GameManagementService } from '../application/GameManagementService.js';
 import { SessionRepository } from '../infrastructure/SessionRepository.js';
 import { GameController } from './controllers/GameController.js';
 import { registerGameRoutes } from './routes/gameRoutes.js';
+import { PinoLogger } from '../infrastructure/PinoLogger.js';
+import { LlmCallLogger } from '../infrastructure/LlmCallLogger.js';
+import { LlmContentLogger } from '../infrastructure/LlmContentLogger.js';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { ILogger } from '../domain/ports.js';
 
 import { ChatOpenAI } from "@langchain/openai";
 
@@ -19,6 +23,7 @@ export interface AppOptions {
   llmModel?: BaseChatModel;
   worldRepo?: WorldTemplateRepository;
   sessionRepo?: SessionRepository;
+  logger?: ILogger;
 }
 
 export function buildApp(options: AppOptions = {}) {
@@ -35,10 +40,14 @@ export function buildApp(options: AppOptions = {}) {
   // Instancia dependências do Core caso não sejam fornecidas
   const worldRepo = options.worldRepo ?? new WorldTemplateRepository();
   const sessionRepo = options.sessionRepo ?? new SessionRepository();
+  const logger = options.logger ?? new PinoLogger();
+
+  const llmCallLogger = new LlmCallLogger('logs/llm_calls.jsonl');
+  const llmContentLogger = new LlmContentLogger('logs/llm_content.jsonl');
 
   let llmService: LlmService;
   if (options.llmModel) {
-    llmService = new LlmService(options.llmModel);
+    llmService = new LlmService(options.llmModel, {}, llmCallLogger, logger, llmContentLogger);
   } else {
     const defaultLlm = new ChatOpenAI({
       temperature: 0.7,
@@ -48,11 +57,11 @@ export function buildApp(options: AppOptions = {}) {
         baseURL: process.env.OPENAI_API_BASE || "http://localhost:1234/v1",
       },
     });
-    llmService = new LlmService(defaultLlm);
+    llmService = new LlmService(defaultLlm, {}, llmCallLogger, logger, llmContentLogger);
   }
 
-  const gameManagementService = new GameManagementService(llmService);
-  const cpuReflectionService = new CpuReflectionService(llmService);
+  const gameManagementService = new GameManagementService(llmService, logger);
+  const cpuReflectionService = new CpuReflectionService(llmService, {}, logger);
   const sessionFactory = new SessionFactory(undefined, undefined, undefined, llmService, worldRepo);
   const gameEngine = new GameEngine(
     undefined,
@@ -62,7 +71,8 @@ export function buildApp(options: AppOptions = {}) {
     cpuReflectionService,
     sessionFactory,
     { godMode: true },
-    gameManagementService
+    gameManagementService,
+    logger
   );
 
   const gameController = new GameController(
@@ -70,7 +80,8 @@ export function buildApp(options: AppOptions = {}) {
     sessionFactory,
     gameEngine,
     llmService,
-    sessionRepo
+    sessionRepo,
+    logger
   );
 
   registerGameRoutes(app, gameController);
@@ -79,13 +90,14 @@ export function buildApp(options: AppOptions = {}) {
 }
 
 export async function startServer(port = 3000, host = '0.0.0.0') {
-  const app = buildApp();
+  const logger = new PinoLogger();
+  const app = buildApp({ logger });
   try {
     const address = await app.listen({ port, host });
-    console.log(`🚀 Servidor Narrativo rodando em ${address}`);
+    logger.info('Servidor Narrativo rodando', { address });
     return app;
   } catch (err) {
-    app.log.error(err);
+    logger.error('Erro ao iniciar servidor', err instanceof Error ? err : new Error(String(err)));
     process.exit(1);
   }
 }

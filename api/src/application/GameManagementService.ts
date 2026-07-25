@@ -1,8 +1,23 @@
 import type { GameState, Character, Location, CharacterStatus } from "../domain/types.js";
 import type { LlmService } from "./LlmService.js";
+import type { ILogger } from "../domain/ports.js";
+
+class NullLogger implements ILogger {
+  trace(_msg: string, ..._args: unknown[]): void {}
+  debug(_msg: string, ..._args: unknown[]): void {}
+  info(_msg: string, ..._args: unknown[]): void {}
+  warn(_msg: string, ..._args: unknown[]): void {}
+  error(_msg: string, ..._args: unknown[]): void {}
+  fatal(_msg: string, ..._args: unknown[]): void {}
+  child(_bindings: Record<string, unknown>): ILogger { return this; }
+}
 
 export class GameManagementService {
-  constructor(private readonly llmService: LlmService) {}
+  private readonly logger: ILogger;
+
+  constructor(private readonly llmService: LlmService, logger?: ILogger) {
+    this.logger = logger ?? new NullLogger();
+  }
 
   /**
    * Adiciona um novo personagem ao GameState
@@ -50,6 +65,8 @@ export class GameManagementService {
     charName: string,
     status: CharacterStatus
   ): GameState {
+    const oldChar = state.characters.find((c) => c.name.toLowerCase() === charName.toLowerCase());
+    const oldStatus = oldChar?.status ?? 'active';
     const characters = state.characters.map((c) => {
       if (c.name.toLowerCase() === charName.toLowerCase()) {
         return { ...c, status };
@@ -57,6 +74,7 @@ export class GameManagementService {
       return c;
     });
 
+    this.logger.info('[StateUpdate] status alterado', { charName, from: oldStatus, to: status });
     return { ...state, characters };
   }
 
@@ -79,6 +97,7 @@ export class GameManagementService {
       return c;
     });
 
+    this.logger.info('[StateUpdate] inventário alterado', { charName, added: [item], removed: [] });
     return { ...state, characters };
   }
 
@@ -100,6 +119,7 @@ export class GameManagementService {
       return c;
     });
 
+    this.logger.info('[StateUpdate] inventário alterado', { charName, added: [], removed: [item] });
     return { ...state, characters };
   }
 
@@ -131,6 +151,7 @@ export class GameManagementService {
       return l;
     });
 
+    this.logger.info('[StateUpdate] local adicionado', { id: loc.id, name: loc.name });
     return { ...state, locations: wired };
   }
 
@@ -149,6 +170,7 @@ export class GameManagementService {
         connectedTo: l.connectedTo.filter((id) => id !== locationId),
       }));
 
+    this.logger.info('[StateUpdate] local removido', { id: locationId });
     return { ...state, locations };
   }
 
@@ -202,7 +224,6 @@ export class GameManagementService {
               status: "active",
             });
           } else {
-            // Se já existia mas estava inativo, ativa novamente
             updatedState = this.setCharacterStatus(
               updatedState,
               lifecycle.characterName,
@@ -236,6 +257,7 @@ export class GameManagementService {
             connectedTo: loc.connectedTo ?? [],
           };
           updatedState.locations = [...locations, newLoc];
+          this.logger.info('[StateUpdate] local descoberto via extração', { id: loc.id, name: loc.name });
         }
       }
     }
@@ -255,6 +277,12 @@ export class GameManagementService {
         });
       }
     }
+
+    this.logger.info('[StateUpdate] alterações aplicadas', {
+      inventoryChanges: changes.inventoryChanges?.length ?? 0,
+      lifecycleChanges: changes.characterLifecycle?.length ?? 0,
+      locationChanges: changes.locationChanges?.discovered?.length ?? 0,
+    });
 
     return updatedState;
   }

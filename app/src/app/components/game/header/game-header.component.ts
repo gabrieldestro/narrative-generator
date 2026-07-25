@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { GameStateService } from '../../../core/services/game-state.service';
+import { LoggingService } from '../../../core/services/logging.service';
 
 @Component({
   selector: 'ng-game-header',
@@ -15,13 +16,13 @@ import { GameStateService } from '../../../core/services/game-state.service';
       <span class="game-header__world-name">{{ gameState.narrativeStyle() || 'Jogo' }}</span>
       <span class="spacer"></span>
       <span class="game-header__turn">Turno #{{ gameState.turnNumber() }}</span>
-      <button mat-icon-button (click)="gameState.toggleLeftPanel()" aria-label="Alternar painel de estado">
+      <button mat-icon-button (click)="toggleLeft()" aria-label="Alternar painel de estado">
         📋
       </button>
-      <button mat-icon-button (click)="gameState.toggleRightPanel()" aria-label="Alternar painel técnico">
+      <button mat-icon-button (click)="toggleRight()" aria-label="Alternar painel técnico">
         📖
       </button>
-      <button mat-icon-button routerLink="/settings" aria-label="Abrir configurações">
+      <button mat-icon-button routerLink="/settings" (click)="onSettings()" aria-label="Abrir configurações">
         ⚙
       </button>
     </mat-toolbar>
@@ -35,4 +36,19 @@ import { GameStateService } from '../../../core/services/game-state.service';
 })
 export class GameHeaderComponent {
   readonly gameState = inject(GameStateService);
+  private readonly log = inject(LoggingService);
+
+  toggleLeft(): void {
+    this.log.debug('Toggle painel esquerdo');
+    this.gameState.toggleLeftPanel();
+  }
+
+  toggleRight(): void {
+    this.log.debug('Toggle painel direito');
+    this.gameState.toggleRightPanel();
+  }
+
+  onSettings(): void {
+    this.log.info('Navegando para configurações');
+  }
 }

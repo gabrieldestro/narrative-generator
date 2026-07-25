@@ -4,12 +4,20 @@ import type { Character } from '../models/character.model';
 import type { Location } from '../models/location.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 
+export interface AppError {
+  message: string;
+  code?: string;
+  timestamp: Date;
+}
+
 @Injectable({ providedIn: 'root' })
 export class GameStateService {
   readonly gameState = signal<GameState | null>(null);
   readonly sessionId = signal<string | null>(null);
   readonly isStreaming = signal<boolean>(false);
   readonly currentTurnResult = signal<any>(null);
+  readonly error = signal<AppError | null>(null);
+  readonly sseConnectionStatus = signal<'disconnected' | 'connecting' | 'streaming' | 'error'>('disconnected');
 
   readonly characters = computed(() => this.gameState()?.characters ?? []);
   readonly playerCharacter = computed(() =>
@@ -36,6 +44,7 @@ export class GameStateService {
   setGameState(sessionId: string, state: GameState): void {
     this.sessionId.set(sessionId);
     this.gameState.set(state);
+    this.error.set(null);
   }
 
   clearNpcDecisions(): void {

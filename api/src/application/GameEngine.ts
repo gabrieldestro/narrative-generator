@@ -1,6 +1,6 @@
 import type { GameState, Character, GameSettings, Location } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
-import type { IUserInput, IOutputWriter } from "../domain/ports.js";
+import type { IUserInput, IOutputWriter, ILogger } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
@@ -20,11 +20,22 @@ class DummyOutput implements IOutputWriter {
   clear(): void {}
 }
 
+class NullLogger implements ILogger {
+  trace(_msg: string, ..._args: unknown[]): void {}
+  debug(_msg: string, ..._args: unknown[]): void {}
+  info(_msg: string, ..._args: unknown[]): void {}
+  warn(_msg: string, ..._args: unknown[]): void {}
+  error(_msg: string, ..._args: unknown[]): void {}
+  fatal(_msg: string, ..._args: unknown[]): void {}
+  child(_bindings: Record<string, unknown>): ILogger { return this; }
+}
+
 export class GameEngine {
   private readonly settings: GameSettings;
   private readonly gameManagementService: GameManagementService;
   private readonly input: IUserInput;
   private readonly output: IOutputWriter;
+  private readonly logger: ILogger;
 
   constructor(
     input?: IUserInput,
@@ -34,12 +45,14 @@ export class GameEngine {
     private readonly cpuReflectionService?: CpuReflectionService,
     private readonly sessionFactory?: SessionFactory,
     settings: Partial<GameSettings> = {},
-    gameManagementService?: GameManagementService
+    gameManagementService?: GameManagementService,
+    logger?: ILogger
   ) {
     this.input = input ?? new DummyInput();
     this.output = output ?? new DummyOutput();
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.gameManagementService = gameManagementService ?? new GameManagementService(this.llmService!);
+    this.logger = logger ?? new NullLogger();
   }
 
   public async start() {
@@ -123,10 +136,15 @@ export class GameEngine {
     playerActions: Map<string, string>,
     onToken?: (token: string) => void
   ): Promise<{ narrative: string; logicalResolution: string; state: GameState }> {
+    const turnLog = this.logger.child({ turnNumber: state.turnNumber });
+    const totalStart = Date.now();
+    turnLog.info('[processTurn iniciado]');
+
     const actions: string[] = [];
 
     // ── Passo 1: dispara reflexões de TODOS os NPCs em paralelo ──
     const npcChars = state.characters.filter(c => !c.isPlayer && (!c.status || c.status === 'active'));
+    turnLog.debug('[NPC Reflection] refletindo N NPCs', { n: npcChars.length });
     if (npcChars.length > 0) {
       this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em paralelo...`);
     }
@@ -134,9 +152,13 @@ export class GameEngine {
     const npcTasks = npcChars.map(char =>
       this.cpuReflectionService!
         .reflectAndAct(state, char, this.output)
-        .then(decision => ({ char, action: decision.action, ok: true as const }))
+        .then(decision => {
+          turnLog.debug('[NPC] decision', { charName: char.name, reasoning: decision.reasoning, action: decision.action });
+          return { char, action: decision.action, ok: true as const };
+        })
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
+          turnLog.error('[NPC] falha na reflexão', { charName: char.name, error: msg });
           this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
           return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, ok: false as const };
         }),
@@ -182,10 +204,12 @@ export class GameEngine {
     }
 
     this.output.writeLine("\n[Árbitro] Calculando as consequências...");
+    const arbiterStart = Date.now();
     const recentHistory = this.settings.arbiterHistoryTurns > 0
       ? state.history.slice(-this.settings.arbiterHistoryTurns)
       : undefined;
     const logicalResolution = await this.llmService!.arbitrateLogic(state, actions, recentHistory, state.longTermSummary);
+    turnLog.info('[Árbitro] resolução obtida', { durationMs: Date.now() - arbiterStart });
     this.output.writeLine(`\x1b[90m(Resolução Mecânica: ${logicalResolution.replace(/\n/g, ' - ')})\x1b[0m`);
 
     // Atualiza scratchpad dos NPCs com base na resolução do árbitro
@@ -197,6 +221,7 @@ export class GameEngine {
 
     this.output.writeLine("\n[Narrador] Escrevendo a cena...");
     this.output.writeLine("--------------------------------------------------");
+    const narrationStart = Date.now();
     const streamWriter: IOutputWriter = {
       write: (text: string) => {
         this.output.write(text);
@@ -209,6 +234,7 @@ export class GameEngine {
       clear: () => this.output.clear(),
     };
     const outcome = await this.llmService!.narrateFiction(state, actions, logicalResolution, streamWriter, unexpectedEvent);
+    turnLog.info('[Narração] concluída', { durationMs: Date.now() - narrationStart });
     this.output.writeLine("\n--------------------------------------------------");
 
     state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
@@ -250,6 +276,9 @@ export class GameEngine {
     }
 
     state.turnNumber++;
+
+    const totalDuration = Date.now() - totalStart;
+    turnLog.info('[processTurn concluído]', { durationMs: totalDuration });
 
     return {
       narrative: outcome,

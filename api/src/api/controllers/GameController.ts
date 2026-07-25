@@ -6,7 +6,18 @@ import type { SessionFactory } from '../../application/SessionFactory.js';
 import type { GameEngine } from '../../application/GameEngine.js';
 import type { LlmService } from '../../application/LlmService.js';
 import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
+import type { ILogger } from '../../domain/ports.js';
 import { ActionBuilderService } from '../../application/ActionBuilderService.js';
+
+class NullLogger implements ILogger {
+  trace(_msg: string, ..._args: unknown[]): void {}
+  debug(_msg: string, ..._args: unknown[]): void {}
+  info(_msg: string, ..._args: unknown[]): void {}
+  warn(_msg: string, ..._args: unknown[]): void {}
+  error(_msg: string, ..._args: unknown[]): void {}
+  fatal(_msg: string, ..._args: unknown[]): void {}
+  child(_bindings: Record<string, unknown>): ILogger { return this; }
+}
 
 export interface CreateGameRequestBody {
   mode: 'template' | 'custom';
@@ -15,16 +26,22 @@ export interface CreateGameRequestBody {
 }
 
 export class GameController {
+  private readonly logger: ILogger;
+
   constructor(
     private readonly worldRepo: WorldTemplateRepository,
     private readonly sessionFactory: SessionFactory,
     private readonly gameEngine: GameEngine,
     private readonly llmService: LlmService,
-    private readonly sessionRepo: SessionRepository
-  ) {}
+    private readonly sessionRepo: SessionRepository,
+    logger?: ILogger,
+  ) {
+    this.logger = logger ?? new NullLogger();
+  }
 
   public async listWorlds(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
     const templates = await this.worldRepo.listAll();
+    this.logger.debug('Listando mundos', { count: templates.length });
     return reply.status(200).send(templates);
   }
 
@@ -44,11 +61,14 @@ export class GameController {
         t.name.toLowerCase().includes(searchName)
       );
       if (!template) {
+        this.logger.warn('Template não encontrado', { templateName });
         return reply.status(404).send({ error: `Template '${templateName}' não encontrado.` });
       }
       state = this.sessionFactory.buildFromTemplate(template);
+      this.logger.info('Jogo criado a partir de template', { templateName: template.name });
     } else if (mode === 'custom' && customPrompt) {
       state = await this.sessionFactory.buildCustomScenario(customPrompt);
+      this.logger.info('Jogo criado a partir de cenário customizado');
     } else {
       return reply.status(400).send({
         error: "Parâmetros inválidos. Forneça 'mode': 'template' com 'templateName', ou 'mode': 'custom' com 'customPrompt'."
@@ -77,6 +97,7 @@ export class GameController {
     const state = this.sessionRepo.getSession(sessionId);
 
     if (!state) {
+      this.logger.warn('Sessão não encontrada', { sessionId });
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
 
@@ -84,6 +105,9 @@ export class GameController {
     if (!payload || !payload.playerText) {
       return reply.status(400).send({ error: "O campo 'playerText' é obrigatório no corpo da requisição." });
     }
+
+    const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
+    reqLog.info('processTurn chamado');
 
     // Enriquece a ação do jogador usando o ActionBuilderService
     const enrichedAction = ActionBuilderService.buildActionString(payload);
@@ -96,7 +120,9 @@ export class GameController {
     playerActionsMap.set(charName, enrichedAction);
 
     // Executa o turno narrativo no engine
+    const turnStart = Date.now();
     const turnResult = await this.gameEngine.processTurn(state, playerActionsMap);
+    reqLog.info('processTurn concluído', { durationMs: Date.now() - turnStart });
 
     // Atualiza o repositório de sessões
     this.sessionRepo.saveSession(sessionId, turnResult.state);
@@ -117,6 +143,7 @@ export class GameController {
     const state = this.sessionRepo.getSession(sessionId);
 
     if (!state) {
+      this.logger.warn('Sessão não encontrada', { sessionId });
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
 
@@ -124,6 +151,9 @@ export class GameController {
     if (!payload || !payload.playerText) {
       return reply.status(400).send({ error: "O campo 'playerText' é obrigatório no corpo da requisição." });
     }
+
+    const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
+    reqLog.info('processTurnStream iniciado');
 
     // Define cabeçalhos de resposta para Server-Sent Events (SSE)
     reply.raw.writeHead(200, {
@@ -146,9 +176,11 @@ export class GameController {
 
     sendSseEvent('start', { message: 'Iniciando processamento do turno...' });
 
+    const turnStart = Date.now();
     const turnResult = await this.gameEngine.processTurn(state, playerActionsMap, (token: string) => {
       sendSseEvent('token', { token });
     });
+    reqLog.info('processTurnStream concluído', { durationMs: Date.now() - turnStart });
 
     this.sessionRepo.saveSession(sessionId, turnResult.state);
 
@@ -170,6 +202,7 @@ export class GameController {
     const state = this.sessionRepo.getSession(sessionId);
 
     if (!state) {
+      this.logger.warn('Sessão não encontrada para getGameState', { sessionId });
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
 
