@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import type { ActionIntent } from '../../../../core/models/api-payloads.model';
@@ -23,20 +23,10 @@ const ACTION_INTENTS: ActionIntentOption[] = [
   selector: 'ng-action-intent-selector',
   standalone: true,
   imports: [MatSelectModule, MatFormFieldModule],
-  template: `
-    <mat-form-field appearance="fill" subscriptSizing="dynamic">
-      <mat-label>Intenção</mat-label>
-      <mat-select [value]="value" (valueChange)="onChange($event)">
-        @for (opt of options; track opt.value) {
-          <mat-option [value]="opt.value">
-            {{ opt.icon }} {{ opt.label }}
-          </mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
-  `
+  templateUrl: './action-intent-selector.component.html',
 })
 export class ActionIntentSelectorComponent {
+  @Input() disabled = false;
   readonly options = ACTION_INTENTS;
   value: ActionIntent = 'neutral';
 

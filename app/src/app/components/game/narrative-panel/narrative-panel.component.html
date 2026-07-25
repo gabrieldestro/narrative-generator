@@ -1,0 +1,16 @@
+<div class="narrative-panel" #scrollContainer role="log" aria-label="Painel de narrativa">
+  @if (messages().length === 0 && !gameState.isStreaming()) {
+    <p class="narrative-panel__empty">A aventura está prestes a começar...</p>
+  }
+
+  @for (msg of messages(); track msg.text) {
+    <ng-narrative-message [message]="msg"/>
+  }
+
+  @if (gameState.isStreaming()) {
+    <ng-narrative-stream
+      [isStreaming]="true"
+      [currentText]="gameState.narrativeTokens()"
+    />
+  }
+</div>

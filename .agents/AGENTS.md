@@ -14,6 +14,7 @@
 * **Código técnico em inglês:** variáveis, funções, classes, arquivos, commits, testes (`it('should ...')`).
 * **UI em português:** strings exibidas ao usuário.
 * **Exemplo:** método `getLastNarrative()`, texto `"Save anterior encontrado!"`.
+* **Angular components:** sempre usar arquivos separados (`.ts`, `.html`, `.scss`), **nunca** `template:` inline ou `styles:` inline. Usar `templateUrl` e `styleUrl`.
 
 ## 4. Repositório
 * Backend: `api/src/`, `api/worlds/`, `api/package.json`.
@@ -21,7 +22,14 @@
 * Rodar comandos sempre no diretório correto: `cd api && npm run dev:api`, `cd app && ng serve`.
 * Testes: `cd api && npm test` (60 testes unitários, sem LLM).
 
-## 5. Comunicação
+## 5. Logging
+* **Todo código novo deve ter logging estruturado** — nunca `console.log`/`console.error`.
+* API: usar `ILogger` (PinoLogger) com níveis apropriados (`error` para falhas, `warn` para recuperação, `info` para fluxo, `debug` para detalhes).
+* App: usar `LoggingService` (Angular) com `debug/info/warn/error`.
+* Chamadas LLM: sempre passar pelo `LlmCallLogger` (métricas) e `LlmContentLogger` (conteúdo completo + tokens).
+* Incluir `durationMs`, `sessionId`, `turnNumber` em logs contextuais.
+
+## 6. Comunicação
 * Paralelos com C#/.NET ao introduzir conceitos Node.
 * Documentar decisões em `docs/`.
 * Explicar "porquês", especialmente ao contornar limitações ou erros de ferramentas.

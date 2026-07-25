@@ -1,0 +1,10 @@
+<mat-form-field appearance="fill" subscriptSizing="dynamic">
+  <mat-label>Intenção</mat-label>
+  <mat-select [value]="value" (valueChange)="onChange($event)" [disabled]="disabled">
+    @for (opt of options; track opt.value) {
+      <mat-option [value]="opt.value">
+        {{ opt.icon }} {{ opt.label }}
+      </mat-option>
+    }
+  </mat-select>
+</mat-form-field>

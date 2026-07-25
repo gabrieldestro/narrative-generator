@@ -1,0 +1,30 @@
+<mat-toolbar role="banner">
+  <span>Narrative Generator</span>
+  <span class="spacer"></span>
+  <button mat-icon-button routerLink="/settings" aria-label="Configurações" [disabled]="isCreating()">
+    ⚙
+  </button>
+</mat-toolbar>
+
+<div class="new-game__content">
+  <h1 class="section-title">NOVA AVENTURA</h1>
+  <p class="ui-text--secondary">Escolha um Mundo Pré-Configurado</p>
+
+  <ng-world-list (selectWorld)="onSelectWorld($event)" (useAsBase)="onUseAsBase($event)"/>
+
+  <div class="new-game__divider" role="separator" aria-label="ou">— ou —</div>
+
+  <div class="new-game__custom-action">
+    <p class="ui-text--secondary">Crie seu próprio cenário do zero</p>
+    <button mat-raised-button color="accent" (click)="goToCustomScenario()" [disabled]="isCreating()">
+      Criar Cenário Personalizado
+    </button>
+  </div>
+</div>
+
+@if (isCreating()) {
+  <div class="new-game__loading-overlay">
+    <mat-progress-bar mode="indeterminate" aria-label="Gerando mundo"/>
+    <p class="new-game__loading-text">Gerando mundo...</p>
+  </div>
+}

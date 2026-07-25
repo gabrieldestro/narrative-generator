@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "start:api": "tsx src/server.ts",
-    "dev:api": "tsx watch src/server.ts",
+    "start:api": "tsx src/api/server.ts",
+    "dev:api": "tsx watch src/api/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

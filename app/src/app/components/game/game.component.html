@@ -1,0 +1,36 @@
+<div class="game-layout">
+  <ng-game-header/>
+
+  <mat-sidenav-container class="game-layout__body">
+    <mat-sidenav
+      class="game-layout__sidenav game-layout__sidenav--start"
+      [opened]="gameState.leftPanelOpen()"
+      (openedChange)="gameState.leftPanelOpen.set($event)"
+      mode="side"
+      position="start"
+      role="complementary"
+      aria-label="Painel de estado do personagem">
+      <ng-collapsible-panel title="Estado" icon="📋">
+        <ng-character-panel/>
+      </ng-collapsible-panel>
+    </mat-sidenav>
+
+    <mat-sidenav-content class="game-layout__center" role="main">
+      <ng-narrative-panel/>
+      <ng-action-input/>
+    </mat-sidenav-content>
+
+    <mat-sidenav
+      class="game-layout__sidenav game-layout__sidenav--end"
+      [opened]="gameState.rightPanelOpen()"
+      (openedChange)="gameState.rightPanelOpen.set($event)"
+      mode="side"
+      position="end"
+      role="complementary"
+      aria-label="Painel técnico do motor narrativo">
+      <ng-collapsible-panel title="Técnico" icon="📖">
+        <ng-debug-panel/>
+      </ng-collapsible-panel>
+    </mat-sidenav>
+  </mat-sidenav-container>
+</div>

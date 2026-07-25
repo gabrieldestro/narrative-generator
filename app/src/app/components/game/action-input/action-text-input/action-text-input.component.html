@@ -1,0 +1,11 @@
+<mat-form-field appearance="fill" class="action-text-input">
+  <mat-label>O que você faz?</mat-label>
+  <textarea
+    matInput
+    [ngModel]="text()"
+    (ngModelChange)="onInput($event)"
+    rows="2"
+    placeholder="Descreva sua ação..."
+    [disabled]="disabled"
+  ></textarea>
+</mat-form-field>

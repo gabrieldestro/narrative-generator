@@ -14,6 +14,12 @@ export const routes: Routes = [
     title: 'Nova Aventura — Narrative Generator',
   },
   {
+    path: 'new-game/custom',
+    loadComponent: () => import('./components/new-game/custom-scenario-page.component')
+      .then(m => m.CustomScenarioPageComponent),
+    title: 'Cenário Personalizado — Narrative Generator',
+  },
+  {
     path: 'game/:sessionId',
     loadComponent: () => import('./components/game/game.component')
       .then(m => m.GameComponent),

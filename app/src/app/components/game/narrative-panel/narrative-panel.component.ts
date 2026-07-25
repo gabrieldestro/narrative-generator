@@ -1,4 +1,4 @@
-import { Component, inject, ElementRef, viewChild, afterRenderEffect, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, computed, ElementRef, viewChild, afterRenderEffect, ChangeDetectionStrategy } from '@angular/core';
 import { GameStateService } from '../../../core/services/game-state.service';
 import { NarrativeMessageComponent, type NarrativeMessage } from './narrative-message/narrative-message.component';
 import { NarrativeStreamComponent } from './narrative-stream/narrative-stream.component';
@@ -8,29 +8,14 @@ import { NarrativeStreamComponent } from './narrative-stream/narrative-stream.co
   standalone: true,
   imports: [NarrativeMessageComponent, NarrativeStreamComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="narrative-panel" #scrollContainer role="log" aria-label="Painel de narrativa">
-      @for (msg of messages(); track msg.text) {
-        <ng-narrative-message [message]="msg"/>
-      }
-
-      @if (gameState.isStreaming()) {
-        <ng-narrative-stream
-          [isStreaming]="true"
-          [currentText]="gameState.narrativeTokens()"
-        />
-      }
-    </div>
-  `,
-  styles: [`
-    .narrative-panel { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; }
-  `]
+  templateUrl: './narrative-panel.component.html',
+  styleUrl: './narrative-panel.component.scss',
 })
 export class NarrativePanelComponent {
   readonly gameState = inject(GameStateService);
   readonly scrollContainer = viewChild<ElementRef<HTMLElement>>('scrollContainer');
 
-  readonly messages = () => {
+  readonly messages = computed(() => {
     const history = this.gameState.history();
     const turnNumber = this.gameState.turnNumber();
     const msgs: NarrativeMessage[] = [];
@@ -44,12 +29,12 @@ export class NarrativePanelComponent {
     }
 
     return msgs;
-  };
+  });
 
   constructor() {
     afterRenderEffect(() => {
+      this.messages();
       this.gameState.narrativeTokens();
-      this.gameState.history();
       const el = this.scrollContainer()?.nativeElement;
       if (el) {
         el.scrollTop = el.scrollHeight;

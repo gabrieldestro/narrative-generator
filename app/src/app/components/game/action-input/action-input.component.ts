@@ -18,39 +18,8 @@ import type { ActionType, ActionIntent, PlayerActionPayload } from '../../../cor
     ActionTypeSelectorComponent, ActionIntentSelectorComponent, ActionTextInputComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="action-input" role="form" aria-label="Input de ação do jogador">
-      <div class="action-input__selectors">
-        <ng-action-type-selector (typeChange)="actionType.set($event)"/>
-        <ng-action-intent-selector (intentChange)="actionIntent.set($event)"/>
-      </div>
-
-      <ng-action-text-input [(text)]="playerText"/>
-
-      <div class="action-input__actions">
-        @if (gameState.isStreaming()) {
-          <button mat-raised-button disabled aria-label="Aguardando processamento">
-            <mat-spinner diameter="20" aria-hidden="true"/>
-            Aguardando...
-          </button>
-        } @else {
-          <button
-            mat-raised-button
-            color="primary"
-            (click)="submit()"
-            [disabled]="!playerText().trim()"
-            aria-label="Enviar ação">
-            Agir
-          </button>
-        }
-      </div>
-    </div>
-  `,
-  styles: [`
-    .action-input { padding: 1rem; border-top: 1px solid #333; background: #222; }
-    .action-input__selectors { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .action-input__actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
-  `]
+  templateUrl: './action-input.component.html',
+  styleUrl: './action-input.component.scss',
 })
 export class ActionInputComponent {
   readonly gameState = inject(GameStateService);

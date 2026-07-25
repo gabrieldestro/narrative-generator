@@ -1,3 +1,4 @@
+import * as dotenv from 'dotenv';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
@@ -90,6 +91,8 @@ export function buildApp(options: AppOptions = {}) {
 }
 
 export async function startServer(port = 3000, host = '0.0.0.0') {
+  dotenv.config();
+
   const logger = new PinoLogger();
   const app = buildApp({ logger });
   try {
@@ -101,3 +104,5 @@ export async function startServer(port = 3000, host = '0.0.0.0') {
     process.exit(1);
   }
 }
+
+startServer();

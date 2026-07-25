@@ -1,0 +1,7 @@
+.spacer { flex: 1 1 auto; }
+.new-game__content { padding: 2rem; max-width: 960px; margin: 0 auto; }
+.new-game__divider { text-align: center; margin: 2rem 0; color: #666; }
+.new-game__custom-action { display: flex; flex-direction: column; align-items: center; gap: 1rem; margin-top: 2rem; }
+.new-game__custom-action button { font-size: 1.1rem; padding: 0.75rem 2rem; }
+.new-game__loading-overlay { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(0,0,0,0.85); padding: 1rem; }
+.new-game__loading-text { text-align: center; color: #c9a84c; margin-top: 0.5rem; }

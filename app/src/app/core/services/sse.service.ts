@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, ApplicationRef } from '@angular/core';
 import { GameStateService } from './game-state.service';
 import { LoggingService } from './logging.service';
 import type { PlayerActionPayload } from '../models/api-payloads.model';
@@ -8,6 +8,7 @@ import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 export class SseService {
   private readonly gameState = inject(GameStateService);
   private readonly log = inject(LoggingService);
+  private readonly appRef = inject(ApplicationRef);
   private abortController: AbortController | null = null;
 
   connectStream(sessionId: string, payload: PlayerActionPayload, timeoutMs = 60000): void {
@@ -68,7 +69,9 @@ export class SseService {
             .then(({ done, value }) => {
               if (done) {
                 this.log.info('SSE stream encerrada', { reason: 'stream completa' });
+                this.gameState.isStreaming.set(false);
                 this.gameState.sseConnectionStatus.set('disconnected');
+                this.appRef.tick();
                 return;
               }
               const chunk = decoder.decode(value, { stream: true });
@@ -101,6 +104,7 @@ export class SseService {
     this.abortController = null;
     this.gameState.isStreaming.set(false);
     this.gameState.sseConnectionStatus.set('disconnected');
+    this.appRef.tick();
     this.log.info('SSE desconectado manualmente');
   }
 
@@ -108,6 +112,7 @@ export class SseService {
     this.gameState.sseConnectionStatus.set('error');
     this.gameState.isStreaming.set(false);
     this.gameState.error.set({ message: error.message, code: 'SSE_ERROR', timestamp: new Date() });
+    this.appRef.tick();
   }
 
   private handleEvent(event: string, data: any): void {
@@ -129,9 +134,11 @@ export class SseService {
         break;
       case 'done':
         this.gameState.isStreaming.set(false);
+        this.gameState.narrativeTokens.set('');
         this.gameState.gameState.set(data.updatedState);
         this.gameState.sseConnectionStatus.set('disconnected');
         break;
     }
+    this.appRef.tick();
   }
 }

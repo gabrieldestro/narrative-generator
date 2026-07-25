@@ -1,0 +1,26 @@
+<div class="action-input" role="form" aria-label="Input de ação do jogador">
+  <div class="action-input__selectors">
+    <ng-action-type-selector (typeChange)="actionType.set($event)" [disabled]="gameState.isStreaming()"/>
+    <ng-action-intent-selector (intentChange)="actionIntent.set($event)" [disabled]="gameState.isStreaming()"/>
+  </div>
+
+  <ng-action-text-input [(text)]="playerText" [disabled]="gameState.isStreaming()"/>
+
+  <div class="action-input__actions">
+    @if (gameState.isStreaming()) {
+      <button mat-raised-button disabled aria-label="Aguardando processamento">
+        <mat-spinner diameter="20" aria-hidden="true"/>
+        Aguardando...
+      </button>
+    } @else {
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="submit()"
+        [disabled]="!playerText().trim()"
+        aria-label="Enviar ação">
+        Agir
+      </button>
+    }
+  </div>
+</div>
