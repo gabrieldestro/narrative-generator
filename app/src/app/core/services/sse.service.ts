@@ -8,17 +8,11 @@ import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 export class SseService {
   private readonly gameState = inject(GameStateService);
   private readonly log = inject(LoggingService);
-  // NgZone garante que atualizações de signal vindas de fetch() (fora da zona)
-  // disparem o Change Detection corretamente nos componentes OnPush.
-  // fetch() é uma API nativa não interceptada pelo Zone.js, então sem ngZone.run()
-  // os signals são atualizados mas a UI não re-renderiza.
   private readonly ngZone = inject(NgZone);
   private abortController: AbortController | null = null;
 
   connectStream(sessionId: string, payload: PlayerActionPayload, timeoutMs = 60000): void {
-    // Estas chamadas já estão dentro da zona (chamadas do template Angular)
-    this.gameState.sseConnectionStatus.set('connecting');
-    this.gameState.isStreaming.set(true);
+    this.gameState.isLoading.set(true);
     this.gameState.clearNpcDecisions();
     this.gameState.error.set(null);
 
@@ -29,12 +23,9 @@ export class SseService {
     const timeoutId = setTimeout(() => {
       this.log.warn('SSE timeout atingido', { durationMs: timeoutMs });
       this.abortController?.abort();
-      // setTimeout também pode rodar fora da zona — garante com ngZone.run()
       this.ngZone.run(() => this.handleError(new Error('Timeout na conexão SSE')));
     }, timeoutMs);
 
-    // Executa o fetch FORA da zona para não poluir o CD com eventos de I/O
-    // internos, mas traz as atualizações de volta para a zona com ngZone.run()
     this.ngZone.runOutsideAngular(() => {
       fetch(url, {
         method: 'POST',
@@ -48,13 +39,9 @@ export class SseService {
             throw new Error('Response body é nulo');
           }
 
-          this.ngZone.run(() => this.gameState.sseConnectionStatus.set('streaming'));
-
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
-          // currentEvent precisa persistir entre chunks para o caso de um evento
-          // SSE ser dividido entre dois chunks de rede
           let currentEvent = '';
 
           const processChunk = (chunk: string) => {
@@ -69,13 +56,11 @@ export class SseService {
                 try {
                   const data = JSON.parse(line.slice(6));
                   this.log.debug('SSE evento processado', { event: currentEvent, dataPreview: JSON.stringify(data).slice(0, 100) });
-                  // Traz a atualização de volta para a zona Angular
                   this.ngZone.run(() => this.handleEvent(currentEvent, data));
                 } catch (parseErr) {
                   this.log.error('SSE JSON.parse falhou', parseErr instanceof Error ? parseErr : new Error(String(parseErr)), { rawLine: line.slice(0, 200) });
                 }
               } else if (line.trim() === '') {
-                // Linha em branco = separador de evento SSE; reseta o evento atual
                 currentEvent = '';
               }
             }
@@ -87,8 +72,7 @@ export class SseService {
                 if (done) {
                   this.log.info('SSE stream encerrada', { reason: 'stream completa' });
                   this.ngZone.run(() => {
-                    this.gameState.isStreaming.set(false);
-                    this.gameState.sseConnectionStatus.set('disconnected');
+                    this.gameState.isLoading.set(false);
                   });
                   return;
                 }
@@ -121,14 +105,12 @@ export class SseService {
   disconnect(): void {
     this.abortController?.abort();
     this.abortController = null;
-    this.gameState.isStreaming.set(false);
-    this.gameState.sseConnectionStatus.set('disconnected');
+    this.gameState.isLoading.set(false);
     this.log.info('SSE desconectado manualmente');
   }
 
   private handleError(error: Error): void {
-    this.gameState.sseConnectionStatus.set('error');
-    this.gameState.isStreaming.set(false);
+    this.gameState.isLoading.set(false);
     this.gameState.error.set({ message: error.message, code: 'SSE_ERROR', timestamp: new Date() });
   }
 
@@ -147,15 +129,11 @@ export class SseService {
         this.gameState.arbiterResolution.set(data.resolution);
         break;
       case 'token':
-        this.gameState.addNarrativeToken(data.token);
         break;
       case 'done':
-        this.gameState.isStreaming.set(false);
-        this.gameState.narrativeTokens.set('');
+        this.gameState.isLoading.set(false);
         this.gameState.gameState.set(data.updatedState);
-        this.gameState.sseConnectionStatus.set('disconnected');
         break;
     }
-    // Sem appRef.tick() — os signals dentro de ngZone.run() já disparam o CD
   }
 }

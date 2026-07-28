@@ -1,14 +1,14 @@
 <div class="action-input" role="form" aria-label="Input de ação do jogador">
   <div class="action-input__selectors">
-    <ng-action-type-selector (typeChange)="actionType.set($event)" [disabled]="gameState.isStreaming()"/>
-    <ng-action-intent-selector (intentChange)="actionIntent.set($event)" [disabled]="gameState.isStreaming()"/>
+    <ng-action-type-selector (typeChange)="actionType.set($event)" [disabled]="gameState.isLoading()"/>
+    <ng-action-intent-selector (intentChange)="actionIntent.set($event)" [disabled]="gameState.isLoading()"/>
   </div>
 
-  <ng-action-text-input [text]="playerText()" (textChange)="playerText.set($event)" [disabled]="gameState.isStreaming()"/>
+  <ng-action-text-input [text]="playerText()" (textChange)="playerText.set($event)" [disabled]="gameState.isLoading()"/>
 
 
   <div class="action-input__actions">
-    @if (gameState.isStreaming()) {
+    @if (gameState.isLoading()) {
       <button mat-raised-button disabled aria-label="Aguardando processamento">
         <mat-spinner diameter="20" aria-hidden="true"/>
         Aguardando...

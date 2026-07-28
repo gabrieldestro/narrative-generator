@@ -1,12 +1,11 @@
 import { Component, inject, computed, ElementRef, viewChild, afterRenderEffect, ChangeDetectionStrategy } from '@angular/core';
 import { GameStateService } from '../../../core/services/game-state.service';
 import { NarrativeMessageComponent, type NarrativeMessage } from './narrative-message/narrative-message.component';
-import { NarrativeStreamComponent } from './narrative-stream/narrative-stream.component';
 
 @Component({
   selector: 'ng-narrative-panel',
   standalone: true,
-  imports: [NarrativeMessageComponent, NarrativeStreamComponent],
+  imports: [NarrativeMessageComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './narrative-panel.component.html',
   styleUrl: './narrative-panel.component.scss',
@@ -34,7 +33,6 @@ export class NarrativePanelComponent {
   constructor() {
     afterRenderEffect(() => {
       this.messages();
-      this.gameState.narrativeTokens();
       const el = this.scrollContainer()?.nativeElement;
       if (el) {
         el.scrollTop = el.scrollHeight;

@@ -3,6 +3,7 @@ import type { GameState } from '../models/game-state.model';
 import type { Character } from '../models/character.model';
 import type { Location } from '../models/location.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
+import type { TurnResponse } from '../models/api-payloads.model';
 
 export interface AppError {
   message: string;
@@ -14,10 +15,9 @@ export interface AppError {
 export class GameStateService {
   readonly gameState = signal<GameState | null>(null);
   readonly sessionId = signal<string | null>(null);
-  readonly isStreaming = signal<boolean>(false);
-  readonly currentTurnResult = signal<any>(null);
+  readonly isLoading = signal<boolean>(false);
+  readonly currentTurnResult = signal<TurnResponse | null>(null);
   readonly error = signal<AppError | null>(null);
-  readonly sseConnectionStatus = signal<'disconnected' | 'connecting' | 'streaming' | 'error'>('disconnected');
 
   readonly characters = computed(() => this.gameState()?.characters ?? []);
   readonly playerCharacter = computed(() =>
@@ -36,7 +36,6 @@ export class GameStateService {
   readonly npcDecisions = signal<NpcDecision[]>([]);
   readonly diceRolls = signal<DiceRoll[]>([]);
   readonly arbiterResolution = signal<string | null>(null);
-  readonly narrativeTokens = signal<string>('');
 
   readonly leftPanelOpen = signal(true);
   readonly rightPanelOpen = signal(true);
@@ -47,11 +46,17 @@ export class GameStateService {
     this.error.set(null);
   }
 
+  setTurnResult(result: TurnResponse): void {
+    this.isLoading.set(false);
+    this.currentTurnResult.set(result);
+    this.gameState.set(result.updatedState);
+    this.error.set(null);
+  }
+
   clearNpcDecisions(): void {
     this.npcDecisions.set([]);
     this.diceRolls.set([]);
     this.arbiterResolution.set(null);
-    this.narrativeTokens.set('');
   }
 
   addNpcDecision(decision: NpcDecision): void {
@@ -60,10 +65,6 @@ export class GameStateService {
 
   addDiceRoll(roll: DiceRoll): void {
     this.diceRolls.update(rolls => [...rolls, roll]);
-  }
-
-  addNarrativeToken(token: string): void {
-    this.narrativeTokens.update(text => text + token);
   }
 
   toggleLeftPanel(): void {
