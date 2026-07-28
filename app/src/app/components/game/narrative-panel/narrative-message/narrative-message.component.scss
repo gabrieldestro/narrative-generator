@@ -1,0 +1,24 @@
+.narrative-message {
+  margin-bottom: 1rem;
+}
+
+.narrative-message--system {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  color: #8a7a3a;
+  text-align: center;
+}
+
+.narrative-message--action {
+  font-size: 1rem;
+  color: #a0a0a0;
+  font-style: italic;
+}
+
+.narrative-message--narrative {
+  font-family: Georgia, Merriweather, serif;
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: #e0e0e0;
+  max-width: 72ch;
+}

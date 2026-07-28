@@ -3,7 +3,7 @@
   <textarea
     matInput
     [ngModel]="text()"
-    (ngModelChange)="onInput($event)"
+    (ngModelChange)="text.set($event)"
     rows="2"
     placeholder="Descreva sua ação..."
     [disabled]="disabled"

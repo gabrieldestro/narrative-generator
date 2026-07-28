@@ -4,7 +4,8 @@
     <ng-action-intent-selector (intentChange)="actionIntent.set($event)" [disabled]="gameState.isStreaming()"/>
   </div>
 
-  <ng-action-text-input [(text)]="playerText" [disabled]="gameState.isStreaming()"/>
+  <ng-action-text-input [text]="playerText()" (textChange)="playerText.set($event)" [disabled]="gameState.isStreaming()"/>
+
 
   <div class="action-input__actions">
     @if (gameState.isStreaming()) {

@@ -1,4 +1,4 @@
-import { Injectable, inject, ApplicationRef } from '@angular/core';
+import { Injectable, inject, NgZone } from '@angular/core';
 import { GameStateService } from './game-state.service';
 import { LoggingService } from './logging.service';
 import type { PlayerActionPayload } from '../models/api-payloads.model';
@@ -8,10 +8,15 @@ import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 export class SseService {
   private readonly gameState = inject(GameStateService);
   private readonly log = inject(LoggingService);
-  private readonly appRef = inject(ApplicationRef);
+  // NgZone garante que atualizações de signal vindas de fetch() (fora da zona)
+  // disparem o Change Detection corretamente nos componentes OnPush.
+  // fetch() é uma API nativa não interceptada pelo Zone.js, então sem ngZone.run()
+  // os signals são atualizados mas a UI não re-renderiza.
+  private readonly ngZone = inject(NgZone);
   private abortController: AbortController | null = null;
 
   connectStream(sessionId: string, payload: PlayerActionPayload, timeoutMs = 60000): void {
+    // Estas chamadas já estão dentro da zona (chamadas do template Angular)
     this.gameState.sseConnectionStatus.set('connecting');
     this.gameState.isStreaming.set(true);
     this.gameState.clearNpcDecisions();
@@ -24,79 +29,93 @@ export class SseService {
     const timeoutId = setTimeout(() => {
       this.log.warn('SSE timeout atingido', { durationMs: timeoutMs });
       this.abortController?.abort();
-      this.handleError(new Error('Timeout na conexão SSE'));
+      // setTimeout também pode rodar fora da zona — garante com ngZone.run()
+      this.ngZone.run(() => this.handleError(new Error('Timeout na conexão SSE')));
     }, timeoutMs);
 
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: this.abortController.signal,
-    })
-      .then(response => {
-        clearTimeout(timeoutId);
-        if (!response.body) {
-          throw new Error('Response body é nulo');
-        }
-        this.gameState.sseConnectionStatus.set('streaming');
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+    // Executa o fetch FORA da zona para não poluir o CD com eventos de I/O
+    // internos, mas traz as atualizações de volta para a zona com ngZone.run()
+    this.ngZone.runOutsideAngular(() => {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: this.abortController!.signal,
+      })
+        .then(response => {
+          clearTimeout(timeoutId);
+          if (!response.body) {
+            throw new Error('Response body é nulo');
+          }
 
-        const processChunk = (chunk: string) => {
-          buffer += chunk;
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
+          this.ngZone.run(() => this.gameState.sseConnectionStatus.set('streaming'));
 
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          // currentEvent precisa persistir entre chunks para o caso de um evento
+          // SSE ser dividido entre dois chunks de rede
           let currentEvent = '';
-          for (const line of lines) {
-            if (line.startsWith('event: ')) {
-              currentEvent = line.slice(7).trim();
-            } else if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                this.log.debug('SSE evento processado', { event: currentEvent, dataPreview: JSON.stringify(data).slice(0, 100) });
-                this.handleEvent(currentEvent, data);
-              } catch (parseErr) {
-                this.log.error('SSE JSON.parse falhou', parseErr instanceof Error ? parseErr : new Error(String(parseErr)), { rawLine: line.slice(0, 200) });
+
+          const processChunk = (chunk: string) => {
+            buffer += chunk;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+              if (line.startsWith('event: ')) {
+                currentEvent = line.slice(7).trim();
+              } else if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  this.log.debug('SSE evento processado', { event: currentEvent, dataPreview: JSON.stringify(data).slice(0, 100) });
+                  // Traz a atualização de volta para a zona Angular
+                  this.ngZone.run(() => this.handleEvent(currentEvent, data));
+                } catch (parseErr) {
+                  this.log.error('SSE JSON.parse falhou', parseErr instanceof Error ? parseErr : new Error(String(parseErr)), { rawLine: line.slice(0, 200) });
+                }
+              } else if (line.trim() === '') {
+                // Linha em branco = separador de evento SSE; reseta o evento atual
+                currentEvent = '';
               }
             }
-          }
-        };
+          };
 
-        const read = () => {
-          reader.read()
-            .then(({ done, value }) => {
-              if (done) {
-                this.log.info('SSE stream encerrada', { reason: 'stream completa' });
-                this.gameState.isStreaming.set(false);
-                this.gameState.sseConnectionStatus.set('disconnected');
-                this.appRef.tick();
-                return;
-              }
-              const chunk = decoder.decode(value, { stream: true });
-              this.log.debug('SSE chunk recebido', { size: chunk.length, rawChunk: chunk.slice(0, 100) });
-              processChunk(chunk);
-              read();
-            })
-            .catch((err: unknown) => {
-              const error = err instanceof Error ? err : new Error(String(err));
-              this.log.error('SSE reader.read() erro', error);
-              this.handleError(error);
-            });
-        };
-        read();
-      })
-      .catch((err: unknown) => {
-        clearTimeout(timeoutId);
-        const error = err instanceof Error ? err : new Error(String(err));
-        if (error.name === 'AbortError') {
-          this.log.warn('SSE fetch abortado', { reason: error.message });
-        } else {
-          this.log.error('SSE fetch erro', error);
-        }
-        this.handleError(error);
-      });
+          const read = () => {
+            reader.read()
+              .then(({ done, value }) => {
+                if (done) {
+                  this.log.info('SSE stream encerrada', { reason: 'stream completa' });
+                  this.ngZone.run(() => {
+                    this.gameState.isStreaming.set(false);
+                    this.gameState.sseConnectionStatus.set('disconnected');
+                  });
+                  return;
+                }
+                const chunk = decoder.decode(value, { stream: true });
+                this.log.debug('SSE chunk recebido', { size: chunk.length, rawChunk: chunk.slice(0, 100) });
+                processChunk(chunk);
+                read();
+              })
+              .catch((err: unknown) => {
+                const error = err instanceof Error ? err : new Error(String(err));
+                this.log.error('SSE reader.read() erro', error);
+                this.ngZone.run(() => this.handleError(error));
+              });
+          };
+          read();
+        })
+        .catch((err: unknown) => {
+          clearTimeout(timeoutId);
+          const error = err instanceof Error ? err : new Error(String(err));
+          if (error.name === 'AbortError') {
+            this.log.warn('SSE fetch abortado', { reason: error.message });
+          } else {
+            this.log.error('SSE fetch erro', error);
+          }
+          this.ngZone.run(() => this.handleError(error));
+        });
+    });
   }
 
   disconnect(): void {
@@ -104,7 +123,6 @@ export class SseService {
     this.abortController = null;
     this.gameState.isStreaming.set(false);
     this.gameState.sseConnectionStatus.set('disconnected');
-    this.appRef.tick();
     this.log.info('SSE desconectado manualmente');
   }
 
@@ -112,7 +130,6 @@ export class SseService {
     this.gameState.sseConnectionStatus.set('error');
     this.gameState.isStreaming.set(false);
     this.gameState.error.set({ message: error.message, code: 'SSE_ERROR', timestamp: new Date() });
-    this.appRef.tick();
   }
 
   private handleEvent(event: string, data: any): void {
@@ -139,6 +156,6 @@ export class SseService {
         this.gameState.sseConnectionStatus.set('disconnected');
         break;
     }
-    this.appRef.tick();
+    // Sem appRef.tick() — os signals dentro de ngZone.run() já disparam o CD
   }
 }

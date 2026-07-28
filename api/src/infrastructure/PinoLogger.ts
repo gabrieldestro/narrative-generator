@@ -20,18 +20,19 @@ export class PinoLogger implements ILogger {
 
     mkdirSync(dirname(logFile), { recursive: true });
 
-    const transports: pino.TransportTargetOptions[] = [
+    const streams: pino.StreamEntry[] = [
       {
-        target: 'pino/file',
-        options: { destination: logFile, mkdir: true },
+        stream: pino.destination({ dest: logFile, sync: true, mkdir: true }),
         level,
       },
     ];
 
     if (consolePretty) {
-      transports.push({
-        target: 'pino-pretty',
-        options: { colorize: true },
+      streams.push({
+        stream: pino.transport({
+          target: 'pino-pretty',
+          options: { colorize: true, sync: true },
+        }),
         level,
       });
     }
@@ -47,16 +48,42 @@ export class PinoLogger implements ILogger {
           error: pino.stdSerializers.err,
         },
       },
-      pino.transport({ targets: transports }),
+      pino.multistream(streams),
     );
   }
 
-  trace(msg: string, ...args: unknown[]): void { this.logger.trace(args, msg); }
-  debug(msg: string, ...args: unknown[]): void { this.logger.debug(args, msg); }
-  info(msg: string, ...args: unknown[]): void { this.logger.info(args, msg); }
-  warn(msg: string, ...args: unknown[]): void { this.logger.warn(args, msg); }
-  error(msg: string, ...args: unknown[]): void { this.logger.error(args, msg); }
-  fatal(msg: string, ...args: unknown[]): void { this.logger.fatal(args, msg); }
+  // CORREÇÃO: A API do pino é logger.method(mergeObject, message) quando há contexto,
+  // ou logger.method(message) quando não há. Antes estava invertido (args, msg),
+  // fazendo a string de mensagem ir para o campo errado.
+  trace(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.trace(args[0] as object, msg);
+    else this.logger.trace(msg);
+  }
+
+  debug(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.debug(args[0] as object, msg);
+    else this.logger.debug(msg);
+  }
+
+  info(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.info(args[0] as object, msg);
+    else this.logger.info(msg);
+  }
+
+  warn(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.warn(args[0] as object, msg);
+    else this.logger.warn(msg);
+  }
+
+  error(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.error(args[0] as object, msg);
+    else this.logger.error(msg);
+  }
+
+  fatal(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.fatal(args[0] as object, msg);
+    else this.logger.fatal(msg);
+  }
 
   child(bindings: Record<string, unknown>): ILogger {
     const childLogger = this.logger.child(bindings as Record<string, any>);
@@ -67,12 +94,35 @@ export class PinoLogger implements ILogger {
 class PinoLoggerChild implements ILogger {
   constructor(private readonly logger: pino.Logger) {}
 
-  trace(msg: string, ...args: unknown[]): void { this.logger.trace(args, msg); }
-  debug(msg: string, ...args: unknown[]): void { this.logger.debug(args, msg); }
-  info(msg: string, ...args: unknown[]): void { this.logger.info(args, msg); }
-  warn(msg: string, ...args: unknown[]): void { this.logger.warn(args, msg); }
-  error(msg: string, ...args: unknown[]): void { this.logger.error(args, msg); }
-  fatal(msg: string, ...args: unknown[]): void { this.logger.fatal(args, msg); }
+  trace(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.trace(args[0] as object, msg);
+    else this.logger.trace(msg);
+  }
+
+  debug(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.debug(args[0] as object, msg);
+    else this.logger.debug(msg);
+  }
+
+  info(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.info(args[0] as object, msg);
+    else this.logger.info(msg);
+  }
+
+  warn(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.warn(args[0] as object, msg);
+    else this.logger.warn(msg);
+  }
+
+  error(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.error(args[0] as object, msg);
+    else this.logger.error(msg);
+  }
+
+  fatal(msg: string, ...args: unknown[]): void {
+    if (args.length > 0) this.logger.fatal(args[0] as object, msg);
+    else this.logger.fatal(msg);
+  }
 
   child(bindings: Record<string, unknown>): ILogger {
     return new PinoLoggerChild(this.logger.child(bindings as Record<string, any>));

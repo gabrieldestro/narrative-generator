@@ -49,6 +49,7 @@ export class ActionInputComponent {
 
     try {
       this.sse.connectStream(sessionId, payload);
+      this.playerText.set(''); // Limpa o campo após envio
     } catch (err) {
       this.log.error('Erro ao processar turno', err instanceof Error ? err : new Error(String(err)));
       this.snackBar.open('Erro ao processar turno. Verifique a conexão com o servidor.', 'Fechar', { duration: 5000 });

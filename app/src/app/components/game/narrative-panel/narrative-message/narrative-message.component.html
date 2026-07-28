@@ -1,0 +1,17 @@
+@switch (message().type) {
+  @case ('system') {
+    <div class="narrative-message narrative-message--system fade-in" role="status">
+      — {{ message().text }} —
+    </div>
+  }
+  @case ('action') {
+    <div class="narrative-message narrative-message--action fade-in" aria-label="Ação do jogador">
+      {{ message().text }}
+    </div>
+  }
+  @default {
+    <div class="narrative-message narrative-message--narrative fade-in" aria-label="Narrativa">
+      {{ message().text }}
+    </div>
+  }
+}

@@ -28,8 +28,12 @@ export interface AppOptions {
 }
 
 export function buildApp(options: AppOptions = {}) {
+  const logger = options.logger ?? new PinoLogger();
   const app = Fastify({
-    logger: true,
+    logger: false,
+  });
+  app.addHook('onRequest', async (_request, _reply) => {
+    logger.debug('Requisição recebida');
   });
 
   app.register(cors, {
@@ -41,7 +45,6 @@ export function buildApp(options: AppOptions = {}) {
   // Instancia dependências do Core caso não sejam fornecidas
   const worldRepo = options.worldRepo ?? new WorldTemplateRepository();
   const sessionRepo = options.sessionRepo ?? new SessionRepository();
-  const logger = options.logger ?? new PinoLogger();
 
   const llmCallLogger = new LlmCallLogger('logs/llm_calls.jsonl');
   const llmContentLogger = new LlmContentLogger('logs/llm_content.jsonl');
@@ -86,6 +89,22 @@ export function buildApp(options: AppOptions = {}) {
   );
 
   registerGameRoutes(app, gameController);
+
+  app.post('/api/logs', async (req, reply) => {
+    const body = req.body as { logs?: Array<{ level: string; message: string; context?: Record<string, unknown> }> };
+    if (!body?.logs) {
+      return reply.status(400).send({ error: 'logs array required' });
+    }
+    for (const entry of body.logs) {
+      switch (entry.level) {
+        case 'debug': logger.debug(entry.message, entry.context ?? {}); break;
+        case 'info':  logger.info(entry.message, entry.context ?? {}); break;
+        case 'warn':  logger.warn(entry.message, entry.context ?? {}); break;
+        case 'error': logger.error(entry.message, entry.context ?? {}); break;
+      }
+    }
+    return reply.status(200).send({ received: body.logs.length });
+  });
 
   return app;
 }
