@@ -84,6 +84,7 @@ export function buildApp(options: AppOptions = {}) {
     sessionFactory,
     gameEngine,
     llmService,
+    gameManagementService,
     sessionRepo,
     logger
   );

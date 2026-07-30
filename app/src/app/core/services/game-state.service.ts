@@ -50,6 +50,9 @@ export class GameStateService {
     this.isLoading.set(false);
     this.currentTurnResult.set(result);
     this.gameState.set(result.updatedState);
+    this.arbiterResolution.set(result.logicalResolution);
+    this.npcDecisions.set(result.npcDecisions ?? []);
+    this.diceRolls.set(result.diceRolls ?? []);
     this.error.set(null);
   }
 

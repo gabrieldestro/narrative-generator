@@ -1,10 +1,11 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
-import type { GameState, PlayerActionPayload } from '../../domain/types.js';
+import type { GameState, PlayerActionPayload, NpcDecision, DiceRoll } from '../../domain/types.js';
 import type { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
 import type { SessionFactory } from '../../application/SessionFactory.js';
 import type { GameEngine } from '../../application/GameEngine.js';
 import type { LlmService } from '../../application/LlmService.js';
+import type { GameManagementService } from '../../application/GameManagementService.js';
 import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
 import type { ILogger } from '../../domain/ports.js';
 import { ActionBuilderService } from '../../application/ActionBuilderService.js';
@@ -33,6 +34,7 @@ export class GameController {
     private readonly sessionFactory: SessionFactory,
     private readonly gameEngine: GameEngine,
     private readonly llmService: LlmService,
+    private readonly gameManagementService: GameManagementService,
     private readonly sessionRepo: SessionRepository,
     logger?: ILogger,
   ) {
@@ -78,6 +80,13 @@ export class GameController {
     // Gera a narrativa inicial via LLM
     const initialNarrative = await this.llmService.generateInitialNarrative(state);
     state.history.push(`Narrativa Inicial: ${initialNarrative}`);
+
+    // Extrai localizações da narrativa inicial para o mapa
+    const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, initialNarrative);
+    if (stateWithUpdates.locations !== undefined) {
+      state.locations = stateWithUpdates.locations;
+    }
+    state.characters = stateWithUpdates.characters;
 
     const sessionId = randomUUID();
     this.sessionRepo.saveSession(sessionId, state);
@@ -131,6 +140,8 @@ export class GameController {
       sessionId,
       narrative: turnResult.narrative,
       logicalResolution: turnResult.logicalResolution,
+      npcDecisions: turnResult.npcDecisions,
+      diceRolls: turnResult.diceRolls,
       updatedState: turnResult.state
     });
   }

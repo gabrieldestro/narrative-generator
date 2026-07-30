@@ -2,6 +2,14 @@ import { Component, inject, computed, ElementRef, viewChild, afterRenderEffect, 
 import { GameStateService } from '../../../core/services/game-state.service';
 import { NarrativeMessageComponent, type NarrativeMessage } from './narrative-message/narrative-message.component';
 
+function extractNarrativeText(entry: string): string {
+  const narrativeMatch = entry.match(/Narrativa:\s*([\s\S]*)$/);
+  if (narrativeMatch) return narrativeMatch[1].trim();
+  const initialMatch = entry.match(/^Narrativa Inicial:\s*([\s\S]*)$/);
+  if (initialMatch) return initialMatch[1].trim();
+  return entry;
+}
+
 @Component({
   selector: 'ng-narrative-panel',
   standalone: true,
@@ -24,7 +32,7 @@ export class NarrativePanelComponent {
     }
 
     for (const entry of history) {
-      msgs.push({ type: 'narrative', text: entry });
+      msgs.push({ type: 'narrative', text: extractNarrativeText(entry) });
     }
 
     return msgs;

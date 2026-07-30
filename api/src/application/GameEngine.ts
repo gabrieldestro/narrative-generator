@@ -1,4 +1,4 @@
-import type { GameState, Character, GameSettings, Location } from "../domain/types.js";
+import type { GameState, Character, GameSettings, Location, NpcDecision, DiceRoll } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IUserInput, IOutputWriter, ILogger } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
@@ -135,7 +135,7 @@ export class GameEngine {
     state: GameState,
     playerActions: Map<string, string>,
     onToken?: (token: string) => void
-  ): Promise<{ narrative: string; logicalResolution: string; state: GameState }> {
+  ): Promise<{ narrative: string; logicalResolution: string; npcDecisions: NpcDecision[]; diceRolls: DiceRoll[]; state: GameState }> {
     const turnLog = this.logger.child({ turnNumber: state.turnNumber });
     const totalStart = Date.now();
     turnLog.info('[processTurn iniciado]');
@@ -154,19 +154,29 @@ export class GameEngine {
         .reflectAndAct(state, char, this.output)
         .then(decision => {
           turnLog.debug('[NPC] decision', { charName: char.name, reasoning: decision.reasoning, action: decision.action });
-          return { char, action: decision.action, ok: true as const };
+          return { char, action: decision.action, reasoning: decision.reasoning, ok: true as const };
         })
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
           turnLog.error('[NPC] falha na reflexão', { charName: char.name, error: msg });
           this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
-          return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, ok: false as const };
+          return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, reasoning: '', ok: false as const };
         }),
     );
 
     const npcResults = await Promise.allSettled(npcTasks);
 
+    // Coleta decisões estruturadas dos NPCs
+    const npcDecisions: NpcDecision[] = [];
+    for (const settled of npcResults) {
+      if (settled.status === 'fulfilled') {
+        const { char, action, reasoning } = settled.value;
+        npcDecisions.push({ characterName: char.name, action, reasoning, success: false });
+      }
+    }
+
     // ── Passo 2: consolida ações (player + NPC) e rola dados ──
+    const diceRolls: DiceRoll[] = [];
     for (const char of state.characters) {
       if (char.status && char.status !== 'active') continue;
 
@@ -195,6 +205,7 @@ export class GameEngine {
       const prefix = this.settings.godMode ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
       this.output.writeLine(`${prefix} ${char.name} rolou: ${roll}\x1b[0m`);
       actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
+      diceRolls.push({ characterName: char.name, roll, isGodMode: this.settings.godMode });
     }
 
     // Chance de evento inesperado
@@ -211,6 +222,18 @@ export class GameEngine {
     const logicalResolution = await this.llmService!.arbitrateLogic(state, actions, recentHistory, state.longTermSummary);
     turnLog.info('[Árbitro] resolução obtida', { durationMs: Date.now() - arbiterStart });
     this.output.writeLine(`\x1b[90m(Resolução Mecânica: ${logicalResolution.replace(/\n/g, ' - ')})\x1b[0m`);
+
+    // Determina sucesso/falha de cada NPC a partir da resolução do árbitro
+    for (const decision of npcDecisions) {
+      const escaped = this.escapeRegex(decision.characterName);
+      const failMatch = logicalResolution.match(new RegExp(`${escaped}.*?->\\s*Falha`, 'i'));
+      const successMatch = logicalResolution.match(new RegExp(`${escaped}.*?->\\s*Sucesso`, 'i'));
+      if (failMatch) {
+        decision.success = false;
+      } else if (successMatch) {
+        decision.success = true;
+      }
+    }
 
     // Atualiza scratchpad dos NPCs com base na resolução do árbitro
     for (const char of state.characters) {
@@ -243,7 +266,7 @@ export class GameEngine {
     this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
     const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, outcome);
     state.characters = stateWithUpdates.characters;
-    if (stateWithUpdates.locations) {
+    if (stateWithUpdates.locations !== undefined) {
       state.locations = stateWithUpdates.locations;
     }
 
@@ -283,6 +306,8 @@ export class GameEngine {
     return {
       narrative: outcome,
       logicalResolution,
+      npcDecisions,
+      diceRolls,
       state
     };
   }
@@ -516,5 +541,9 @@ export class GameEngine {
       }
     }
     return "(Nenhuma narrativa encontrada no histórico)";
+  }
+
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 }

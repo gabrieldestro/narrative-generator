@@ -2,7 +2,7 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { Router } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiService } from '../../core/services/api.service';
 import { LoggingService } from '../../core/services/logging.service';
@@ -13,7 +13,7 @@ import type { WorldTemplate } from '../../core/models/world-template.model';
   selector: 'ng-custom-scenario-page',
   standalone: true,
   imports: [
-    MatToolbarModule, MatButtonModule, MatProgressBarModule,
+    MatToolbarModule, MatButtonModule, MatProgressSpinnerModule,
     CustomScenarioComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -2,7 +2,7 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { Router, RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiService } from '../../core/services/api.service';
 import { LoggingService } from '../../core/services/logging.service';
@@ -14,7 +14,7 @@ import type { WorldTemplate } from '../../core/models/world-template.model';
   standalone: true,
   imports: [
     RouterLink,
-    MatToolbarModule, MatButtonModule, MatProgressBarModule,
+    MatToolbarModule, MatButtonModule, MatProgressSpinnerModule,
     WorldListComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

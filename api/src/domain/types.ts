@@ -83,6 +83,19 @@ export interface NarrationSizePrompts {
   descriptive: string;
 }
 
+export interface NpcDecision {
+  characterName: string;
+  action: string;
+  reasoning: string;
+  success: boolean;
+}
+
+export interface DiceRoll {
+  characterName: string;
+  roll: number;
+  isGodMode?: boolean;
+}
+
 // Configurações ajustáveis e centralizadas do motor de jogo
 export interface GameSettings {
   memoryWindowSize: number;

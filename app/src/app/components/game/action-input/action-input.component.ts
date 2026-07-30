@@ -47,6 +47,7 @@ export class ActionInputComponent {
 
     this.log.info('Turno submetido', { actionType: payload.actionType, intent: payload.actionIntent, playerText: text, charName: payload.characterName });
 
+    this.gameState.clearNpcDecisions();
     this.gameState.isLoading.set(true);
 
     this.api.processTurn(sessionId, payload).subscribe({
