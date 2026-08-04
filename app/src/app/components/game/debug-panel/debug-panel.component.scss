@@ -1,0 +1,143 @@
+.debug-panel {
+  background: #1e1e2e;
+  min-height: 100%;
+  color: #cdd6f4;
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-sizing: border-box;
+}
+
+.debug-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.debug-panel__section--live {
+  background: rgba(201, 168, 76, 0.05);
+  border-bottom: 2px dashed rgba(201, 168, 76, 0.2);
+  padding-bottom: 1rem;
+}
+
+.debug-panel__section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #89b4fa;
+  margin: 1rem 1rem 0.25rem 1rem;
+}
+
+.debug-panel__section-title--live {
+  color: #f9e2af;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.debug-panel__empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #6c7086;
+  font-size: 0.875rem;
+
+  p {
+    margin: 0 0 0.5rem 0;
+  }
+}
+
+.debug-panel__empty-sub {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.turn-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem 1.5rem 0.75rem;
+}
+
+.turn-card {
+  background: #252538;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #313244;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #45475a;
+    background: #2b2b3f;
+  }
+}
+
+.turn-card--expanded {
+  border-color: #89b4fa;
+  box-shadow: 0 4px 12px rgba(137, 180, 250, 0.05);
+}
+
+.turn-card__header {
+  width: 100%;
+  background: transparent;
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  color: #cdd6f4;
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.turn-card__title {
+  color: #cdd6f4;
+}
+
+.turn-card__arrow {
+  font-size: 0.75rem;
+  color: #a6adc8;
+  transition: transform 0.2s ease;
+}
+
+.turn-card__body {
+  border-top: 1px solid #313244;
+  background: #1e1e2e;
+}
+
+/* Pulse animation for the live tracking */
+.pulse-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #f9e2af;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+    box-shadow: 0 0 0 0 rgba(249, 226, 175, 0.7);
+  }
+  70% {
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 0 0 6px rgba(249, 226, 175, 0);
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+    box-shadow: 0 0 0 0 rgba(249, 226, 175, 0);
+  }
+}

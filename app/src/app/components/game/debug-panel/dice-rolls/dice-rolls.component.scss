@@ -1,0 +1,39 @@
+.dice-rolls {
+  padding: 0.75rem;
+}
+.dice-rolls__empty {
+  color: #666;
+  font-size: 0.875rem;
+  text-align: center;
+}
+.dice-rolls__entry {
+  margin-bottom: 0.75rem;
+}
+.dice-rolls__header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+.dice-rolls__name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.dice-rolls__value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+.dice-rolls__bar {
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.dice-rolls__bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.dice-rolls__label {
+  font-size: 0.75rem;
+  color: #666;
+}

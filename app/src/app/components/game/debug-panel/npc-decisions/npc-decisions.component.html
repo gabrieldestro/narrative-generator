@@ -1,0 +1,19 @@
+<div class="npc-decisions">
+  <h4 class="section-title">DECISÃO DOS NPCS</h4>
+  @if (decisions.length === 0) {
+    <p class="npc-decisions__empty">
+      {{ gameState.isLoading() ? 'Processando decisões...' : (gameState.hasProcessedFirstTurn() ? 'Nenhuma decisão de NPC neste turno' : 'Nenhum dado ainda') }}
+    </p>
+  } @else {
+    @for (dec of decisions; track $index) {
+      <div class="npc-decisions__card">
+        <div class="npc-decisions__name">{{ dec.characterName }}</div>
+        <div class="npc-decisions__action">→ {{ dec.action }}</div>
+        <div class="npc-decisions__reasoning">{{ dec.reasoning }}</div>
+        <span class="npc-decisions__status" [class.npc-decisions__status--success]="dec.success">
+          {{ dec.success ? '✓ Sucesso' : '✗ Falha' }}
+        </span>
+      </div>
+    }
+  }
+</div>

@@ -1,0 +1,15 @@
+<div class="arbiter-resolution">
+  <h4 class="section-title">ÁRBITRO</h4>
+  @if (!resolution) {
+    <p class="arbiter-resolution__empty">
+      {{ gameState.isLoading() ? 'Arbitrando resoluções...' : (gameState.hasProcessedFirstTurn() ? 'Nenhuma resolução do árbitro' : 'Nenhum dado ainda') }}
+    </p>
+  } @else {
+    <div class="arbiter-resolution__text">{{ resolution }}</div>
+    @if (unexpectedEvent) {
+      <div class="arbiter-resolution__unexpected">
+        ✦ Evento Inesperado!
+      </div>
+    }
+  }
+</div>

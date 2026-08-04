@@ -11,6 +11,13 @@ export interface AppError {
   timestamp: Date;
 }
 
+export interface TurnDebugEntry {
+  turnNumber: number;
+  npcDecisions: NpcDecision[];
+  diceRolls: DiceRoll[];
+  arbiterResolution: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class GameStateService {
   readonly gameState = signal<GameState | null>(null);
@@ -36,6 +43,8 @@ export class GameStateService {
   readonly npcDecisions = signal<NpcDecision[]>([]);
   readonly diceRolls = signal<DiceRoll[]>([]);
   readonly arbiterResolution = signal<string | null>(null);
+  readonly turnDebugHistory = signal<TurnDebugEntry[]>([]);
+  readonly hasProcessedFirstTurn = signal<boolean>(false);
 
   readonly leftPanelOpen = signal(true);
   readonly rightPanelOpen = signal(true);
@@ -44,9 +53,12 @@ export class GameStateService {
     this.sessionId.set(sessionId);
     this.gameState.set(state);
     this.error.set(null);
+    this.turnDebugHistory.set([]);
+    this.hasProcessedFirstTurn.set(false);
   }
 
   setTurnResult(result: TurnResponse): void {
+    const turnBeforeUpdate = this.gameState()?.turnNumber ?? 1;
     this.isLoading.set(false);
     this.currentTurnResult.set(result);
     this.gameState.set(result.updatedState);
@@ -54,6 +66,22 @@ export class GameStateService {
     this.npcDecisions.set(result.npcDecisions ?? []);
     this.diceRolls.set(result.diceRolls ?? []);
     this.error.set(null);
+    this.saveCurrentTurnToHistory(turnBeforeUpdate);
+  }
+
+  saveCurrentTurnToHistory(turnNumber: number): void {
+    const entry: TurnDebugEntry = {
+      turnNumber,
+      npcDecisions: this.npcDecisions(),
+      diceRolls: this.diceRolls(),
+      arbiterResolution: this.arbiterResolution()
+    };
+
+    this.turnDebugHistory.update(history => {
+      const filtered = history.filter(h => h.turnNumber !== turnNumber);
+      return [...filtered, entry];
+    });
+    this.hasProcessedFirstTurn.set(true);
   }
 
   clearNpcDecisions(): void {
@@ -61,6 +89,7 @@ export class GameStateService {
     this.diceRolls.set([]);
     this.arbiterResolution.set(null);
   }
+
 
   addNpcDecision(decision: NpcDecision): void {
     this.npcDecisions.update(decisions => [...decisions, decision]);

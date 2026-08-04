@@ -1,0 +1,45 @@
+<div class="debug-panel">
+  <!-- Seção Turno Atual / Em Processamento -->
+  @if (gameState.isLoading()) {
+    <div class="debug-panel__section debug-panel__section--live">
+      <h3 class="debug-panel__section-title debug-panel__section-title--live">
+        <span class="pulse-indicator"></span>
+        Processando Turno {{ (gameState.gameState()?.turnNumber ?? 0) }}...
+      </h3>
+      <ng-npc-decisions [decisions]="gameState.npcDecisions()"/>
+      <ng-dice-rolls [rolls]="gameState.diceRolls()"/>
+      <ng-arbiter-resolution [resolution]="gameState.arbiterResolution()"/>
+    </div>
+  }
+
+  <!-- Histórico de Resoluções -->
+  <div class="debug-panel__section">
+    <h3 class="debug-panel__section-title">HISTÓRICO DE RESOLUÇÕES</h3>
+    
+    @if (reversedHistory().length === 0 && !gameState.isLoading()) {
+      <div class="debug-panel__empty">
+        <p>Nenhuma resolução de turno registrada ainda.</p>
+        <p class="debug-panel__empty-sub">As decisões e rolagens aparecerão aqui após cada turno.</p>
+      </div>
+    } @else {
+      <div class="turn-history-list">
+        @for (entry of reversedHistory(); track entry.turnNumber) {
+          <div class="turn-card" [class.turn-card--expanded]="isExpanded(entry.turnNumber)">
+            <button class="turn-card__header" (click)="toggleTurn(entry.turnNumber)" [attr.aria-expanded]="isExpanded(entry.turnNumber)">
+              <span class="turn-card__title">Resolução do Turno {{ entry.turnNumber }}</span>
+              <span class="turn-card__arrow">{{ isExpanded(entry.turnNumber) ? '▼' : '▶' }}</span>
+            </button>
+            
+            @if (isExpanded(entry.turnNumber)) {
+              <div class="turn-card__body fade-in">
+                <ng-npc-decisions [decisions]="entry.npcDecisions"/>
+                <ng-dice-rolls [rolls]="entry.diceRolls"/>
+                <ng-arbiter-resolution [resolution]="entry.arbiterResolution"/>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

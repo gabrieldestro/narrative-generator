@@ -11,7 +11,10 @@
   }
   @default {
     <div class="narrative-message narrative-message--narrative fade-in" aria-label="Narrativa">
-      {{ message().text }}
+      @for (p of formattedParagraphs(); track $index) {
+        <p class="narrative-message__paragraph" [innerHTML]="p"></p>
+      }
     </div>
   }
 }
+

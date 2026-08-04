@@ -130,10 +130,14 @@ export class SseService {
         break;
       case 'token':
         break;
-      case 'done':
+      case 'done': {
+        const turnBeforeUpdate = this.gameState.gameState()?.turnNumber ?? 1;
         this.gameState.isLoading.set(false);
         this.gameState.gameState.set(data.updatedState);
+        this.gameState.saveCurrentTurnToHistory(turnBeforeUpdate);
         break;
+      }
+
     }
   }
 }

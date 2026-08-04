@@ -1,7 +1,7 @@
 <aside class="collapsible-panel" role="complementary" [attr.aria-label]="title">
   <div class="collapsible-panel__header">
     @if (icon) {
-      <span class="collapsible-panel__icon" aria-hidden="true">{{ icon }}</span>
+      <mat-icon class="collapsible-panel__icon" aria-hidden="true">{{ icon }}</mat-icon>
     }
     <span class="collapsible-panel__title">{{ title }}</span>
   </div>
@@ -9,3 +9,4 @@
     <ng-content></ng-content>
   </div>
 </aside>
+

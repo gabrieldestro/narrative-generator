@@ -2,14 +2,6 @@ import { Component, inject, computed, ElementRef, viewChild, afterRenderEffect, 
 import { GameStateService } from '../../../core/services/game-state.service';
 import { NarrativeMessageComponent, type NarrativeMessage } from './narrative-message/narrative-message.component';
 
-function extractNarrativeText(entry: string): string {
-  const narrativeMatch = entry.match(/Narrativa:\s*([\s\S]*)$/);
-  if (narrativeMatch) return narrativeMatch[1].trim();
-  const initialMatch = entry.match(/^Narrativa Inicial:\s*([\s\S]*)$/);
-  if (initialMatch) return initialMatch[1].trim();
-  return entry;
-}
-
 @Component({
   selector: 'ng-narrative-panel',
   standalone: true,
@@ -22,17 +14,35 @@ export class NarrativePanelComponent {
   readonly gameState = inject(GameStateService);
   readonly scrollContainer = viewChild<ElementRef<HTMLElement>>('scrollContainer');
 
-  readonly messages = computed(() => {
+  readonly messages = computed<NarrativeMessage[]>(() => {
     const history = this.gameState.history();
-    const turnNumber = this.gameState.turnNumber();
     const msgs: NarrativeMessage[] = [];
 
-    if (turnNumber > 1) {
-      msgs.push({ type: 'system', text: `Turno ${turnNumber}`, turnNumber });
-    }
-
     for (const entry of history) {
-      msgs.push({ type: 'narrative', text: extractNarrativeText(entry) });
+      const parsed = this.parseHistoryEntry(entry);
+      
+      // Push turn divider
+      msgs.push({
+        type: 'system',
+        text: parsed.isInitial ? 'Início da Aventura' : `Turno ${parsed.turnNumber}`,
+        turnNumber: parsed.turnNumber
+      });
+      
+      // If we have actions parsed from this turn, push them
+      if (parsed.actions) {
+        msgs.push({
+          type: 'action',
+          text: parsed.actions,
+          turnNumber: parsed.turnNumber
+        });
+      }
+      
+      // Push the narrative text
+      msgs.push({
+        type: 'narrative',
+        text: parsed.narrative,
+        turnNumber: parsed.turnNumber
+      });
     }
 
     return msgs;
@@ -47,4 +57,31 @@ export class NarrativePanelComponent {
       }
     });
   }
+
+  private parseHistoryEntry(entry: string): { turnNumber: number, actions?: string, narrative: string, isInitial: boolean } {
+    if (entry.startsWith('Narrativa Inicial:')) {
+      return {
+        turnNumber: 1,
+        narrative: entry.slice('Narrativa Inicial:'.length).trim(),
+        isInitial: true
+      };
+    }
+    
+    const turnMatch = entry.match(/^Turno (\d+):/i);
+    const turnNumber = turnMatch ? parseInt(turnMatch[1], 10) : 1;
+    
+    const actionsMatch = entry.match(/Ações:\s*([\s\S]*?)(?=\nNarrativa:)/i);
+    const actions = actionsMatch ? actionsMatch[1].trim() : undefined;
+    
+    const narrativeMatch = entry.match(/Narrativa:\s*([\s\S]*)$/i);
+    const narrative = narrativeMatch ? narrativeMatch[1].trim() : entry;
+    
+    return {
+      turnNumber,
+      actions,
+      narrative,
+      isInitial: false
+    };
+  }
 }
+

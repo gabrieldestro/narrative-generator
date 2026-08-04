@@ -1,0 +1,39 @@
+.npc-decisions {
+  padding: 0.75rem;
+}
+.npc-decisions__empty {
+  color: #666;
+  font-size: 0.875rem;
+  text-align: center;
+}
+.npc-decisions__card {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.npc-decisions__name {
+  font-weight: 600;
+  color: #c9a84c;
+}
+.npc-decisions__action {
+  font-size: 0.875rem;
+  color: #e0e0e0;
+  margin-top: 0.25rem;
+}
+.npc-decisions__reasoning {
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+.npc-decisions__status {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.npc-decisions__status--success {
+  color: #4caf50;
+}
+.npc-decisions__status:not(.npc-decisions__status--success) {
+  color: #e53935;
+}
