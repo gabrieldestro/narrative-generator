@@ -1,11 +1,132 @@
-.game-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; width: 100%; height: 480px; display: flex; flex-direction: column; overflow: hidden; }
-.game-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.4); }
-mat-card-header { flex-direction: column; align-items: center; text-align: center; flex: 1; overflow: hidden; padding: 24px 24px 0 24px; }
-::ng-deep mat-card-header .mat-mdc-card-header-text { overflow: hidden; width: 100%; flex: 1; display: flex; flex-direction: column; }
-mat-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.4rem; flex-shrink: 0; }
-mat-card-subtitle { overflow-y: auto; flex: 1; scrollbar-width: thin; margin-top: 8px; word-break: break-word; font-size: 0.95rem; }
-mat-card-content { flex-shrink: 0; padding: 12px 24px; }
-mat-chip-set { justify-content: center; gap: 8px; flex-wrap: nowrap; overflow: hidden; }
-.game-card__chip { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
-mat-card-actions { justify-content: center; gap: 12px; margin-top: auto; flex-shrink: 0; padding: 12px 24px 24px; min-width: 0; }
-mat-card-actions button { font-size: 0.9rem; min-width: 120px; }
+.game-card {
+  background: linear-gradient(135deg, #101020 0%, #16162d 100%) !important;
+  border: 1px solid rgba(137, 180, 250, 0.08) !important;
+  border-radius: 16px !important;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+  width: 100%;
+  height: 440px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-6px) scale(1.01);
+    border-color: rgba(255, 213, 79, 0.3) !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 213, 79, 0.1) !important;
+  }
+}
+
+mat-card-header {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+  overflow: hidden;
+  padding: 24px 24px 0 24px;
+}
+
+::ng-deep mat-card-header .mat-mdc-card-header-text {
+  overflow: hidden;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+mat-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  color: #ffd54f;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+}
+
+mat-card-subtitle {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  margin-top: 12px;
+  word-break: break-word;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  color: #a6adc8;
+  line-height: 1.6;
+}
+
+mat-card-content {
+  flex-shrink: 0;
+  padding: 12px 24px;
+}
+
+mat-chip-set {
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.game-card__chip {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  background: rgba(137, 180, 250, 0.06) !important;
+  border: 1px solid rgba(137, 180, 250, 0.12) !important;
+  color: #89b4fa !important;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+}
+
+mat-card-actions {
+  justify-content: center;
+  gap: 12px;
+  margin-top: auto;
+  flex-shrink: 0;
+  padding: 12px 24px 24px;
+  min-width: 0;
+}
+
+.btn-play {
+  background: linear-gradient(135deg, #ffd54f 0%, #ffb74d 100%) !important;
+  color: #08080f !important;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 10px rgba(255, 213, 79, 0.25) !important;
+  font-size: 0.9rem;
+  min-width: 120px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(255, 213, 79, 0.4) !important;
+  }
+}
+
+.btn-base {
+  border: 1px solid rgba(255, 213, 79, 0.25) !important;
+  color: #ffd54f !important;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  border-radius: 8px !important;
+  font-size: 0.9rem;
+  min-width: 120px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 213, 79, 0.05) !important;
+    transform: translateY(-2px);
+  }
+}
+

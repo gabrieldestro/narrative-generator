@@ -1,0 +1,323 @@
+// ─── Toolbar ───────────────────────────────────────────────────
+.spacer {
+  flex: 1 1 auto;
+}
+
+mat-toolbar {
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+}
+
+.page-title {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-left: 0.5rem;
+}
+
+// ─── Layout Geral ───────────────────────────────────────────────
+.settings__content {
+  padding: 3rem 1.5rem;
+  max-width: 820px;
+  margin: 0 auto;
+  min-height: calc(100vh - 64px);
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.settings__header {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.settings__title {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  letter-spacing: -0.02em;
+}
+
+.settings__title-icon {
+  color: var(--accent);
+  font-size: 1.8rem;
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.settings__subtitle {
+  font-family: 'Inter', sans-serif;
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin: 0;
+}
+
+// ─── Cards de seção ─────────────────────────────────────────────
+.settings-card {
+  background: linear-gradient(160deg, #0e0e22 0%, #151530 100%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+
+  &:hover {
+    border-color: rgba(137, 180, 250, 0.12);
+  }
+}
+
+.settings-card__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--divider);
+}
+
+.settings-card__icon {
+  font-size: 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--accent);
+}
+
+.settings-card__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.settings-card__title {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.settings-card__subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.settings-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+// ─── Campos de configuração ─────────────────────────────────────
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.settings-field__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-field__label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.settings-field__value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.settings-field__hint {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+// ─── Radio Group (Ouro/Âmbar ativo) ─────────────────────────────
+.settings-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+
+  ::ng-deep .mat-mdc-radio-button {
+    --mat-radio-selected-icon-color: var(--accent);
+    --mat-radio-selected-focus-icon-color: var(--accent);
+    --mat-radio-selected-hover-icon-color: var(--accent);
+    --mat-radio-selected-pressed-icon-color: var(--accent);
+    --mat-radio-checked-ripple-color: rgba(255, 213, 79, 0.15);
+    --mat-radio-ripple-color: rgba(137, 180, 250, 0.1);
+
+    .mdc-form-field > label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+  }
+}
+
+// ─── Slider (Ouro/Âmbar ativo) ──────────────────────────────────
+.settings-slider {
+  width: 100%;
+
+  ::ng-deep {
+    --mat-slider-active-track-color: var(--accent);
+    --mat-slider-inactive-track-color: rgba(137, 180, 250, 0.12);
+    --mat-slider-handle-color: var(--accent);
+    --mat-slider-focus-handle-color: var(--accent-hover);
+    --mat-slider-hover-handle-color: var(--accent);
+    --mat-slider-label-container-color: var(--accent);
+    --mat-slider-label-label-text-color: var(--text-inverse);
+    --mat-slider-ripple-color: rgba(255, 213, 79, 0.15);
+  }
+}
+
+// ─── Toggle Switches (Ouro/Âmbar ativo) ─────────────────────────
+.settings-toggle {
+  width: fit-content;
+
+  ::ng-deep {
+    --mat-slide-toggle-selected-track-color: var(--accent);
+    --mat-slide-toggle-selected-handle-color: var(--text-inverse);
+    --mat-slide-toggle-selected-focus-track-color: var(--accent);
+    --mat-slide-toggle-selected-hover-track-color: var(--accent-hover);
+    --mat-slide-toggle-selected-pressed-track-color: var(--accent);
+    --mat-slide-toggle-unselected-track-color: rgba(137, 180, 250, 0.12);
+    --mat-slide-toggle-unselected-handle-color: var(--text-muted);
+    --mat-slide-toggle-label-text-color: var(--text-primary);
+
+    .mdc-form-field > label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+  }
+}
+
+// ─── Inputs (outline com brilho celeste no foco) ────────────────
+.settings-form-field {
+  width: 100%;
+
+  ::ng-deep {
+    .mat-mdc-form-field-flex {
+      background: var(--bg-elevated) !important;
+    }
+
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--border-light) !important;
+    }
+
+    &.mat-focused .mdc-notched-outline__leading,
+    &.mat-focused .mdc-notched-outline__notch,
+    &.mat-focused .mdc-notched-outline__trailing {
+      border-color: var(--info) !important;
+      box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.08);
+    }
+
+    input {
+      color: var(--text-primary) !important;
+      font-family: 'Inter', sans-serif;
+      caret-color: var(--info);
+    }
+
+    .mat-mdc-form-field-label,
+    .mat-mdc-floating-label {
+      color: var(--text-muted) !important;
+    }
+  }
+}
+
+// ─── Botões ─────────────────────────────────────────────────────
+.btn-test {
+  align-self: flex-start;
+  border: 1px solid var(--border-light) !important;
+  color: var(--text-muted) !important;
+  font-family: 'Outfit', sans-serif !important;
+  border-radius: 8px !important;
+  height: 44px;
+  padding: 0 1.5rem !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease !important;
+
+  mat-icon {
+    font-size: 1.1rem;
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &:hover {
+    border-color: var(--info) !important;
+    color: var(--info) !important;
+    background: rgba(137, 180, 250, 0.06) !important;
+  }
+}
+
+.settings__actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+
+.btn-save {
+  background: linear-gradient(135deg, var(--accent) 0%, #ffb74d 100%) !important;
+  color: var(--text-inverse) !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 8px !important;
+  padding: 0 2rem !important;
+  height: 48px;
+  box-shadow: 0 4px 12px rgba(255, 213, 79, 0.2) !important;
+  transition: all 0.25s ease !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  mat-icon {
+    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 213, 79, 0.35) !important;
+  }
+}
+
+// ─── Sobre ──────────────────────────────────────────────────────
+.settings-about__text {
+  font-family: 'Georgia', serif;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  margin: 0;
+}

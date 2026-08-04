@@ -10,11 +10,12 @@
     </mat-chip-set>
   </mat-card-content>
   <mat-card-actions>
-    <button mat-raised-button color="primary" (click)="onPlay(); $event.stopPropagation()" aria-label="Jogar {{ world.name }}">
+    <button class="btn-play" mat-raised-button (click)="onPlay(); $event.stopPropagation()" aria-label="Jogar {{ world.name }}">
       Jogar
     </button>
-    <button mat-stroked-button (click)="onUseAsBase($event)" aria-label="Usar {{ world.name }} como base">
+    <button class="btn-base" mat-stroked-button (click)="onUseAsBase($event)" aria-label="Usar {{ world.name }} como base">
       Usar como Base
     </button>
   </mat-card-actions>
 </mat-card>
+

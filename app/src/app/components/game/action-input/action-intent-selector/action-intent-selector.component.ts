@@ -24,6 +24,7 @@ const ACTION_INTENTS: ActionIntentOption[] = [
   standalone: true,
   imports: [MatSelectModule, MatFormFieldModule],
   templateUrl: './action-intent-selector.component.html',
+  styleUrl: './action-intent-selector.component.scss',
 })
 export class ActionIntentSelectorComponent {
   @Input() disabled = false;

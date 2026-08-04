@@ -3,9 +3,9 @@
 }
 
 .narrative-message--system {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.875rem;
-  color: #ffcc80;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  color: var(--accent);
   text-align: center;
   margin-top: 2.5rem;
   margin-bottom: 2rem;
@@ -13,34 +13,36 @@
   align-items: center;
   gap: 1rem;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.2em;
   font-weight: 700;
+  width: 100%;
 
   &::before, &::after {
     content: '';
     flex: 1;
-    height: 1px;
-    background: linear-gradient(to right, transparent, rgba(255, 204, 128, 0.4), transparent);
+    border-top: 1px dotted rgba(255, 213, 79, 0.35);
   }
 }
 
 .narrative-message--action {
+  font-family: 'Inter', sans-serif;
   font-size: 1rem;
-  color: #b0bec5;
+  color: var(--info);
   font-style: italic;
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-left: 3px solid #b0bec5;
-  border-radius: 0 4px 4px 0;
+  line-height: 1.6;
+  padding: 0.6rem 1rem;
+  background: rgba(137, 180, 250, 0.06);
+  border-left: 3px solid var(--info);
+  border-radius: 0 8px 8px 0;
   margin-bottom: 1rem;
 }
 
 .narrative-message--narrative {
-  font-family: Georgia, Merriweather, serif;
+  font-family: var(--font-narrative);
   font-size: 1.125rem;
   line-height: 1.8;
-  color: #e0e0e0;
-  max-width: 72ch;
+  color: var(--text-primary);
+  max-width: var(--max-reading-width);
 }
 
 .narrative-message__paragraph {
@@ -60,18 +62,17 @@
   display: inline-block;
 
   &--character {
-    color: #ffd54f;
-    border-bottom: 1px dashed #ffd54f;
+    color: var(--accent);
+    border-bottom: 1px dashed var(--accent);
   }
 
   &--location {
-    color: #4fc3f7;
-    border-bottom: 1px dashed #4fc3f7;
+    color: var(--info);
+    border-bottom: 1px dashed var(--info);
   }
 
   &--item {
-    color: #81c784;
-    border-bottom: 1px dashed #81c784;
+    color: var(--success);
+    border-bottom: 1px dashed var(--success);
   }
 }
-

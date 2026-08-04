@@ -1,3 +1,64 @@
-.action-input { padding: 1rem; border-top: 1px solid #333; background: #222; }
-.action-input__selectors { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-.action-input__actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+.action-input {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.action-input__selectors {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+
+  ng-action-type-selector,
+  ng-action-intent-selector {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.action-input__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.btn-action {
+  background: linear-gradient(135deg, var(--accent) 0%, #ffb74d 100%) !important;
+  color: var(--text-inverse) !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 8px !important;
+  padding: 0 1.75rem !important;
+  height: 46px;
+  box-shadow: 0 4px 12px rgba(255, 213, 79, 0.2) !important;
+  transition: all 0.25s ease !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  mat-icon {
+    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 213, 79, 0.35) !important;
+  }
+
+  &:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed;
+  }
+}
+
+.btn-action--loading {
+  background: var(--bg-elevated) !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  letter-spacing: 0.04em !important;
+}

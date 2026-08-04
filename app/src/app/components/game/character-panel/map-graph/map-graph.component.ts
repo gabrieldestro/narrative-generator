@@ -23,13 +23,25 @@ import type { Location } from '../../../../core/models/location.model';
     </div>
   `,
   styles: [`
-    .map-graph { padding: 0.75rem; }
-    .map-graph__empty { color: #666; font-size: 0.875rem; }
+    .map-graph { padding: 0.75rem 1rem; }
+    .map-graph__empty { color: var(--text-muted); font-size: 0.875rem; font-style: italic; }
     .map-graph__nodes { display: flex; flex-direction: column; gap: 0.5rem; }
-    .map-graph__node { padding: 0.5rem; border-radius: 8px; background: #2a2a2a; border: 2px solid #333; text-align: center; cursor: default; }
-    .map-graph__node--current { border-color: #c9a84c; background: rgba(201,168,76,0.1); }
+    .map-graph__node {
+      padding: 0.5rem;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      text-align: center;
+      cursor: default;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .map-graph__node--current {
+      border-color: var(--accent);
+      background: rgba(255, 213, 79, 0.08);
+      box-shadow: 0 0 12px rgba(255, 213, 79, 0.12);
+    }
     .map-graph__node--unvisited { opacity: 0.5; }
-    .map-graph__node-name { font-size: 0.875rem; color: #e0e0e0; }
+    .map-graph__node-name { font-family: 'Outfit', sans-serif; font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); }
   `]
 })
 export class MapGraphComponent {

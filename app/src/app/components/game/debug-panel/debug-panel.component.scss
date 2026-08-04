@@ -1,12 +1,13 @@
 .debug-panel {
-  background: #1e1e2e;
+  background: var(--bg-secondary);
   min-height: 100%;
-  color: #cdd6f4;
+  color: var(--text-secondary);
   font-family: 'Inter', sans-serif;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   box-sizing: border-box;
+  padding: 0.5rem 0;
 }
 
 .debug-panel__section {
@@ -16,22 +17,23 @@
 }
 
 .debug-panel__section--live {
-  background: rgba(201, 168, 76, 0.05);
-  border-bottom: 2px dashed rgba(201, 168, 76, 0.2);
+  background: rgba(255, 213, 79, 0.04);
+  border-bottom: 2px dashed rgba(255, 213, 79, 0.15);
   padding-bottom: 1rem;
 }
 
 .debug-panel__section-title {
+  font-family: 'Outfit', sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #89b4fa;
+  color: var(--info);
   margin: 1rem 1rem 0.25rem 1rem;
 }
 
 .debug-panel__section-title--live {
-  color: #f9e2af;
+  color: var(--accent);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -40,7 +42,7 @@
 .debug-panel__empty {
   padding: 2rem 1rem;
   text-align: center;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: 0.875rem;
 
   p {
@@ -61,21 +63,21 @@
 }
 
 .turn-card {
-  background: #252538;
-  border-radius: 8px;
+  background: var(--bg-elevated);
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #313244;
+  border: 1px solid var(--border);
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #45475a;
-    background: #2b2b3f;
+    border-color: var(--border-light);
+    background: var(--bg-hover);
   }
 }
 
 .turn-card--expanded {
-  border-color: #89b4fa;
-  box-shadow: 0 4px 12px rgba(137, 180, 250, 0.05);
+  border-color: var(--info);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.1), 0 4px 12px rgba(137, 180, 250, 0.05);
 }
 
 .turn-card__header {
@@ -86,7 +88,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.85rem 1rem;
-  color: #cdd6f4;
+  color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
   outline: none;
@@ -100,18 +102,18 @@
 }
 
 .turn-card__title {
-  color: #cdd6f4;
+  color: var(--text-secondary);
 }
 
 .turn-card__arrow {
   font-size: 0.75rem;
-  color: #a6adc8;
+  color: var(--text-muted);
   transition: transform 0.2s ease;
 }
 
 .turn-card__body {
-  border-top: 1px solid #313244;
-  background: #1e1e2e;
+  border-top: 1px solid var(--divider);
+  background: var(--bg-secondary);
 }
 
 /* Pulse animation for the live tracking */
@@ -119,7 +121,7 @@
   display: inline-block;
   width: 8px;
   height: 8px;
-  background-color: #f9e2af;
+  background-color: var(--accent);
   border-radius: 50%;
   animation: pulse 1.5s infinite ease-in-out;
 }
@@ -128,16 +130,16 @@
   0% {
     transform: scale(0.8);
     opacity: 0.5;
-    box-shadow: 0 0 0 0 rgba(249, 226, 175, 0.7);
+    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0.7);
   }
   70% {
     transform: scale(1.1);
     opacity: 1;
-    box-shadow: 0 0 0 6px rgba(249, 226, 175, 0);
+    box-shadow: 0 0 0 6px rgba(255, 213, 79, 0);
   }
   100% {
     transform: scale(0.8);
     opacity: 0.5;
-    box-shadow: 0 0 0 0 rgba(249, 226, 175, 0);
+    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0);
   }
 }

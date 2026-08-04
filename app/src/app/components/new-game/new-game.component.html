@@ -2,8 +2,9 @@
   <span>Narrative Generator</span>
   <span class="spacer"></span>
   <button mat-icon-button routerLink="/settings" aria-label="Configurações" [disabled]="isCreating()">
-    ⚙
+    <mat-icon>settings</mat-icon>
   </button>
+
 </mat-toolbar>
 
 <div class="new-game__content">
@@ -23,8 +24,5 @@
 </div>
 
 @if (isCreating()) {
-  <div class="new-game__loading-overlay">
-    <mat-spinner diameter="48" aria-label="Gerando mundo"/>
-    <p class="new-game__loading-text">Gerando mundo...</p>
-  </div>
+  <ng-loading-overlay/>
 }

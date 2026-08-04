@@ -1,5 +1,6 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { GameStateService } from '../../../core/services/game-state.service';
@@ -14,7 +15,7 @@ import type { ActionType, ActionIntent, PlayerActionPayload } from '../../../cor
   selector: 'ng-action-input',
   standalone: true,
   imports: [
-    MatButtonModule, MatProgressSpinnerModule,
+    MatButtonModule, MatIconModule, MatProgressSpinnerModule,
     ActionTypeSelectorComponent, ActionIntentSelectorComponent, ActionTextInputComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

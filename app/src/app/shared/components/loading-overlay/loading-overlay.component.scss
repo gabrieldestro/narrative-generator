@@ -1,0 +1,77 @@
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(8, 8, 15, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.loading-overlay__panel {
+  background: linear-gradient(160deg, #0e0e22 0%, #151530 100%);
+  border: 1px solid rgba(255, 213, 79, 0.15);
+  border-radius: 20px;
+  padding: 2.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(255, 213, 79, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  max-width: 420px;
+  text-align: center;
+}
+
+.loading-overlay__ring {
+  position: relative;
+  width: 76px;
+  height: 76px;
+
+  ::ng-deep .mat-mdc-progress-spinner {
+    --mat-progress-spinner-active-indicator-color: var(--accent);
+  }
+}
+
+.loading-overlay__icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--accent);
+  font-size: 1.9rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  animation: iconPulse 2s ease-in-out infinite;
+  text-shadow: 0 0 16px rgba(255, 213, 79, 0.45);
+}
+
+.loading-overlay__message {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.loading-overlay__hint {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+@keyframes iconPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 1;
+  }
+}

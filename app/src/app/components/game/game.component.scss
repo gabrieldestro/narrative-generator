@@ -1,14 +1,43 @@
-.game-layout { display: flex; flex-direction: column; height: 100vh; }
-.game-layout__body { flex: 1; }
-.game-layout__sidenav { border: none; background: #222; }
-.game-layout__sidenav--start { border-right: 1px solid #333; }
-.game-layout__sidenav--end { border-left: 1px solid #333; }
-.game-layout__center { background: #1a1a1a; display: flex; flex-direction: column; }
+.game-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.game-layout__body {
+  flex: 1;
+}
+
+.game-layout__sidenav {
+  border: none;
+  background: var(--bg-secondary);
+  width: 300px;
+}
+
+.game-layout__sidenav--start {
+  border-right: 1px solid var(--border);
+}
+
+.game-layout__sidenav--end {
+  border-left: 1px solid var(--border);
+}
+
+.game-layout__center {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(137, 180, 250, 0.06), transparent 60%),
+    var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
 
 @media (max-width: 767px) {
-  mat-sidenav { width: 100% !important; }
+  mat-sidenav {
+    width: 100% !important;
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1279px) {
-  mat-sidenav { width: 240px; }
+  mat-sidenav {
+    width: 240px;
+  }
 }

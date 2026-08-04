@@ -2,11 +2,12 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { Router, RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiService } from '../../core/services/api.service';
 import { LoggingService } from '../../core/services/logging.service';
 import { WorldListComponent } from './world-list/world-list.component';
+import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 import type { WorldTemplate } from '../../core/models/world-template.model';
 
 @Component({
@@ -14,13 +15,14 @@ import type { WorldTemplate } from '../../core/models/world-template.model';
   standalone: true,
   imports: [
     RouterLink,
-    MatToolbarModule, MatButtonModule, MatProgressSpinnerModule,
-    WorldListComponent,
+    MatToolbarModule, MatButtonModule, MatIconModule,
+    WorldListComponent, LoadingOverlayComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './new-game.component.html',
   styleUrl: './new-game.component.scss',
 })
+
 export class NewGameComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);

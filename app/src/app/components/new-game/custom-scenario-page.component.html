@@ -1,8 +1,8 @@
 <mat-toolbar role="banner">
   <button mat-icon-button (click)="goBack()" aria-label="Voltar" [disabled]="isCreating()">
-    ←
+    <mat-icon>arrow_back</mat-icon>
   </button>
-  <span>Cenário Personalizado</span>
+  <span class="page-title">Cenário Personalizado</span>
 </mat-toolbar>
 
 <div class="custom-page__content">
@@ -10,8 +10,6 @@
 </div>
 
 @if (isCreating()) {
-  <div class="custom-page__loading-overlay">
-    <mat-spinner diameter="48" aria-label="Gerando mundo"/>
-    <p class="custom-page__loading-text">Gerando mundo...</p>
-  </div>
+  <ng-loading-overlay/>
 }
+

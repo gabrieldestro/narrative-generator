@@ -41,14 +41,26 @@ import type { Character } from '../../../../core/models/character.model';
     </div>
   `,
   styles: [`
-    .character-sheet { border-bottom: 1px solid #333; padding: 0.5rem; }
+    .character-sheet {
+      border-bottom: 1px solid var(--divider);
+      padding: 0.75rem 1rem;
+      transition: background 0.2s ease;
+    }
+    .character-sheet:hover { background: rgba(137, 180, 250, 0.03); }
     .character-sheet--compact { cursor: pointer; }
-    .character-sheet__header { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+    .character-sheet__header { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; }
     .character-sheet__avatar { font-size: 1.2rem; }
-    .character-sheet__name { flex: 1; font-weight: 600; }
-    .character-sheet__body { padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
-    .character-sheet__field { font-size: 0.875rem; color: #a0a0a0; }
-    .character-sheet__label { color: #666; }
+    .character-sheet__name { flex: 1; font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--text-primary); }
+    .character-sheet__body { padding-top: 0.6rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .character-sheet__field { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
+    .character-sheet__label {
+      color: var(--text-muted);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
   `]
 })
 export class CharacterSheetComponent {

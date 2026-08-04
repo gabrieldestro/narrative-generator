@@ -1,4 +1,7 @@
 <mat-toolbar role="banner" aria-label="Cabeçalho do jogo">
+  <button mat-icon-button routerLink="/new-game" aria-label="Voltar para a tela inicial">
+    <mat-icon>arrow_back</mat-icon>
+  </button>
   <mat-icon class="game-header__world-icon" aria-hidden="true">sports_esports</mat-icon>
   <span class="game-header__world-name">{{ gameState.narrativeStyle() || 'Jogo' }}</span>
   <span class="spacer"></span>
@@ -8,8 +11,5 @@
   </button>
   <button mat-icon-button (click)="toggleRight()" aria-label="Alternar painel técnico">
     <mat-icon>construction</mat-icon>
-  </button>
-  <button mat-icon-button routerLink="/settings" (click)="onSettings()" aria-label="Abrir configurações">
-    <mat-icon>settings</mat-icon>
   </button>
 </mat-toolbar>

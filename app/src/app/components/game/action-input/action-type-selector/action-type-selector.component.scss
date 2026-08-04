@@ -1,4 +1,4 @@
-.action-text-input {
+.action-select {
   width: 100%;
 
   ::ng-deep {
@@ -19,11 +19,13 @@
       box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.08);
     }
 
-    textarea {
-      color: var(--text-primary) !important;
+    .mat-mdc-select-value-text {
+      color: var(--text-primary);
       font-family: 'Inter', sans-serif;
-      line-height: 1.5;
-      caret-color: var(--info);
+    }
+
+    .mat-mdc-select-arrow {
+      color: var(--text-muted);
     }
 
     .mat-mdc-form-field-label,

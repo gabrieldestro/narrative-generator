@@ -1,0 +1,146 @@
+<mat-toolbar role="banner">
+  <button mat-icon-button routerLink="/new-game" aria-label="Voltar">
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+  <span class="page-title">Configurações</span>
+  <span class="spacer"></span>
+</mat-toolbar>
+
+<div class="settings__content fade-in">
+  <div class="settings__header">
+    <h1 class="settings__title">
+      <mat-icon class="settings__title-icon">settings</mat-icon>
+      Configurações
+    </h1>
+    <p class="settings__subtitle">
+      Ajuste o motor narrativo, o modelo de IA e as preferências do seu grimório digital.
+    </p>
+  </div>
+
+  <section class="settings-card">
+    <header class="settings-card__header">
+      <mat-icon class="settings-card__icon">auto_stories</mat-icon>
+      <div class="settings-card__heading">
+        <h2 class="settings-card__title">Jogo</h2>
+        <p class="settings-card__subtitle">Comportamento do motor narrativo durante a partida.</p>
+      </div>
+    </header>
+
+    <div class="settings-card__body">
+      <div class="settings-field">
+        <label class="settings-field__label">Tamanho da Narração</label>
+        <mat-radio-group class="settings-radio-group"
+          [ngModel]="settingsService.settings().narrationSize"
+          (ngModelChange)="update('narrationSize', $event)">
+          <mat-radio-button value="concise">Conciso</mat-radio-button>
+          <mat-radio-button value="balanced">Equilibrado</mat-radio-button>
+          <mat-radio-button value="descriptive">Detalhado</mat-radio-button>
+        </mat-radio-group>
+        <p class="settings-field__hint">Define quantos parágrafos a IA escreve a cada turno.</p>
+      </div>
+
+      <div class="settings-field">
+        <div class="settings-field__row">
+          <label class="settings-field__label">Eventos Inesperados</label>
+          <span class="settings-field__value">{{ settingsService.settings().unexpectedEventChance * 100 }}%</span>
+        </div>
+        <mat-slider class="settings-slider" min="0" max="50" step="5" discrete>
+          <input matSliderThumb [value]="settingsService.settings().unexpectedEventChance * 100" (valueChange)="update('unexpectedEventChance', $event / 100)">
+        </mat-slider>
+        <p class="settings-field__hint">Chance de um evento imprevisto alterar o rumo da história.</p>
+      </div>
+
+      <div class="settings-field">
+        <label class="settings-field__label">Janela de Memória</label>
+        <mat-radio-group class="settings-radio-group"
+          [ngModel]="settingsService.settings().memoryWindowSize"
+          (ngModelChange)="update('memoryWindowSize', $event)">
+          <mat-radio-button [value]="2">2 turnos</mat-radio-button>
+          <mat-radio-button [value]="5">5 turnos</mat-radio-button>
+          <mat-radio-button [value]="10">10 turnos</mat-radio-button>
+          <mat-radio-button [value]="15">15 turnos</mat-radio-button>
+          <mat-radio-button [value]="20">20 turnos</mat-radio-button>
+        </mat-radio-group>
+        <p class="settings-field__hint">Quantos turnos a IA lembra ao escrever a próxima narração.</p>
+      </div>
+
+      <div class="settings-field">
+        <mat-slide-toggle class="settings-toggle" [checked]="settingsService.settings().debug" (change)="update('debug', $event.checked)">
+          Modo Debug
+        </mat-slide-toggle>
+        <p class="settings-field__hint">Exibe o painel de debug arcano com rolagens e decisões da IA.</p>
+      </div>
+
+      <div class="settings-field">
+        <mat-slide-toggle class="settings-toggle" [checked]="settingsService.settings().godMode" (change)="update('godMode', $event.checked)">
+          God Mode
+        </mat-slide-toggle>
+        <p class="settings-field__hint">Rolagens de dados sempre resultam em 20.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="settings-card">
+    <header class="settings-card__header">
+      <mat-icon class="settings-card__icon">memory</mat-icon>
+      <div class="settings-card__heading">
+        <h2 class="settings-card__title">Conexão com o LLM</h2>
+        <p class="settings-card__subtitle">Configure o endpoint e o modelo de linguagem usado pelo motor.</p>
+      </div>
+    </header>
+
+    <div class="settings-card__body">
+      <div class="settings-field">
+        <label class="settings-field__label">URL da API</label>
+        <mat-form-field appearance="outline" class="settings-form-field">
+          <input matInput [ngModel]="settingsService.settings().apiUrl" (ngModelChange)="update('apiUrl', $event)" placeholder="http://localhost:1234/v1">
+        </mat-form-field>
+        <p class="settings-field__hint">Endpoint compatível com a OpenAI API (ex: LM Studio, Ollama).</p>
+      </div>
+
+      <div class="settings-field">
+        <label class="settings-field__label">Modelo</label>
+        <mat-form-field appearance="outline" class="settings-form-field">
+          <input matInput [ngModel]="settingsService.settings().model" (ngModelChange)="update('model', $event)" placeholder="gemma-4b">
+        </mat-form-field>
+        <p class="settings-field__hint">Identificador do modelo carregado no servidor.</p>
+      </div>
+
+      <div class="settings-field">
+        <label class="settings-field__label">API Token (opcional)</label>
+        <mat-form-field appearance="outline" class="settings-form-field">
+          <input matInput type="password" [ngModel]="settingsService.settings().apiToken" (ngModelChange)="update('apiToken', $event)" placeholder="Token de autenticação">
+        </mat-form-field>
+        <p class="settings-field__hint">Requerido apenas por provedores que exigem autenticação.</p>
+      </div>
+
+      <button class="btn-test" mat-stroked-button (click)="testConnection()">
+        <mat-icon>wifi_tethering</mat-icon>
+        Testar Conexão
+      </button>
+    </div>
+  </section>
+
+  <section class="settings-card">
+    <header class="settings-card__header">
+      <mat-icon class="settings-card__icon">info</mat-icon>
+      <div class="settings-card__heading">
+        <h2 class="settings-card__title">Sobre</h2>
+        <p class="settings-card__subtitle">Narrative Generator v1.0</p>
+      </div>
+    </header>
+
+    <div class="settings-card__body">
+      <p class="settings-about__text">
+        Motor narrativo configurável com suporte a múltiplos modelos de linguagem, gerando aventuras únicas com IA.
+      </p>
+    </div>
+  </section>
+
+  <div class="settings__actions">
+    <button class="btn-save" mat-raised-button (click)="saveSettings()">
+      <mat-icon>save</mat-icon>
+      Salvar Configurações
+    </button>
+  </div>
+</div>

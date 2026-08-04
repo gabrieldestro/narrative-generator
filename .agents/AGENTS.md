@@ -15,6 +15,7 @@
 * **UI em português:** strings exibidas ao usuário.
 * **Exemplo:** método `getLastNarrative()`, texto `"Save anterior encontrado!"`.
 * **Angular components:** sempre usar arquivos separados (`.ts`, `.html`, `.scss`), **nunca** `template:` inline ou `styles:` inline. Usar `templateUrl` e `styleUrl`.
+* **UI nova ou refatoração de tela:** seguir o padrão visual em `.agents/visual-guidelines.md` (tokens, tipografia, componentes, checklist).
 
 ## 4. Repositório
 * Backend: `api/src/`, `api/worlds/`, `api/package.json`.
@@ -33,3 +34,11 @@
 * Paralelos com C#/.NET ao introduzir conceitos Node.
 * Documentar decisões em `docs/`.
 * Explicar "porquês", especialmente ao contornar limitações ou erros de ferramentas.
+
+## 7. Trabalhos Pendentes
+* **Refatorar componentes restantes** para separar HTML/CSS/TS (remover `template:` e `styles:` inline; usar `templateUrl` e `styleUrl` + arquivos `.html`/`.scss`):
+  - `app/src/app/shared/components/status-badge/status-badge.component.ts` (template + styles inline)
+  - `app/src/app/components/game/character-panel/character-panel.component.ts` (template inline)
+  - `app/src/app/components/game/character-panel/character-sheet/character-sheet.component.ts` (template + styles inline)
+  - `app/src/app/components/game/character-panel/inventory/inventory-panel.component.ts` (template + styles inline)
+  - `app/src/app/components/game/character-panel/map-graph/map-graph.component.ts` (template + styles inline)

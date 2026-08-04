@@ -1,40 +1,40 @@
 // ─── Design Tokens ───
 
 // Backgrounds
-$bg-primary:     #1a1a1a;
-$bg-secondary:   #222222;
-$bg-elevated:    #2a2a2a;
-$bg-hover:       #333333;
+$bg-primary:     #08080f; // Obsidian Deep
+$bg-secondary:   #121222; // Panel Deep
+$bg-elevated:    #1a1a30; // Card Deep
+$bg-hover:       #242445; // Hover/Active
 
 // Texto
-$text-primary:   #e0e0e0;
-$text-secondary: #a0a0a0;
-$text-muted:     #666666;
-$text-inverse:   #1a1a1a;
+$text-primary:   #f1f1f6; // High contrast text
+$text-secondary: #cdd6f4; // Sub-headers and labels
+$text-muted:     #a6adc8; // Descriptions and low emphasis
+$text-inverse:   #08080f; // Dark contrast text
 
-// Acento (dourado suave)
-$accent:         #c9a84c;
-$accent-hover:   #dbb85e;
-$accent-muted:   #8a7a3a;
+// Acento (dourado e brilho celeste)
+$accent:         #ffd54f; // Ethereal Gold
+$accent-hover:   #ffe082;
+$accent-muted:   #c9a84c;
 
 // Bordas
-$border:         #333333;
-$border-light:   #3a3a3a;
-$divider:        #2a2a2a;
+$border:         rgba(137, 180, 250, 0.08); // Glassmorphic borders
+$border-light:   rgba(137, 180, 250, 0.15);
+$divider:        rgba(137, 180, 250, 0.05);
 
 // Estados semânticos
-$success:        #4caf50;
-$warning:        #ff9800;
-$error:          #e53935;
-$info:           #42a5f5;
+$success:        #a6e3a1; // Pastel Green
+$warning:        #f9e2af; // Pastel Yellow
+$error:          #f38ba8; // Pastel Red
+$info:           #89b4fa; // Celeste
 
 // Painel debug
-$debug-bg:       #1e1e2e;
-$debug-border:   #2a2a3e;
+$debug-bg:       #121222;
+$debug-border:   rgba(137, 180, 250, 0.08);
 
 // Fontes
 $font-narrative: 'Georgia', 'Merriweather', 'Palatino Linotype', serif;
-$font-ui:        'Inter', 'Segoe UI', 'Roboto', system-ui, sans-serif;
+$font-ui:        'Outfit', 'Inter', 'Segoe UI', 'Roboto', system-ui, sans-serif;
 $font-mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 
 // Tamanhos
@@ -79,10 +79,11 @@ $radius-lg:  12px;
 $radius-xl:  16px;
 $radius-full: 9999px;
 
-// Sombras
+// Sombras e Brilhos
 $shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.3);
 $shadow-md:  0 4px 6px rgba(0, 0, 0, 0.4);
 $shadow-lg:  0 10px 25px rgba(0, 0, 0, 0.5);
+$glow-primary: 0 0 15px rgba(137, 180, 250, 0.15);
 
 // Transições
 $transition-fast:   150ms ease;
@@ -114,4 +115,6 @@ $transition-slow:   400ms ease;
   --font-ui: #{$font-ui};
   --font-mono: #{$font-mono};
   --max-reading-width: #{$max-reading-width};
+  --glow-primary: #{$glow-primary};
 }
+

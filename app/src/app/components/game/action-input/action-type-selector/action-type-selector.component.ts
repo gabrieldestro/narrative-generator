@@ -25,6 +25,7 @@ const ACTION_TYPES: ActionTypeOption[] = [
   standalone: true,
   imports: [MatSelectModule, MatFormFieldModule],
   templateUrl: './action-type-selector.component.html',
+  styleUrl: './action-type-selector.component.scss',
 })
 export class ActionTypeSelectorComponent {
   @Input() disabled = false;

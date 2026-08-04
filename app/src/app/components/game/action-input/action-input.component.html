@@ -6,20 +6,20 @@
 
   <ng-action-text-input [text]="playerText()" (textChange)="playerText.set($event)" [disabled]="gameState.isLoading()"/>
 
-
   <div class="action-input__actions">
     @if (gameState.isLoading()) {
-      <button mat-raised-button disabled aria-label="Aguardando processamento">
+      <button mat-raised-button class="btn-action btn-action--loading" disabled aria-label="Aguardando processamento">
         <mat-spinner diameter="20" aria-hidden="true"/>
         Aguardando...
       </button>
     } @else {
       <button
         mat-raised-button
-        color="primary"
+        class="btn-action"
         (click)="submit()"
         [disabled]="!playerText().trim()"
         aria-label="Enviar ação">
+        <mat-icon>bolt</mat-icon>
         Agir
       </button>
     }

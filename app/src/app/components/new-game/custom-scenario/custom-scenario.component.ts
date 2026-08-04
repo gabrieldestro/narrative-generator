@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import type { WorldTemplate } from '../../../core/models/world-template.model';
 
 export interface CustomScenarioData {
@@ -14,51 +15,10 @@ export interface CustomScenarioData {
 @Component({
   selector: 'ng-custom-scenario',
   standalone: true,
-  imports: [FormsModule, MatFormFieldModule, MatInputModule, MatButtonModule],
+  imports: [FormsModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="custom-scenario">
-      <h3>{{ baseTemplate ? 'Personalizar: ' + baseTemplate.name : 'Cenário Personalizado' }}</h3>
-      @if (baseTemplate) {
-        <p class="custom-scenario__hint">Os campos foram pré-preenchidos com os dados do mundo. Ajuste como desejar.</p>
-      }
-
-      <mat-form-field appearance="fill">
-        <mat-label>Gênero</mat-label>
-        <input matInput [(ngModel)]="narrativeStyle" placeholder="Ex: Fantasia Medieval, Cyberpunk Noir">
-      </mat-form-field>
-
-      <mat-form-field appearance="fill">
-        <mat-label>Estilo de Escrita</mat-label>
-        <input matInput [(ngModel)]="writingStyle" placeholder="Ex: Épico, Cômico, Terror Sombrio">
-      </mat-form-field>
-
-      <mat-form-field appearance="fill">
-        <mat-label>Contexto do Mundo</mat-label>
-        <textarea matInput [(ngModel)]="worldContext" placeholder="Descreva o mundo que você quer criar..." rows="5"></textarea>
-        @if (!worldContext && submitted) {
-          <mat-error>O contexto do mundo é obrigatório</mat-error>
-        }
-      </mat-form-field>
-
-      <div class="custom-scenario__actions">
-        <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="!worldContext.trim()">
-          {{ baseTemplate ? 'Criar Jogo' : 'Gerar Mundo' }}
-        </button>
-        @if (baseTemplate) {
-          <button mat-button (click)="clearBase()">Cancelar</button>
-        }
-      </div>
-    </div>
-  `,
-  styles: [`
-    .custom-scenario { max-width: 600px; margin: 2rem auto; display: flex; flex-direction: column; gap: 1rem; }
-    h3 { text-align: center; color: #c9a84c; }
-    .custom-scenario__hint { text-align: center; color: #888; font-size: 0.85rem; }
-    mat-form-field { width: 100%; }
-    .custom-scenario__actions { display: flex; gap: 1rem; justify-content: center; }
-    button { align-self: center; }
-  `]
+  templateUrl: './custom-scenario.component.html',
+  styleUrl: './custom-scenario.component.scss',
 })
 export class CustomScenarioComponent {
   @Input() baseTemplate: WorldTemplate | null = null;
@@ -69,6 +29,25 @@ export class CustomScenarioComponent {
   writingStyle = '';
   worldContext = '';
   submitted = false;
+
+  get isEditing(): boolean {
+    return !!this.baseTemplate;
+  }
+
+  get previewTitle(): string {
+    return this.narrativeStyle || 'Seu Mundo';
+  }
+
+  get previewStyle(): string {
+    return this.writingStyle || 'Estilo livre';
+  }
+
+  get previewContext(): string {
+    if (!this.worldContext) return 'O contexto do seu mundo aparecerá aqui conforme você escreve...';
+    return this.worldContext.length > 280
+      ? this.worldContext.slice(0, 280) + '…'
+      : this.worldContext;
+  }
 
   constructor() {
     effect(() => {

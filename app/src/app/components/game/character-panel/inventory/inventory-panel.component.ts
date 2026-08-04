@@ -19,10 +19,18 @@ import type { Character } from '../../../../core/models/character.model';
     </div>
   `,
   styles: [`
-    .inventory-panel { padding: 0.75rem; }
-    .inventory-panel__empty { color: #666; font-size: 0.875rem; }
-    .inventory-panel__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25rem; }
-    .inventory-panel__item { padding: 0.25rem 0.5rem; font-size: 0.875rem; border-radius: 4px; background: #2a2a2a; }
+    .inventory-panel { padding: 0.75rem 1rem; }
+    .inventory-panel__empty { color: var(--text-muted); font-size: 0.875rem; font-style: italic; }
+    .inventory-panel__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .inventory-panel__item {
+      padding: 0.4rem 0.6rem;
+      font-size: 0.85rem;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-family: 'Inter', sans-serif;
+    }
   `]
 })
 export class InventoryPanelComponent {

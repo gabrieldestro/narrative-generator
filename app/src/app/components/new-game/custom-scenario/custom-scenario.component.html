@@ -1,0 +1,134 @@
+<div class="create-world">
+
+  <!-- Cabeçalho da seção -->
+  <div class="create-world__header">
+    <h1 class="create-world__title">
+      @if (isEditing) {
+        <mat-icon class="create-world__title-icon">edit</mat-icon>
+        Personalizando: <span class="create-world__title-accent">{{ baseTemplate!.name }}</span>
+      } @else {
+        <mat-icon class="create-world__title-icon">auto_awesome</mat-icon>
+        Criar seu Mundo
+      }
+    </h1>
+    <p class="create-world__subtitle">
+      @if (isEditing) {
+        Os campos foram pré-preenchidos com os dados do mundo base. Ajuste como desejar.
+      } @else {
+        Defina o gênero, estilo e contexto para que a IA gere uma aventura única para você.
+      }
+    </p>
+  </div>
+
+  <!-- Layout de duas colunas: Formulário + Preview -->
+  <div class="create-world__body">
+
+    <!-- Coluna esquerda: Formulário -->
+    <div class="create-world__form-col">
+
+      <div class="form-section">
+        <label class="form-section__label">
+          <mat-icon class="form-section__icon">theater_comedy</mat-icon>
+          Gênero Narrativo
+        </label>
+        <mat-form-field appearance="outline" class="form-section__field">
+          <input
+            matInput
+            [(ngModel)]="narrativeStyle"
+            placeholder="Ex: Fantasia Medieval, Cyberpunk Noir, Space Opera…"
+            id="input-narrative-style">
+        </mat-form-field>
+      </div>
+
+      <div class="form-section">
+        <label class="form-section__label">
+          <mat-icon class="form-section__icon">edit_note</mat-icon>
+          Estilo de Escrita
+        </label>
+        <mat-form-field appearance="outline" class="form-section__field">
+          <input
+            matInput
+            [(ngModel)]="writingStyle"
+            placeholder="Ex: Épico, Cômico, Terror Sombrio, Introspectivo…"
+            id="input-writing-style">
+        </mat-form-field>
+      </div>
+
+      <div class="form-section">
+        <label class="form-section__label">
+          <mat-icon class="form-section__icon">public</mat-icon>
+          Contexto do Mundo
+          <span class="form-section__required">*</span>
+        </label>
+        <mat-form-field appearance="outline" class="form-section__field">
+          <textarea
+            matInput
+            [(ngModel)]="worldContext"
+            placeholder="Descreva o mundo, os conflitos centrais, personagens importantes e o tom geral da aventura…"
+            rows="8"
+            id="input-world-context">
+          </textarea>
+          @if (!worldContext && submitted) {
+            <mat-error>O contexto do mundo é obrigatório</mat-error>
+          }
+        </mat-form-field>
+        <p class="form-section__hint">Quanto mais detalhes, mais rica será a aventura gerada pela IA.</p>
+      </div>
+
+      <div class="create-world__actions">
+        <button
+          class="btn-create"
+          mat-raised-button
+          (click)="onSubmit()"
+          [disabled]="!worldContext.trim()"
+          id="btn-generate-world">
+          <mat-icon>rocket_launch</mat-icon>
+          {{ isEditing ? 'Criar Jogo' : 'Gerar Mundo com IA' }}
+        </button>
+        @if (isEditing) {
+          <button class="btn-cancel" mat-stroked-button (click)="clearBase()" id="btn-cancel">
+            Cancelar
+          </button>
+        }
+      </div>
+
+    </div>
+
+    <!-- Coluna direita: Preview em tempo real -->
+    <div class="create-world__preview-col">
+      <div class="preview-card">
+        <div class="preview-card__badge">
+          <mat-icon>preview</mat-icon>
+          Pré-visualização
+        </div>
+
+        <div class="preview-card__title">{{ previewTitle }}</div>
+
+        <div class="preview-card__chips">
+          @if (narrativeStyle) {
+            <span class="preview-chip preview-chip--genre">{{ narrativeStyle }}</span>
+          }
+          @if (writingStyle) {
+            <span class="preview-chip preview-chip--style">{{ writingStyle }}</span>
+          }
+          @if (!narrativeStyle && !writingStyle) {
+            <span class="preview-chip preview-chip--empty">Gênero · Estilo</span>
+          }
+        </div>
+
+        <div class="preview-card__divider"></div>
+
+        <p class="preview-card__context" [class.preview-card__context--empty]="!worldContext">
+          {{ previewContext }}
+        </p>
+
+        <div class="preview-card__footer">
+          <mat-icon class="preview-card__footer-icon">auto_stories</mat-icon>
+          <span>Gerado por IA Local</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>

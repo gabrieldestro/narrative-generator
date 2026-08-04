@@ -27,8 +27,4 @@ export class GameHeaderComponent {
     this.log.debug('Toggle painel direito');
     this.gameState.toggleRightPanel();
   }
-
-  onSettings(): void {
-    this.log.info('Navegando para configurações');
-  }
 }

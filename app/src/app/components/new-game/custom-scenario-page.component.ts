@@ -2,10 +2,11 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { Router } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiService } from '../../core/services/api.service';
 import { LoggingService } from '../../core/services/logging.service';
+import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 import { CustomScenarioComponent, type CustomScenarioData } from './custom-scenario/custom-scenario.component';
 import type { WorldTemplate } from '../../core/models/world-template.model';
 
@@ -13,8 +14,8 @@ import type { WorldTemplate } from '../../core/models/world-template.model';
   selector: 'ng-custom-scenario-page',
   standalone: true,
   imports: [
-    MatToolbarModule, MatButtonModule, MatProgressSpinnerModule,
-    CustomScenarioComponent,
+    MatToolbarModule, MatButtonModule, MatIconModule,
+    CustomScenarioComponent, LoadingOverlayComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './custom-scenario-page.component.html',
