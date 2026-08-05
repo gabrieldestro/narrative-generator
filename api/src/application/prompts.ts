@@ -62,7 +62,9 @@ export function narratorSystemPrompt(
   promptParts.push(
     'NUNCA contradiga o Árbitro. Se o Árbitro disse que falhou, narre a falha.',
     `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições (por exemplo, se for cômico/sarcástico, use ironia; se for terror sombrio, use descrições macabras e assustadoras; se for épico, use linguagem nobre e poética).`,
-    'Não tome decisões pelos personagens, narre as consequências finais deste turno.'
+    'Não tome decisões pelos personagens.',
+    'Narre cada ação se desenrolando momento a momento: primeiro o personagem age, depois o ambiente/oponente reage, e então o resultado se revela. Use presente ou pretérito imperfeito para dar sensação de movimento.',
+    'Destaque nomes de personagens, lugares e itens em negrito usando marcação markdown (**Nome**) na primeira vez que aparecerem na narração, para facilitar a leitura.',
   );
   if (unexpectedEventTriggered) {
     promptParts.push(
@@ -83,13 +85,13 @@ export function narratorHumanPrompt(state: GameState, actions: string[], logical
     'Localização atual dos personagens:',
     locations,
     '',
-    'O que tentaram fazer:',
+    'O que cada personagem está fazendo neste exato momento:',
     actions.join('\n'),
     '',
-    'Resolução do Árbitro:',
+    'Guia interno da resolução (resultado já decidido — não cite literalmente, apenas cumpra o desfecho):',
     logicalResolution,
     '',
-    'Escreva a cena em português, considerando onde cada personagem está e como seus locais mudam (ou não) durante a ação (apenas o texto da narração):',
+    'Escreva a cena em português descrevendo as ações conforme elas acontecem, considerando onde cada personagem está e como seus locais mudam (ou não) durante a ação (apenas o texto da narração):',
   ].join('\n');
 }
 
