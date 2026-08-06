@@ -65,6 +65,7 @@ export function narratorSystemPrompt(
     'Não tome decisões pelos personagens.',
     'Narre cada ação se desenrolando momento a momento: primeiro o personagem age, depois o ambiente/oponente reage, e então o resultado se revela. Use presente ou pretérito imperfeito para dar sensação de movimento.',
     'Destaque nomes de personagens, lugares e itens em negrito usando marcação markdown (**Nome**) na primeira vez que aparecerem na narração, para facilitar a leitura.',
+    'NÃO descreva novamente o cenário/lugar onde a cena acontece — ele já foi estabelecido e apresentado ao leitor. Apenas continue a cena a partir de onde parou. Descreva o ambiente apenas se as ações deste turno provocarem uma mudança RELEVANTE nele, e nesse caso mencione somente o que mudou.',
   );
   if (unexpectedEventTriggered) {
     promptParts.push(
@@ -92,6 +93,28 @@ export function narratorHumanPrompt(state: GameState, actions: string[], logical
     logicalResolution,
     '',
     'Escreva a cena em português descrevendo as ações conforme elas acontecem, considerando onde cada personagem está e como seus locais mudam (ou não) durante a ação (apenas o texto da narração):',
+  ].join('\n');
+}
+
+// ── Scene Description (generateSceneDescription) ──
+
+export function describeSceneSystemPrompt(state: GameState): string {
+  return [
+    `Você é o Narrador Literário de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
+    'Sua função é escrever APENAS a descrição do local/cenário onde os personagens estão, SEM narrar ações nem falas.',
+    `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições.`,
+    'Crie uma descrição imersiva e sensorial do lugar, como a abertura de uma cena, apresentando o ambiente em que a ação vai acontecer.',
+    'Não descreva personagens nem o que eles estão fazendo.',
+    'Escreva em português, em até 3 frases.',
+  ].join('\n');
+}
+
+export function describeSceneHumanPrompt(state: GameState, location: string): string {
+  return [
+    `Local atual: ${location}`,
+    `Contexto do mundo: ${state.worldContext}`,
+    '',
+    'Escreva a descrição deste local (apenas o texto da descrição):',
   ].join('\n');
 }
 

@@ -18,6 +18,8 @@ import {
   companionDescriptionHumanPrompt,
   initialNarrativeSystemPrompt,
   initialNarrativeHumanPrompt,
+  describeSceneSystemPrompt,
+  describeSceneHumanPrompt,
   summarizeSystemPrompt,
   summarizeHumanPrompt,
   updateWorldContextSystemPrompt,
@@ -208,12 +210,28 @@ export class LlmService {
     return response.content as string;
   }
 
+  async generateSceneDescription(state: GameState, location: string): Promise<string> {
+    const messages = [
+      new SystemMessage(describeSceneSystemPrompt(state)),
+      new HumanMessage(describeSceneHumanPrompt(state, location)),
+    ];
+
+    if (this.logger) {
+      const response = await this.logger.measure('Descritor:Cenário', state.turnNumber, () => this.llm.invoke(messages));
+      return response.content as string;
+    }
+
+    const response = await this.llm.invoke(messages);
+    return response.content as string;
+  }
+
   async narrateFiction(
     state: GameState,
     actions: string[],
     logicalResolution: string,
     output?: IOutputWriter,
-    unexpectedEventTriggered?: boolean
+    unexpectedEventTriggered?: boolean,
+    sceneDescription?: string
   ): Promise<string> {
     const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
     const systemMsg = narratorSystemPrompt(state, sizePrompt, unexpectedEventTriggered);
@@ -223,6 +241,10 @@ export class LlmService {
       new HumanMessage(humanMsg),
     ];
     let fullResponse = "";
+    if (sceneDescription) {
+      if (output) output.write(sceneDescription + "\n\n");
+      fullResponse = sceneDescription + "\n\n";
+    }
 
     const start = Date.now();
     const stream = await this.llm.stream(messages);

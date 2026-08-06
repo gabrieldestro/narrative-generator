@@ -32,6 +32,8 @@ export class SessionFactory {
       return character;
     });
 
+    const playerChar = characters.find(c => c.isPlayer);
+
     return {
       worldContext: template.worldContext,
       narrativeStyle: template.narrativeStyle,
@@ -40,6 +42,7 @@ export class SessionFactory {
       history: [],
       characters,
       locations: template.locations ?? [],
+      lastSceneLocation: playerChar?.currentLocation ?? 'Ponto de Partida',
     };
   }
 
@@ -76,7 +79,8 @@ export class SessionFactory {
       turnNumber: 1,
       history: [],
       characters,
-      locations: []
+      locations: [],
+      lastSceneLocation: "Ponto de Partida",
     };
   }
 
@@ -128,6 +132,8 @@ export class SessionFactory {
       return character;
     });
 
+    const playerChar = characters.find(c => c.isPlayer);
+
     const state: GameState = {
       worldContext: context,
       narrativeStyle: style,
@@ -136,6 +142,7 @@ export class SessionFactory {
       history: [],
       characters,
       locations,
+      lastSceneLocation: playerChar?.currentLocation ?? 'Ponto de Partida',
     };
     if (this.repository) {
       await this.repository.save(state);

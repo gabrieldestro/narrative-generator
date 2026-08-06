@@ -134,4 +134,5 @@ export interface GameState extends WorldConfig {
   turnNumber: number;
   longTermSummary?: string; // Memória de longo prazo sumarizada (opcional)
   locations?: Location[]; // Lista de localizações do mundo atual
+  lastSceneLocation?: string; // Local em que a descrição de cenário foi apresentada pela última vez
 }

@@ -244,6 +244,17 @@ export class GameEngine {
       }
     }
 
+    // ── Passo 4: descreve o cenário quando o jogador entra/retorna a um novo local ──
+    let sceneDescription: string | undefined;
+    const scenePlayer = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+    const playerLocation = scenePlayer?.currentLocation;
+    if (playerLocation && playerLocation !== state.lastSceneLocation) {
+      this.output.writeLine("\n[Cenário] Novo local detectado, descrevendo o ambiente...");
+      turnLog.debug('[Cenário] novo local', { location: playerLocation });
+      sceneDescription = await this.llmService!.generateSceneDescription(state, playerLocation);
+      state.lastSceneLocation = playerLocation;
+    }
+
     this.output.writeLine("\n[Narrador] Escrevendo a cena...");
     this.output.writeLine("--------------------------------------------------");
     const narrationStart = Date.now();
@@ -258,7 +269,7 @@ export class GameEngine {
       },
       clear: () => this.output.clear(),
     };
-    const outcome = await this.llmService!.narrateFiction(state, actions, logicalResolution, streamWriter, unexpectedEvent);
+    const outcome = await this.llmService!.narrateFiction(state, actions, logicalResolution, streamWriter, unexpectedEvent, sceneDescription);
     turnLog.info('[Narração] concluída', { durationMs: Date.now() - narrationStart });
     this.output.writeLine("\n--------------------------------------------------");
 

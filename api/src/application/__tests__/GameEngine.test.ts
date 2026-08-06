@@ -81,6 +81,26 @@ describe('SessionFactory', () => {
       expect(state.characters[1]!.id).toBe('2');
     });
 
+    it('deve inicializar lastSceneLocation com o local inicial do jogador', async () => {
+      const state = await factory.createNewGame(
+        'Fantasia', 'Épico', 'Castelo.',
+        [{ ...playerAric, initialLocation: 'Salão do Trono' }, companionElara]
+      );
+      expect(state.lastSceneLocation).toBe('Salão do Trono');
+    });
+
+    it('deve inicializar lastSceneLocation via buildFromTemplate', () => {
+      const state = factory.buildFromTemplate({
+        narrativeStyle: 'Fantasia Medieval',
+        writingStyle: 'Épico / Poético',
+        worldContext: 'Um castelo antigo.',
+        name: 'Castelo',
+        description: 'Castelo do reino',
+        characters: [{ ...playerAric, initialLocation: 'Pátio' }, companionElara],
+      });
+      expect(state.lastSceneLocation).toBe('Pátio');
+    });
+
     it('deve aceitar N personagens no template', async () => {
       const chars: CharacterTemplate[] = [
         playerAric, companionElara,
