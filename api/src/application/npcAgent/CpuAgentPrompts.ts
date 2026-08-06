@@ -52,13 +52,22 @@ export function cpuReflectionSystemPrompt(state: GameState, char: Character): st
   return parts.join('\n');
 }
 
-export function cpuReflectionHumanPrompt(state: GameState): string {
+export function cpuReflectionHumanPrompt(state: GameState, priorNpcActions?: string[]): string {
   const historyContext = state.history.length > 0
     ? state.history.join('\n\n')
     : '(Nenhum evento anterior ainda. Você está no início da aventura.)';
-  return [
+  const parts = [
     `Contexto Recente:\n${historyContext}`,
     '',
-    'Reflita sobre seu objetivo, as tentativas passadas e decida sua ação agora. Responda APENAS com o JSON.',
-  ].join('\n');
+  ];
+  if (priorNpcActions && priorNpcActions.length > 0) {
+    parts.push(
+      'Ações já decididas por outros NPCs neste mesmo turno:',
+      priorNpcActions.map(a => `- ${a}`).join('\n'),
+      '',
+      'Leve essas ações em consideração para decidir a sua, evitando contradições (ex: não disputar o mesmo objeto que outro já pegou) e reagindo aos outros se fizer sentido.',
+    );
+  }
+  parts.push('Reflita sobre seu objetivo, as tentativas passadas e decida sua ação agora. Responda APENAS com o JSON.');
+  return parts.join('\n');
 }

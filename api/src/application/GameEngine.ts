@@ -142,37 +142,39 @@ export class GameEngine {
 
     const actions: string[] = [];
 
-    // ── Passo 1: dispara reflexões de TODOS os NPCs em paralelo ──
+    // ── Passo 1: reflete os NPCs em sequência, em ordem aleatória ──
     const npcChars = state.characters.filter(c => !c.isPlayer && (!c.status || c.status === 'active'));
     turnLog.debug('[NPC Reflection] refletindo N NPCs', { n: npcChars.length });
     if (npcChars.length > 0) {
-      this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em paralelo...`);
+      this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em sequência...`);
     }
 
-    const npcTasks = npcChars.map(char =>
-      this.cpuReflectionService!
-        .reflectAndAct(state, char, this.output)
-        .then(decision => {
-          turnLog.debug('[NPC] decision', { charName: char.name, reasoning: decision.reasoning, action: decision.action });
-          return { char, action: decision.action, reasoning: decision.reasoning, ok: true as const };
-        })
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          turnLog.error('[NPC] falha na reflexão', { charName: char.name, error: msg });
-          this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
-          return { char, action: `${char.name} observa os arredores e reconsidera suas opções.`, reasoning: '', ok: false as const };
-        }),
-    );
+    const orderedNpcs = this.shuffle(npcChars);
+    const npcResults: { char: Character; action: string; reasoning: string; ok: boolean }[] = [];
+    const priorNpcActions: string[] = [];
 
-    const npcResults = await Promise.allSettled(npcTasks);
+    for (const char of orderedNpcs) {
+      try {
+        const decision = await this.cpuReflectionService!
+          .reflectAndAct(state, char, this.output, priorNpcActions)
+          .then(decision => {
+            turnLog.debug('[NPC] decision', { charName: char.name, reasoning: decision.reasoning, action: decision.action });
+            return decision;
+          });
+        npcResults.push({ char, action: decision.action, reasoning: decision.reasoning, ok: true });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        turnLog.error('[NPC] falha na reflexão', { charName: char.name, error: msg });
+        this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
+        npcResults.push({ char, action: `${char.name} observa os arredores e reconsidera suas opções.`, reasoning: '', ok: false });
+      }
+      priorNpcActions.push(`${char.name}: ${npcResults[npcResults.length - 1]!.action}`);
+    }
 
     // Coleta decisões estruturadas dos NPCs
     const npcDecisions: NpcDecision[] = [];
-    for (const settled of npcResults) {
-      if (settled.status === 'fulfilled') {
-        const { char, action, reasoning } = settled.value;
-        npcDecisions.push({ characterName: char.name, action, reasoning, success: false });
-      }
+    for (const { char, action, reasoning } of npcResults) {
+      npcDecisions.push({ characterName: char.name, action, reasoning, success: false });
     }
 
     // ── Passo 2: consolida ações (player + NPC) e rola dados ──
@@ -184,12 +186,12 @@ export class GameEngine {
       if (char.isPlayer) {
         action = playerActions.get(char.name) ?? `${char.name} hesita por um momento.`;
       } else {
-        const settled = npcResults.find(
-          r => r.status === 'fulfilled' && r.value.char.name === char.name,
+        const npcResult = npcResults.find(
+          r => r.char.name === char.name,
         );
-        if (settled && settled.status === 'fulfilled') {
-          action = settled.value.action;
-          if (!settled.value.ok) {
+        if (npcResult) {
+          action = npcResult.action;
+          if (!npcResult.ok) {
             this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
           } else {
             this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
@@ -545,5 +547,14 @@ export class GameEngine {
 
   private escapeRegex(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private shuffle<T>(items: T[]): T[] {
+    const result = [...items];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j]!, result[i]!];
+    }
+    return result;
   }
 }

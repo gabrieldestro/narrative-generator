@@ -30,9 +30,9 @@ export class CpuReflectionService {
     this.logger = logger ?? new NullLogger();
   }
 
-  async reflectAndAct(state: GameState, char: Character, output?: IOutputWriter): Promise<CpuAgentDecision> {
+  async reflectAndAct(state: GameState, char: Character, output?: IOutputWriter, priorNpcActions?: string[]): Promise<CpuAgentDecision> {
     const systemPrompt = cpuReflectionSystemPrompt(state, char);
-    const humanPrompt = cpuReflectionHumanPrompt(state);
+    const humanPrompt = cpuReflectionHumanPrompt(state, priorNpcActions);
 
     let lastError: Error | undefined;
 
