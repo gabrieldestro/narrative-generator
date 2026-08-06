@@ -3,7 +3,7 @@ import type { GameState } from '../domain/types.js';
 // ── Agent: Arbiter (arbitrateLogic) ──
 
 export const arbiterSystemPrompt =
-  'Você é uma máquina de regras de RPG. Apenas retorne a avaliação lógica de sucesso ou falha, ignorando a narrativa.';
+  'Você é uma máquina de regras de RPG. Apenas retorne a avaliação lógica de sucesso ou falha, ignorando a narrativa. Responda em linhas técnicas de avaliação, sem prosa, sem parágrafos literários, sem descrever a cena.';
 
 export function arbiterHumanPrompt(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): string {
   const locations = state.characters
@@ -41,6 +41,11 @@ export function arbiterHumanPrompt(state: GameState, actions: string[], recentHi
     'NÃO use o gênero da história ou o estilo de escrita para negar ou aprovar ações.',
     'Responda de forma CRUA e DIRETA, sem literatura.',
     'Para cada ação diga: [Personagem] tentou [Ação] -> [Sucesso/Falha] porque [Motivo físico baseado na regra aplicada e no dado d20].',
+    '',
+    'EXEMPLO DE RESPOSTA ESPERADA (siga este formato, sem parágrafos, sem descrever a cena; use os nomes e ações reais listados acima, não os nomes deste exemplo):',
+    'Fulano tentou forçar a fechadura da porta -> Sucesso porque o dado d20=16 indica esforço excepcional e forçar uma fechadura simples é uma ação fisicamente possível.',
+    'Sicrano tentou voar batendo os braços -> Falha porque voar batendo os braços é fisicamente impossível para um ser humano comum (Regra 1), independentemente do dado.',
+    'Beltrano tentou lembrar o nome do antigo caseiro -> Sucesso porque d20=11 é performance normal e lembrar é uma ação comum.',
   );
   return promptParts.join('\n');
 }

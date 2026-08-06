@@ -70,11 +70,20 @@ export class NarrativePanelComponent {
     const turnMatch = entry.match(/^Turno (\d+):/i);
     const turnNumber = turnMatch ? parseInt(turnMatch[1], 10) : 1;
     
+    // Formato antigo (compatibilidade): "Turno X:\nAções: ...\nNarrativa: <prosa>"
     const actionsMatch = entry.match(/Ações:\s*([\s\S]*?)(?=\nNarrativa:)/i);
     const actions = actionsMatch ? actionsMatch[1].trim() : undefined;
     
     const narrativeMatch = entry.match(/Narrativa:\s*([\s\S]*)$/i);
-    const narrative = narrativeMatch ? narrativeMatch[1].trim() : entry;
+    let narrative: string;
+    if (narrativeMatch) {
+      narrative = narrativeMatch[1].trim();
+    } else if (turnMatch) {
+      // Novo formato: "Turno X: <prosa>"
+      narrative = entry.replace(/^Turno \d+:\s*/i, '').trim();
+    } else {
+      narrative = entry;
+    }
     
     return {
       turnNumber,

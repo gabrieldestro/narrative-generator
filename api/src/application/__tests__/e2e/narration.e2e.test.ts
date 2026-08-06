@@ -97,7 +97,7 @@ describeIf("Suíte de Testes End-to-End (E2E) - Narração e Coerência", () => 
 
     // Narração
     const narrationT1 = await llmService.narrateFiction(state, actionsWithDiceT1, resolutionT1);
-    state.history.push(`Turno 1:\nAções: ${actionsWithDiceT1.join(" | ")}\nNarrativa: ${narrationT1}`);
+    state.history.push(`Turno 1: ${narrationT1}`);
 
     // Extração e atualização de estado automático
     state = await gameManagementService.applyAutomaticStateUpdates(state, narrationT1);
@@ -139,7 +139,7 @@ describeIf("Suíte de Testes End-to-End (E2E) - Narração e Coerência", () => 
 
     // Narração - Forçamos um evento inesperado (Sal e Pimenta) para introduzir um perigo/NPC
     const narrationT2 = await llmService.narrateFiction(state, actionsWithDiceT2, resolutionT2, undefined, true);
-    state.history.push(`Turno 2:\nAções: ${actionsWithDiceT2.join(" | ")}\nNarrativa: ${narrationT2}`);
+    state.history.push(`Turno 2: ${narrationT2}`);
 
     // Extração e atualização de estado automático (deve detectar novos itens descobertos ou aparições)
     state = await gameManagementService.applyAutomaticStateUpdates(state, narrationT2);

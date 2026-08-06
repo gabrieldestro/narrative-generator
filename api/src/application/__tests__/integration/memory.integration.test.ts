@@ -11,8 +11,8 @@ describeIf('Memória Narrativa e Contexto de Mundo com LLM real (LM Studio)', ()
   it('deve sumarizar o histórico antigo acumulando com o resumo anterior', async () => {
     const oldSummary = 'O jogador e Elara investigaram um corredor escuro no asilo abandonado.';
     const oldestTurns = [
-      'Turno 3:\nAções: Jogador tenta: abrir a porta trancada do escritório | Elara tenta: vigiar o corredor\nNarrativa: Com um estalo, a fechadura cede. O escritório está coberto de poeira e contém uma mesa de carvalho com papéis amarelados.',
-      'Turno 4:\nAções: Jogador tenta: examinar os papéis na mesa | Elara tenta: vasculhar as gavetas\nNarrativa: Os papéis revelam experimentos médicos secretos conduzidos em 1984. Elara encontra uma chave de latão brilhante em uma gaveta secreta.'
+      'Turno 3: Com um estalo, a fechadura cede. O escritório está coberto de poeira e contém uma mesa de carvalho com papéis amarelados.',
+      'Turno 4: Os papéis revelam experimentos médicos secretos conduzidos em 1984. Elara encontra uma chave de latão brilhante em uma gaveta secreta.'
     ];
 
     const systemPrompt = summarizeSystemPrompt();

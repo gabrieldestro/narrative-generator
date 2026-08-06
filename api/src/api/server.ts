@@ -74,7 +74,7 @@ export function buildApp(options: AppOptions = {}) {
     llmService,
     cpuReflectionService,
     sessionFactory,
-    { godMode: true },
+    { godMode: false },
     gameManagementService,
     logger
   );

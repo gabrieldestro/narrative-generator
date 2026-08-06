@@ -300,7 +300,7 @@ describe('GameEngine', () => {
   it('deve limitar o histórico ao memoryWindowSize e disparar sumarização', async () => {
     const localEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { memoryWindowSize: 2, arbiterHistoryTurns: 0 });
 
-    const longHistory = ['Turno 1:\nAções: ...\nNarrativa: ...', 'Turno 2:\nAções: ...\nNarrativa: ...'];
+    const longHistory = ['Turno 1: Entrada na floresta...', 'Turno 2: Encontro com a criatura...'];
     const baseState = JSON.parse(JSON.stringify(existingState));
     const loadedState: GameState = { ...baseState, turnNumber: 3, history: longHistory, longTermSummary: 'Resumo inicial.' };
     vi.mocked(mockRepo.load).mockResolvedValue(loadedState);
@@ -327,7 +327,7 @@ describe('GameEngine', () => {
     expect(savedState).toBeDefined();
     expect(savedState.history).toHaveLength(2);
     expect(summarizeSpy).toHaveBeenCalledWith('Resumo inicial.', [
-      'Turno 1:\nAções: ...\nNarrativa: ...'
+      'Turno 1: Entrada na floresta...'
     ], expect.any(Number));
     expect(savedState.longTermSummary).toBe('Novo resumo consolidado.');
     expect(updateCtxSpy).toHaveBeenCalledWith('Uma floresta sombria.', 'Cena narrada.', expect.any(Number));

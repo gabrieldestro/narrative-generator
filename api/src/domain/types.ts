@@ -32,6 +32,7 @@ export interface PlayerActionPayload {
   actionIntent?: ActionIntent;
   playerText: string;
   characterName?: string;
+  settings?: Partial<GameSettings>;
 }
 
 // Representa um personagem na nossa história

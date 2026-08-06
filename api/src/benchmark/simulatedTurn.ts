@@ -205,7 +205,7 @@ async function simulateTurn(
   const outcome = await llmService.narrateFiction(state, actions, logicalResolution);
   const narratorMs = Date.now() - narratorStart;
 
-  state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(' | ')}\nNarrativa: ${outcome}`);
+  state.history.push(`Turno ${state.turnNumber}: ${outcome}`);
 
   // ── Post-turn ─────────────────────────────────────────────────────────────
   const postStart = Date.now();

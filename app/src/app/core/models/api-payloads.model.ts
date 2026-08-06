@@ -1,5 +1,6 @@
 import type { GameState } from './game-state.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
+import type { GameSettings } from './game-settings.model';
 
 export type ActionType = 'observe' | 'speak' | 'attack' | 'sneak' | 'use_item' | 'interact' | 'flee' | 'free';
 export type ActionIntent = 'curious' | 'aggressive' | 'cautious' | 'friendly' | 'intimidating' | 'desperate' | 'neutral';
@@ -9,16 +10,19 @@ export interface PlayerActionPayload {
   actionIntent?: ActionIntent;
   playerText: string;
   characterName?: string;
+  settings?: Partial<GameSettings>;
 }
 
 export interface CreateGameTemplatePayload {
   mode: 'template';
   templateName: string;
+  settings?: Partial<GameSettings>;
 }
 
 export interface CreateGameCustomPayload {
   mode: 'custom';
   customPrompt: string;
+  settings?: Partial<GameSettings>;
 }
 
 export type CreateGamePayload = CreateGameTemplatePayload | CreateGameCustomPayload;

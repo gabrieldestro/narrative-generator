@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
-import type { GameState, PlayerActionPayload, NpcDecision, DiceRoll } from '../../domain/types.js';
+import type { GameState, GameSettings, PlayerActionPayload, NpcDecision, DiceRoll } from '../../domain/types.js';
 import type { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
 import type { SessionFactory } from '../../application/SessionFactory.js';
 import type { GameEngine } from '../../application/GameEngine.js';
@@ -24,6 +24,7 @@ export interface CreateGameRequestBody {
   mode: 'template' | 'custom';
   templateName?: string;
   customPrompt?: string;
+  settings?: Partial<GameSettings>;
 }
 
 export class GameController {
@@ -51,8 +52,12 @@ export class GameController {
     req: FastifyRequest<{ Body: CreateGameRequestBody }>,
     reply: FastifyReply
   ): Promise<void> {
-    const { mode, templateName, customPrompt } = req.body;
+    const { mode, templateName, customPrompt, settings } = req.body;
     let state: GameState;
+
+    if (settings) {
+      this.gameEngine.updateSettings(settings);
+    }
 
     if (mode === 'template' && templateName) {
       const templates = await this.worldRepo.listAll();
@@ -118,6 +123,10 @@ export class GameController {
     const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
     reqLog.info('processTurn chamado');
 
+    if (payload.settings) {
+      this.gameEngine.updateSettings(payload.settings);
+    }
+
     // Enriquece a ação do jogador usando o ActionBuilderService
     const enrichedAction = ActionBuilderService.buildActionString(payload);
 
@@ -165,6 +174,10 @@ export class GameController {
 
     const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
     reqLog.info('processTurnStream iniciado');
+
+    if (payload.settings) {
+      this.gameEngine.updateSettings(payload.settings);
+    }
 
     // Define cabeçalhos de resposta para Server-Sent Events (SSE)
     reply.raw.writeHead(200, {

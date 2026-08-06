@@ -31,7 +31,7 @@ class NullLogger implements ILogger {
 }
 
 export class GameEngine {
-  private readonly settings: GameSettings;
+  private settings: GameSettings;
   private readonly gameManagementService: GameManagementService;
   private readonly input: IUserInput;
   private readonly output: IOutputWriter;
@@ -53,6 +53,14 @@ export class GameEngine {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.gameManagementService = gameManagementService ?? new GameManagementService(this.llmService!);
     this.logger = logger ?? new NullLogger();
+  }
+
+  public updateSettings(partial: Partial<GameSettings>): void {
+    this.settings = { ...this.settings, ...partial };
+  }
+
+  public getSettings(): Readonly<GameSettings> {
+    return this.settings;
   }
 
   public async start() {
@@ -273,7 +281,7 @@ export class GameEngine {
     turnLog.info('[Narração] concluída', { durationMs: Date.now() - narrationStart });
     this.output.writeLine("\n--------------------------------------------------");
 
-    state.history.push(`Turno ${state.turnNumber}:\nAções: ${actions.join(" | ")}\nNarrativa: ${outcome}`);
+    state.history.push(`Turno ${state.turnNumber}: ${outcome}`);
 
     // Executa a extração automática pós-narração pelo LLM
     this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
@@ -551,6 +559,10 @@ export class GameEngine {
       }
       if (entry.includes("Narrativa:")) {
         return entry.substring(entry.indexOf("Narrativa:") + "Narrativa:".length).trim();
+      }
+      const turnMatch = entry.match(/^Turno \d+:\s*([\s\S]*)$/);
+      if (turnMatch) {
+        return turnMatch[1]!.trim();
       }
     }
     return "(Nenhuma narrativa encontrada no histórico)";
