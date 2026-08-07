@@ -54,7 +54,7 @@ export class LlmCallLogger {
         turnNumber: turn,
         durationMs: Date.now() - start,
         attempt,
-        status: 'success',
+        status: attempt > 1 ? 'retry' : 'success',
         inputTokens: usageMetadata?.input_tokens,
         outputTokens: usageMetadata?.output_tokens,
         totalTokens: usageMetadata?.total_tokens,

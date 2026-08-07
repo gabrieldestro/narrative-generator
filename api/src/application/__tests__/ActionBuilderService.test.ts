@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ActionBuilderService } from './ActionBuilderService.js';
-import type { PlayerActionPayload } from '../domain/types.js';
+import { ActionBuilderService } from '../ActionBuilderService.js';
+import type { PlayerActionPayload } from '../../domain/types.js';
 
 describe('ActionBuilderService', () => {
   it('should return raw text when actionType and actionIntent are undefined', () => {

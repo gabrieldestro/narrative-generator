@@ -1,5 +1,5 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { SystemMessage, HumanMessage } from "@langchain/core/messages";
+import { SystemMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
 import type { GameState, Character, GameSettings } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IOutputWriter, ILogger } from "../domain/ports.js";
@@ -30,7 +30,18 @@ import {
   extractStateChangesHumanPrompt,
   extractCharacterFromHistorySystemPrompt,
   extractCharacterFromHistoryHumanPrompt,
+  STATE_CHANGES_FORMAT_SPEC,
+  CHARACTER_SHEET_FORMAT_SPEC,
+  LOCATION_MAP_FORMAT_SPEC,
 } from "./prompts.js";
+import { SelfHealingService } from "./selfHealing/SelfHealingService.js";
+import {
+  validateStateChanges,
+  validateCharacterSheet,
+  validateLocationMap,
+  normalizeStateChanges,
+} from "./selfHealing/JsonValidators.js";
+import { classifyLlmError } from "./selfHealing/LlmErrorClassifier.js";
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -45,6 +56,7 @@ class NullLogger implements ILogger {
 export class LlmService {
   private readonly settings: GameSettings;
   private readonly appLogger: ILogger;
+  private readonly selfHealing: SelfHealingService;
 
   constructor(
     private readonly llm: BaseChatModel,
@@ -55,6 +67,7 @@ export class LlmService {
   ) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.appLogger = appLogger ?? new NullLogger();
+    this.selfHealing = new SelfHealingService(llm, logger, this.appLogger, this.settings);
   }
 
   async generateInitialContext(style: string, writingStyle: string): Promise<string> {
@@ -113,31 +126,6 @@ export class LlmService {
     return response.content as string;
   }
 
-  private tryParseJson(raw: string): any {
-    const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
-
-    const parseAttempts: string[] = [
-      stripped,
-    ];
-
-    const firstBrace = stripped.indexOf('{');
-    const lastBrace = stripped.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      parseAttempts.push(stripped.slice(firstBrace, lastBrace + 1));
-    }
-
-    for (const str of parseAttempts) {
-      try {
-        return JSON.parse(str);
-      } catch {
-        continue;
-      }
-    }
-
-    this.appLogger.error('[LLM Parse Fallback] Nenhum JSON válido encontrado', { raw: stripped.slice(0, 200) });
-    return {};
-  }
-
   async extractCharacterLocations(state: GameState, narration: string): Promise<Record<string, string>> {
     const system = extractLocationSystemPrompt();
     const human = extractLocationHumanPrompt(
@@ -147,14 +135,23 @@ export class LlmService {
 
     try {
       const raw = await this.invokePrompts(system, human, 'Extrator:Localização', state.turnNumber);
-      const parsed = this.tryParseJson(raw);
+      const healed = await this.selfHealing.parseWithRepair({
+        agent: 'Extrator:Localização',
+        turn: state.turnNumber,
+        raw,
+        schemaSpec: LOCATION_MAP_FORMAT_SPEC,
+        validate: validateLocationMap,
+        compact: true,
+      });
+      const parsed = (healed ? healed.value : {}) as Record<string, string>;
       const result: Record<string, string> = {};
       for (const char of state.characters) {
         const location = parsed[char.name];
         result[char.name] = typeof location === 'string' && location.length > 0 ? location : char.currentLocation ?? 'local desconhecido';
       }
       return result;
-    } catch {
+    } catch (err) {
+      this.appLogger.error('[LLM Extraction Error] Falha ao extrair localizações', err instanceof Error ? err : new Error(String(err)));
       return {};
     }
   }
@@ -165,16 +162,15 @@ export class LlmService {
 
     try {
       const raw = await this.invokePrompts(system, human, 'Extrator:Estado', state.turnNumber);
-      const parsed = this.tryParseJson(raw);
-
-      return {
-        inventoryChanges: Array.isArray(parsed.inventoryChanges) ? parsed.inventoryChanges : [],
-        locationChanges: {
-          discovered: Array.isArray(parsed.locationChanges?.discovered) ? parsed.locationChanges.discovered : [],
-          newConnections: Array.isArray(parsed.locationChanges?.newConnections) ? parsed.locationChanges.newConnections : [],
-        },
-        characterLifecycle: Array.isArray(parsed.characterLifecycle) ? parsed.characterLifecycle : [],
-      };
+      const healed = await this.selfHealing.parseWithRepair({
+        agent: 'Extrator:Estado',
+        turn: state.turnNumber,
+        raw,
+        schemaSpec: STATE_CHANGES_FORMAT_SPEC,
+        validate: validateStateChanges,
+        compact: true,
+      });
+      return normalizeStateChanges(healed ? healed.value : {});
     } catch (err) {
       this.appLogger.error('[LLM Extraction Error] Falha ao extrair modificações de estado', err instanceof Error ? err : new Error(String(err)));
       return {
@@ -185,20 +181,22 @@ export class LlmService {
     }
   }
 
-
   async arbitrateLogic(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): Promise<string> {
-    const messages = [
-      new SystemMessage(arbiterSystemPrompt),
-      new HumanMessage(arbiterHumanPrompt(state, actions, recentHistory, longTermSummary)),
-    ];
-
-    if (this.logger) {
-      const response = await this.logger.measure('Árbitro', state.turnNumber, () => this.llm.invoke(messages));
-      return response.content as string;
-    }
-
-    const response = await this.llm.invoke(messages);
-    return response.content as string;
+    const turnsToUse = recentHistory?.length ?? 0;
+    return this.selfHealing.invokeWithRetry({
+      agent: 'Árbitro',
+      turn: state.turnNumber,
+      maxBudget: turnsToUse,
+      minBudget: 0,
+      budgetStep: 1,
+      build: (budget) => {
+        const history = budget > 0 && recentHistory ? recentHistory.slice(-budget) : undefined;
+        return [
+          new SystemMessage(arbiterSystemPrompt),
+          new HumanMessage(arbiterHumanPrompt(state, actions, history, longTermSummary)),
+        ];
+      },
+    });
   }
 
   async generateInitialNarrative(state: GameState): Promise<string> {
@@ -234,12 +232,21 @@ export class LlmService {
     sceneDescription?: string
   ): Promise<string> {
     const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
-    const systemMsg = narratorSystemPrompt(state, sizePrompt, unexpectedEventTriggered);
-    const humanMsg = narratorHumanPrompt(state, actions, logicalResolution);
-    const messages = [
-      new SystemMessage(systemMsg),
-      new HumanMessage(humanMsg),
-    ];
+
+    const buildMessages = async (budget: number): Promise<BaseMessage[]> => {
+      const dropped = state.history.length - budget;
+      const summary = await this.healSummaryForDroppedTurns(state, dropped);
+      const reducedState: GameState = {
+        ...state,
+        history: state.history.slice(-budget),
+        ...(summary !== undefined ? { longTermSummary: summary } : {}),
+      };
+      return [
+        new SystemMessage(narratorSystemPrompt(reducedState, sizePrompt, unexpectedEventTriggered)),
+        new HumanMessage(narratorHumanPrompt(reducedState, actions, logicalResolution)),
+      ];
+    };
+
     let fullResponse = "";
     if (sceneDescription) {
       if (output) output.write(sceneDescription + "\n\n");
@@ -247,7 +254,48 @@ export class LlmService {
     }
 
     const start = Date.now();
-    const stream = await this.llm.stream(messages);
+    const initialMessages = await buildMessages(state.history.length);
+    const fullPrompt = initialMessages.map(m => String(m.content)).join('\n');
+    let stream: Awaited<ReturnType<typeof this.llm.stream>>;
+
+    try {
+      stream = await this.llm.stream(initialMessages);
+    } catch (err) {
+      if (classifyLlmError(err) !== 'context_overflow') {
+        throw err;
+      }
+      this.logger?.record({
+        timestamp: new Date().toISOString(),
+        agent: 'Narrador',
+        turnNumber: state.turnNumber,
+        durationMs: Date.now() - start,
+        attempt: 1,
+        status: 'error',
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      const healed = await this.selfHealing.invokeWithRetry({
+        agent: 'Narrador',
+        turn: state.turnNumber,
+        maxBudget: state.history.length,
+        minBudget: 0,
+        budgetStep: 1,
+        startAttempt: 2,
+        initialBudget: Math.max(0, state.history.length - 1),
+        build: buildMessages,
+      });
+      if (output) output.write(healed);
+      const recovered = fullResponse + healed;
+      this.contentLogger?.record({
+        timestamp: new Date().toISOString(),
+        turnNumber: state.turnNumber,
+        agent: 'Narrador',
+        fullPrompt,
+        fullResponse: recovered,
+        status: 'retry',
+        durationMs: Date.now() - start,
+      } as any);
+      return recovered;
+    }
 
     for await (const chunk of stream) {
       const text = chunk.content as string;
@@ -268,13 +316,29 @@ export class LlmService {
       timestamp: new Date().toISOString(),
       turnNumber: state.turnNumber,
       agent: 'Narrador',
-      fullPrompt: systemMsg + '\n' + humanMsg,
+      fullPrompt,
       fullResponse,
       status: 'success',
       durationMs: Date.now() - start,
     } as any);
 
     return fullResponse;
+  }
+
+  private async healSummaryForDroppedTurns(state: GameState, dropped: number): Promise<string | undefined> {
+    if (dropped <= 0 || !this.settings.healSummaryOnOverflow) {
+      return state.longTermSummary;
+    }
+    try {
+      const oldestTurns = state.history.slice(0, dropped);
+      return await this.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+    } catch (err) {
+      this.appLogger.warn('[SelfHealing] falha ao sumarizar turnos cortados', {
+        turnNumber: state.turnNumber,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return state.longTermSummary;
+    }
   }
 
   async summarizeMemory(longTermSummary: string | undefined, oldestTurns: string[], turn = 0): Promise<string> {
@@ -318,9 +382,19 @@ export class LlmService {
 
     try {
       const raw = await this.invokePrompts(system, human);
-      const cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
-      const parsed = JSON.parse(cleaned);
+      const healed = await this.selfHealing.parseWithRepair({
+        agent: 'Extrator:Ficha',
+        turn: 0,
+        raw,
+        schemaSpec: CHARACTER_SHEET_FORMAT_SPEC,
+        validate: validateCharacterSheet,
+      });
 
+      if (!healed) {
+        return null;
+      }
+
+      const parsed = healed.value as Record<string, string>;
       this.appLogger.info('[Extrator:Ficha] personagem extraído', { characterName, durationMs: Date.now() - start });
 
       return {

@@ -108,6 +108,9 @@ export interface GameSettings {
   maxCpuRetries: number;
   narrationSize: 'concise' | 'balanced' | 'descriptive';
   narrationSizePrompts: NarrationSizePrompts;
+  maxHealRetries: number;
+  healSummaryOnOverflow: boolean;
+  jsonRepairMaxInputChars: number;
 }
 
 export const DEFAULT_NARRATION_SIZE_PROMPTS: NarrationSizePrompts = {
@@ -126,6 +129,9 @@ export const DEFAULT_SETTINGS: GameSettings = {
   maxCpuRetries: 3,
   narrationSize: 'balanced',
   narrationSizePrompts: DEFAULT_NARRATION_SIZE_PROMPTS,
+  maxHealRetries: 2,
+  healSummaryOnOverflow: true,
+  jsonRepairMaxInputChars: 4000,
 };
 
 // Representa o Estado global do nosso jogo em um dado momento

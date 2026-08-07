@@ -13,6 +13,10 @@ export interface GameSettings {
   unexpectedEventChance: number;
   narrationSize: NarrationSize;
 
+  // Self-healing do motor (retries em erros de LLM)
+  maxHealRetries: number;
+  jsonRepairMaxInputChars: number;
+
   // Conexão LLM
   apiUrl: string;
   model: string;
@@ -25,6 +29,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   godMode: false,
   unexpectedEventChance: 0.15,
   narrationSize: 'balanced',
+  maxHealRetries: 2,
+  jsonRepairMaxInputChars: 4000,
   apiUrl: 'http://localhost:1234/v1',
   model: 'gemma-4b',
   apiToken: '',

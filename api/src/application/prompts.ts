@@ -193,6 +193,11 @@ export function extractLocationSystemPrompt(): string {
   return 'Você é um assistente de RPG que extrai a localização atual dos personagens com base na narração.';
 }
 
+export const LOCATION_MAP_FORMAT_SPEC = `{
+  "Nome do Personagem 1": "Nome do local",
+  "Nome do Personagem 2": "Nome do local"
+}`;
+
 export function extractLocationHumanPrompt(characters: { id: string; name: string; currentLocation: string | undefined }[], narration: string): string {
   const chars = characters.map(c => `- ${c.name} (local atual: ${c.currentLocation ?? 'desconhecido'})`).join('\n');
   return [
@@ -200,6 +205,9 @@ export function extractLocationHumanPrompt(characters: { id: string; name: strin
     'Se um personagem não mudou de local, mantenha o local anterior.',
     'Se houver dúvida, mantenha o local anterior do personagem.',
     'Retorne APENAS um JSON válido com o nome de cada personagem como chave e o local como valor.',
+    '',
+    'Formato esperado:',
+    LOCATION_MAP_FORMAT_SPEC,
     '',
     'Personagens:',
     chars,
@@ -273,6 +281,23 @@ export function extractStateChangesSystemPrompt(): string {
   ].join('\n');
 }
 
+export const STATE_CHANGES_FORMAT_SPEC = `{
+  "inventoryChanges": [
+    { "characterName": "Nome", "action": "add" | "remove", "item": "Nome do Item" }
+  ],
+  "locationChanges": {
+    "discovered": [
+      { "id": "id_unico", "name": "Nome", "description": "Breve descrição", "connectedTo": ["ids_vizinhos"] }
+    ],
+    "newConnections": [
+      { "from": "id_origem", "to": "id_destino" }
+    ]
+  },
+  "characterLifecycle": [
+    { "characterName": "Nome", "status": "dead" | "lost" | "active" | "discovered", "description": "Se discovered", "personality": "Se discovered", "location": "ID do local se discovered" }
+  ]
+}`;
+
 export function extractStateChangesHumanPrompt(state: GameState, lastNarration: string): string {
   const charsInfo = state.characters
     .map(c => `- ${c.name} (Status: ${c.status || 'active'}, Local: ${c.currentLocation ?? 'Ponto de Partida'}, Inventário: [${c.inventory ? c.inventory.join(', ') : ''}])`)
@@ -295,22 +320,7 @@ export function extractStateChangesHumanPrompt(state: GameState, lastNarration: 
     '### INSTRUÇÕES:',
     'Gere o JSON com as alterações incrementais do estado do jogo com base APENAS na Última Narrativa Literária acima.',
     'Formato esperado:',
-    '{',
-    '  "inventoryChanges": [',
-    '    { "characterName": "Nome", "action": "add" | "remove", "item": "Nome do Item" }',
-    '  ],',
-    '  "locationChanges": {',
-    '    "discovered": [',
-    '      { "id": "id_unico", "name": "Nome", "description": "Breve descrição", "connectedTo": ["ids_vizinhos"] }',
-    '    ],',
-    '    "newConnections": [',
-    '      { "from": "id_origem", "to": "id_destino" }',
-    '    ]',
-    '  },',
-    '  "characterLifecycle": [',
-    '    { "characterName": "Nome", "status": "dead" | "lost" | "active" | "discovered", "description": "Se discovered", "personality": "Se discovered", "location": "ID do local se discovered" }',
-    '  ]',
-    '}',
+    STATE_CHANGES_FORMAT_SPEC,
     '',
     'JSON:'
   ].join('\n');
@@ -325,6 +335,13 @@ export function extractCharacterFromHistorySystemPrompt(): string {
     'Responda APENAS com um JSON válido, sem texto antes ou depois.',
   ].join('\n');
 }
+
+export const CHARACTER_SHEET_FORMAT_SPEC = `{
+  "name": "Nome exato do personagem",
+  "description": "Aparência, ocupação e background (1-2 frases)",
+  "personality": "Traços de personalidade observados no texto (poucas palavras)",
+  "currentLocation": "Último local onde o personagem foi visto no texto"
+}`;
 
 export function extractCharacterFromHistoryHumanPrompt(
   characterName: string,
@@ -343,13 +360,37 @@ export function extractCharacterFromHistoryHumanPrompt(
     'Se algum campo não puder ser inferido do texto, invente algo coerente com o gênero da história.',
     '',
     'Responda APENAS com o JSON no formato:',
-    '{',
-    '  "name": "Nome exato do personagem",',
-    '  "description": "Aparência, ocupação e background (1-2 frases)",',
-    '  "personality": "Traços de personalidade observados no texto (poucas palavras)",',
-    '  "currentLocation": "Último local onde o personagem foi visto no texto"',
-    '}',
+    CHARACTER_SHEET_FORMAT_SPEC,
     '',
     'JSON:',
   ].join('\n');
+}
+
+// ── JSON Repair (Self-Healing) ──
+
+export const jsonRepairSystemPrompt = [
+  'Você é um assistente especializado em corrigir respostas de IA que deveriam ser JSON estruturado.',
+  'Sua resposta deve conter APENAS o JSON corrigido, sem markdown, sem texto antes ou depois.',
+  'Mantenha o formato exato especificado. Se a resposta anterior estava cortada/longa demais, reduza o número de itens e retorne apenas o essencial (arrays podem ficar vazios).',
+].join('\n');
+
+export function jsonRepairHumanPrompt(invalidJson: string, schemaSpec: string, compact = false): string {
+  return [
+    'Sua resposta anterior não era um JSON válido para o formato pedido.',
+    'Abaixo está a resposta inválida retornada:',
+    '--- INÍCIO DA RESPOSTA INVÁLIDA ---',
+    invalidJson,
+    '--- FIM DA RESPOSTA INVÁLIDA ---',
+    '',
+    'Corrija-a e retorne APENAS o JSON válido, no formato exato especificado abaixo:',
+    '',
+    schemaSpec,
+    '',
+    ...(compact ? ['Se a resposta estiver muito longa e tiver sido cortada, reduza o número de itens e retorne apenas o essencial. Arrays podem ficar vazios.', ''] : []),
+    'JSON:',
+  ].join('\n');
+}
+
+export function contextReductionNote(level: number): string {
+  return `Atenção: parte do histórico foi condensada para caber no contexto (nível de redução ${level}). Continue coerente com o resumo e com as ações deste turno.`;
 }
