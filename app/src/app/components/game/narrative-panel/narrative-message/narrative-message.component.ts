@@ -1,8 +1,9 @@
 import { Component, input, ChangeDetectionStrategy, computed, inject } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { MatIconModule } from '@angular/material/icon';
 import { GameStateService } from '../../../../core/services/game-state.service';
 
-export type NarrativeMessageType = 'narrative' | 'system' | 'action';
+export type NarrativeMessageType = 'narrative' | 'system' | 'action' | 'observation';
 
 export interface NarrativeMessage {
   type: NarrativeMessageType;
@@ -13,6 +14,7 @@ export interface NarrativeMessage {
 @Component({
   selector: 'ng-narrative-message',
   standalone: true,
+  imports: [MatIconModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './narrative-message.component.html',
   styleUrl: './narrative-message.component.scss',

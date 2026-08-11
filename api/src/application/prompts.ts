@@ -101,6 +101,42 @@ export function narratorHumanPrompt(state: GameState, actions: string[], logical
   ].join('\n');
 }
 
+// ── Observation (generateObservation) ──
+
+export function observeSystemPrompt(state: GameState, narrationSizePrompt: string): string {
+  return [
+    `Você é o Narrador Literário de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
+    'Sua função é atender a um pedido de OBSERVAÇÃO do jogador: detalhar, expandir ou descrever com profundidade um aspecto específico da cena atual.',
+    'REGRAS DA OBSERVAÇÃO (IMPORTANTE):',
+    '  1. NÃO avance a história: nada de novos eventos, chegadas, reviravoltas ou descobertas mecânicas.',
+    '  2. NÃO faça os personagens agirem, falarem ou se moverem — descreva apenas o que os sentidos percebem no instante presente.',
+    '  3. Seja fiel ao que já foi estabelecido na cena; você pode enriquecer detalhes sensoriais e atmosféricos, mas não invente fatos novos que contradigam a cena.',
+    `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições.`,
+    'Destaque nomes de personagens, lugares e itens em negrito usando marcação markdown (**Nome**) na primeira vez que aparecerem.',
+    narrationSizePrompt,
+  ].join('\n');
+}
+
+export function observeHumanPrompt(state: GameState, request: string, characterName?: string): string {
+  const locations = state.characters
+    .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
+    .join('\n');
+  return [
+    characterName ? `Quem está observando: ${characterName}` : undefined,
+    `Contexto do mundo (cenário atual): ${state.worldContext}`,
+    '',
+    'Localização atual dos personagens:',
+    locations,
+    '',
+    'Histórico recente da cena (onde a narrativa parou):',
+    state.history.join('\n\n'),
+    '',
+    `Pedido de observação do jogador: "${request}"`,
+    '',
+    'Escreva apenas o texto da observação em português, no estilo do gênero e tom da história, sem citar o pedido nem usar aspas:',
+  ].filter((part): part is string => typeof part === 'string').join('\n');
+}
+
 // ── Scene Description (generateSceneDescription) ──
 
 export function describeSceneSystemPrompt(state: GameState): string {

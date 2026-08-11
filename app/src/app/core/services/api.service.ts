@@ -5,7 +5,7 @@ import { LoggingService } from './logging.service';
 import { SettingsService } from './settings.service';
 import type { GameSettings } from '../models/game-settings.model';
 import type { WorldTemplate } from '../models/world-template.model';
-import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse } from '../models/api-payloads.model';
+import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse } from '../models/api-payloads.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -50,6 +50,16 @@ export class ApiService {
       tap({
         next: (res) => this.log.info('ApiService.processTurn', { sessionId, turnNumber: res.updatedState?.turnNumber }),
         error: (err) => this.log.error('ApiService.processTurn falhou', err, { sessionId }),
+      }),
+    );
+  }
+
+  observeTurn(sessionId: string, payload: PlayerActionPayload): Observable<ObserveResponse> {
+    const body = { ...payload, settings: this.buildEngineSettings() };
+    return this.http.post<ObserveResponse>(`${this.baseUrl}/games/${sessionId}/observe`, body).pipe(
+      tap({
+        next: (res) => this.log.info('ApiService.observeTurn', { sessionId, turnNumber: res.updatedState?.turnNumber }),
+        error: (err) => this.log.error('ApiService.observeTurn falhou', err, { sessionId }),
       }),
     );
   }

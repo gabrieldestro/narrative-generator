@@ -218,6 +218,48 @@ export class GameController {
     reply.raw.end();
   }
 
+  public async observe(
+    req: FastifyRequest<{ Params: { sessionId: string }; Body: PlayerActionPayload }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId } = req.params;
+    const state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      this.logger.warn('Sessão não encontrada', { sessionId });
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+
+    const payload = req.body;
+    if (!payload || !payload.playerText) {
+      return reply.status(400).send({ error: "O campo 'playerText' é obrigatório no corpo da requisição." });
+    }
+
+    const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
+    reqLog.info('observe chamado');
+
+    if (payload.settings) {
+      this.gameEngine.updateSettings(payload.settings);
+    }
+
+    // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
+    const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
+    const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
+
+    // Gera a observação detalhada via LLM (não avança a história nem o turno)
+    const observeStart = Date.now();
+    const observation = await this.gameEngine.recordObservation(state, payload.playerText, charName);
+    reqLog.info('observe concluído', { durationMs: Date.now() - observeStart });
+
+    this.sessionRepo.saveSession(sessionId, state);
+
+    return reply.status(200).send({
+      sessionId,
+      observation,
+      updatedState: state
+    });
+  }
+
   public async getGameState(
     req: FastifyRequest<{ Params: { sessionId: string } }>,
     reply: FastifyReply

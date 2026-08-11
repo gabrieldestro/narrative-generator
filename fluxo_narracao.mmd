@@ -5,7 +5,7 @@ flowchart TD
     PLAYER -->|Sim| INPUT["Usuário digita a ação<br/>(ConsoleInput)"]
     PLAYER -->|Não| NPC["CPU Reflection (LLM)<br/>decide ação do NPC"]
     
-    INPUT --> D20["d20: godMode? 20 : random(1-20)"]
+    INPUT --> D20["d20:<br/>Jogador: godMode? 20 : random(1-20)<br/>NPC: random(1-20)"]
     NPC --> D20
     
     D20 --> EVENTO{"Evento<br/>inesperado?"}

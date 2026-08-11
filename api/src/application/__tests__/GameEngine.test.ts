@@ -334,6 +334,63 @@ describe('GameEngine', () => {
     expect(savedState.worldContext).toBe('Cenário atualizado.');
   });
 
+  it('deve processar o comando /observe sem avançar o turno e registrá-lo no histórico', async () => {
+    vi.mocked(mockRepo.load).mockResolvedValue(JSON.parse(JSON.stringify(existingState)));
+    vi.mocked(mockInput.question)
+      .mockResolvedValueOnce('s')        // carregar save
+      .mockResolvedValueOnce('')         // Enter para continuar
+      .mockResolvedValueOnce('/observe O que percebo na névoa?')  // comando observe
+      .mockResolvedValueOnce('Explorar a caverna')  // ação real do turno
+      .mockResolvedValueOnce('n');       // continuar? → não
+
+    const observeSpy = vi.spyOn(mockLlmService, 'generateObservation')
+      .mockResolvedValue('A névoa esconde sombras rastejantes.');
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Aric avança pela caverna.');
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({ Aric: 'Caverna', Elara: 'Floresta' });
+
+    await engine.start();
+
+    expect(observeSpy).toHaveBeenCalledTimes(1);
+    const [, request, observer] = observeSpy.mock.calls[0] as [GameState, string, string];
+    expect(request).toBe('O que percebo na névoa?');
+    expect(observer).toBe('Aric');
+
+    // A observação é registrada como "(Turno 3)" (não avança o turno por si só);
+    // o turno 4 só existe após a ação real do jogador ser processada.
+    const savedState = vi.mocked(mockRepo.save).mock.calls.find(
+      (call) => (call[0] as GameState).turnNumber === 4
+    )?.[0] as GameState;
+    expect(savedState).toBeDefined();
+    expect(savedState.history.some(h => h.startsWith('Observação (Turno 3): A névoa esconde sombras rastejantes.'))).toBe(true);
+    expect(savedState.history.some(h => h.startsWith('Turno 3: Aric avança pela caverna.'))).toBe(true);
+  });
+
+  it('god mode: apenas o jogador rola 20; NPCs rolam normalmente', async () => {
+    const godEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { godMode: true, arbiterHistoryTurns: 0 });
+    const state = JSON.parse(JSON.stringify(existingState));
+
+    // Controla Math.random para o NPC (0.05 → d20 = 2); o jogador ignora o dado
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.05);
+
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Aric tentou -> Sucesso. Elara tentou -> Falha.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({ Aric: 'Floresta', Elara: 'Floresta' });
+    vi.spyOn(mockLlmService, 'extractStateChanges').mockResolvedValue({});
+
+    const result = await godEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+
+    const playerRoll = result.diceRolls.find(r => r.characterName === 'Aric');
+    const npcRoll = result.diceRolls.find(r => r.characterName === 'Elara');
+    expect(playerRoll?.roll).toBe(20);
+    expect(playerRoll?.isGodMode).toBe(true);
+    expect(npcRoll?.roll).toBe(2);
+    expect(npcRoll?.isGodMode).toBe(false);
+
+    randomSpy.mockRestore();
+  });
+
   it('deve criar novo jogo quando não há save', async () => {
     vi.mocked(mockRepo.load).mockResolvedValue(null);
     vi.mocked(mockInput.question)

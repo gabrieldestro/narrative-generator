@@ -9,6 +9,17 @@
       {{ message().text }}
     </div>
   }
+  @case ('observation') {
+    <div class="narrative-message narrative-message--observation fade-in" aria-label="Observação do jogador">
+      <div class="narrative-message__label">
+        <mat-icon aria-hidden="true">visibility</mat-icon>
+        Observação
+      </div>
+      @for (p of formattedParagraphs(); track $index) {
+        <p class="narrative-message__paragraph" [innerHTML]="p"></p>
+      }
+    </div>
+  }
   @default {
     <div class="narrative-message narrative-message--narrative fade-in" aria-label="Narrativa">
       @for (p of formattedParagraphs(); track $index) {

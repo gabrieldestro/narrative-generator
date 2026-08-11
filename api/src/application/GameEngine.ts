@@ -210,12 +210,14 @@ export class GameEngine {
         }
       }
 
-      // Rola d20
-      const roll = this.settings.godMode ? 20 : Math.floor(Math.random() * 20) + 1;
-      const prefix = this.settings.godMode ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
+      // Rola d20 — o god mode garante 20 apenas para o personagem do jogador;
+      // os NPCs continuam rolando normalmente.
+      const isGodModeRoll = this.settings.godMode && char.isPlayer;
+      const roll = isGodModeRoll ? 20 : Math.floor(Math.random() * 20) + 1;
+      const prefix = isGodModeRoll ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
       this.output.writeLine(`${prefix} ${char.name} rolou: ${roll}\x1b[0m`);
       actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
-      diceRolls.push({ characterName: char.name, roll, isGodMode: this.settings.godMode });
+      diceRolls.push({ characterName: char.name, roll, isGodMode: isGodModeRoll });
     }
 
     // Chance de evento inesperado
@@ -333,6 +335,24 @@ export class GameEngine {
     };
   }
 
+  /**
+   * Gera uma observação/detalhamento da cena e a registra no histórico,
+   * contando para o limite de sumarização, mas sem avançar o turno.
+   */
+  public async recordObservation(state: GameState, request: string, characterName?: string): Promise<string> {
+    const observation = await this.llmService!.generateObservation(state, request, characterName);
+    state.history.push(`Observação (Turno ${state.turnNumber}): ${observation}`);
+
+    if (state.history.length > this.settings.memoryWindowSize) {
+      const excessCount = state.history.length - this.settings.memoryWindowSize;
+      const oldestTurns = state.history.slice(0, excessCount);
+      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+      state.history = state.history.slice(excessCount);
+    }
+
+    return observation;
+  }
+
   public async handleCliCommand(state: GameState, commandText: string): Promise<void> {
     const parts = commandText.trim().split(" ");
     const command = parts[0]!.toLowerCase();
@@ -342,6 +362,7 @@ export class GameEngine {
       case "/help":
         this.output.writeLine("\n--- Comandos Administrativos Disponíveis ---");
         this.output.writeLine("/help - Mostra este menu de ajuda.");
+        this.output.writeLine("/observe <detalhe da cena> - Detalha/observa um aspecto da cena sem avançar o turno.");
         this.output.writeLine("/status ou /chars - Mostra os personagens, locais, inventários e status.");
         this.output.writeLine("/map - Mostra o mapa de localizações conhecidas.");
         this.output.writeLine("/add-item <personagem> <item> - Adiciona um item ao inventário.");
@@ -353,6 +374,23 @@ export class GameEngine {
         this.output.writeLine("/extract - Extrai mudanças de estado da última narrativa automaticamente.");
         this.output.writeLine("/extract-char - Gera ficha de um personagem a partir do histórico via LLM.");
         break;
+
+      case "/observe": {
+        const observeText = args.join(" ").trim();
+        if (!observeText) {
+          this.output.writeLine("Uso: /observe <o que você deseja observar ou detalhar da cena>");
+          break;
+        }
+        const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+        const charName = playerChar?.name ?? 'Jogador';
+
+        this.output.writeLine(`\n[Observação] ${charName} examina a cena...`);
+        const observation = await this.recordObservation(state, observeText, charName);
+        this.output.writeLine("--------------------------------------------------");
+        this.output.writeLine(observation);
+        this.output.writeLine("--------------------------------------------------");
+        break;
+      }
 
       case "/status":
       case "/chars":

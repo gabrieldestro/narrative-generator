@@ -3,7 +3,7 @@ import type { GameState } from '../models/game-state.model';
 import type { Character } from '../models/character.model';
 import type { Location } from '../models/location.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
-import type { TurnResponse } from '../models/api-payloads.model';
+import type { TurnResponse, ObserveResponse } from '../models/api-payloads.model';
 
 export interface AppError {
   message: string;
@@ -55,6 +55,12 @@ export class GameStateService {
     this.error.set(null);
     this.turnDebugHistory.set([]);
     this.hasProcessedFirstTurn.set(false);
+  }
+
+  setObservation(result: ObserveResponse): void {
+    this.isLoading.set(false);
+    this.gameState.set(result.updatedState);
+    this.error.set(null);
   }
 
   setTurnResult(result: TurnResponse): void {

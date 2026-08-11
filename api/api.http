@@ -67,6 +67,17 @@ Content-Type: application/json
 
 ###
 
+### 7.1 Observar/Detalhar um Aspecto da Cena (não avança o turno)
+POST {{baseUrl}}/api/games/{{sessionId}}/observe
+Content-Type: application/json
+
+{
+  "playerText": "O que percebo de estranho na porta de carvalho?",
+  "characterName": "Darian"
+}
+
+###
+
 ### 8. Iniciar um Novo Jogo Customizado via IA
 POST {{baseUrl}}/api/games/new
 Content-Type: application/json

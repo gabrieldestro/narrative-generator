@@ -32,6 +32,12 @@ export interface CreateGameResponse {
   state: GameState;
 }
 
+export interface ObserveResponse {
+  sessionId: string;
+  observation: string;
+  updatedState: GameState;
+}
+
 export interface TurnResponse {
   sessionId: string;
   narrative: string;

@@ -64,4 +64,34 @@ export class ActionInputComponent {
       },
     });
   }
+
+  observe(): void {
+    const text = this.playerText().trim();
+    if (!text) return;
+
+    const sessionId = this.gameState.sessionId();
+    if (!sessionId) return;
+
+    const payload: PlayerActionPayload = {
+      playerText: text,
+      characterName: this.gameState.playerCharacter()?.name,
+    };
+
+    this.log.info('Observação submetida', { playerText: text, charName: payload.characterName });
+
+    this.gameState.isLoading.set(true);
+
+    this.api.observeTurn(sessionId, payload).subscribe({
+      next: (res) => {
+        this.gameState.setObservation(res);
+        this.playerText.set('');
+      },
+      error: (err) => {
+        this.gameState.isLoading.set(false);
+        this.gameState.error.set({ message: err.message ?? 'Erro ao observar a cena', code: 'OBSERVE_ERROR', timestamp: new Date() });
+        this.log.error('Erro ao observar a cena', err instanceof Error ? err : new Error(String(err)));
+        this.snackBar.open('Erro ao observar a cena. Verifique a conexão com o servidor.', 'Fechar', { duration: 5000 });
+      },
+    });
+  }
 }

@@ -20,6 +20,8 @@ import {
   initialNarrativeHumanPrompt,
   describeSceneSystemPrompt,
   describeSceneHumanPrompt,
+  observeSystemPrompt,
+  observeHumanPrompt,
   summarizeSystemPrompt,
   summarizeHumanPrompt,
   updateWorldContextSystemPrompt,
@@ -220,6 +222,25 @@ export class LlmService {
     }
 
     const response = await this.llm.invoke(messages);
+    return response.content as string;
+  }
+
+  async generateObservation(state: GameState, request: string, characterName?: string): Promise<string> {
+    const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
+    const messages = [
+      new SystemMessage(observeSystemPrompt(state, sizePrompt)),
+      new HumanMessage(observeHumanPrompt(state, request, characterName)),
+    ];
+
+    const start = Date.now();
+    if (this.logger) {
+      const response = await this.logger.measure('Observador', state.turnNumber, () => this.llm.invoke(messages));
+      this.appLogger.info('[Observação] gerada', { characterName, durationMs: Date.now() - start });
+      return response.content as string;
+    }
+
+    const response = await this.llm.invoke(messages);
+    this.appLogger.info('[Observação] gerada', { characterName, durationMs: Date.now() - start });
     return response.content as string;
   }
 

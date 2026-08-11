@@ -37,6 +37,47 @@
   margin-bottom: 1rem;
 }
 
+.narrative-message--observation {
+  font-family: var(--font-narrative);
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  max-width: var(--max-reading-width);
+  padding: 1rem 1.25rem;
+  background: rgba(137, 180, 250, 0.05);
+  border-left: 3px solid var(--info);
+  border-radius: 0 10px 10px 0;
+  margin-bottom: 1.5rem;
+
+  .narrative-message__label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--info);
+    margin-bottom: 0.6rem;
+
+    mat-icon {
+      font-size: 1rem;
+      width: 1rem;
+      height: 1rem;
+    }
+  }
+
+  .narrative-message__paragraph {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
 .narrative-message--narrative {
   font-family: var(--font-narrative);
   font-size: 1.125rem;

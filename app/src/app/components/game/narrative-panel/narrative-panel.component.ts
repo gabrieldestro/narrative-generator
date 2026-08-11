@@ -20,7 +20,17 @@ export class NarrativePanelComponent {
 
     for (const entry of history) {
       const parsed = this.parseHistoryEntry(entry);
-      
+
+      // Observações não avançam o turno: renderizadas sem divisor próprio
+      if (parsed.isObservation) {
+        msgs.push({
+          type: 'observation',
+          text: parsed.narrative,
+          turnNumber: parsed.turnNumber
+        });
+        continue;
+      }
+
       // Push turn divider
       msgs.push({
         type: 'system',
@@ -58,12 +68,22 @@ export class NarrativePanelComponent {
     });
   }
 
-  private parseHistoryEntry(entry: string): { turnNumber: number, actions?: string, narrative: string, isInitial: boolean } {
+  private parseHistoryEntry(entry: string): { turnNumber: number, actions?: string, narrative: string, isInitial: boolean, isObservation?: boolean } {
     if (entry.startsWith('Narrativa Inicial:')) {
       return {
         turnNumber: 1,
         narrative: entry.slice('Narrativa Inicial:'.length).trim(),
         isInitial: true
+      };
+    }
+
+    const observeMatch = entry.match(/^Observação \(Turno (\d+)\):\s*([\s\S]*)$/i);
+    if (observeMatch) {
+      return {
+        turnNumber: parseInt(observeMatch[1], 10),
+        narrative: observeMatch[2].trim(),
+        isInitial: false,
+        isObservation: true
       };
     }
     

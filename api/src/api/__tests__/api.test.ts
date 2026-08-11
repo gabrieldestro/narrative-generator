@@ -130,6 +130,85 @@ describe('Fastify Game API', () => {
     expect(streamRes.payload).toContain('event: done');
   });
 
+  it('POST /api/games/:sessionId/observe deve detalhar a cena sem avançar o turno', async () => {
+    const fakeLlm = new FakeListChatModel({
+      responses: [
+        'Narrativa inicial de teste.',
+        '{}',
+        'Observação detalhada da cena: a porta de carvalho range com o vento.',
+      ],
+    });
+    sessionRepo = new SessionRepository();
+    app = buildApp({
+      llmModel: fakeLlm,
+      sessionRepo,
+      worldRepo: new WorldTemplateRepository(),
+    });
+
+    // 1. Cria um jogo
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+    const createdState = JSON.parse(createRes.payload).state;
+    const turnBefore = createdState.turnNumber;
+
+    // 2. Executa uma observação
+    const observeRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/observe`,
+      payload: {
+        playerText: 'O que percebo na porta de carvalho?',
+      },
+    });
+
+    expect(observeRes.statusCode).toBe(200);
+    const body = JSON.parse(observeRes.payload);
+    expect(body).toHaveProperty('observation');
+    expect(body.observation).toContain('porta de carvalho');
+    expect(body).toHaveProperty('updatedState');
+
+    // A observação entra no histórico mas não avança o turno
+    expect(body.updatedState.turnNumber).toBe(turnBefore);
+    const lastEntry = body.updatedState.history[body.updatedState.history.length - 1];
+    expect(lastEntry).toContain(`Observação (Turno ${turnBefore}):`);
+  });
+
+  it('POST /api/games/:sessionId/observe deve retornar 400 sem playerText', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const observeRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/observe`,
+      payload: {},
+    });
+
+    expect(observeRes.statusCode).toBe(400);
+  });
+
+  it('POST /api/games/:sessionId/observe deve retornar 404 para sessão inexistente', async () => {
+    const observeRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/nao-existe/observe',
+      payload: { playerText: 'Observo o ambiente.' },
+    });
+
+    expect(observeRes.statusCode).toBe(404);
+  });
+
   it('GET /api/games/:sessionId/state deve consultar o estado atual do jogo', async () => {
     // 1. Cria um jogo
     const createRes = await app.inject({

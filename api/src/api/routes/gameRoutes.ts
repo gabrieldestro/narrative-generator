@@ -85,6 +85,28 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
     },
   }, (req: any, reply) => controller.processTurnStream(req, reply));
 
+  // Observa/detalha um aspecto da cena sem avançar o turno
+  fastify.post('/api/games/:sessionId/observe', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: { type: 'string' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['playerText'],
+        properties: {
+          playerText: { type: 'string' },
+          characterName: { type: 'string' },
+          settings: { type: 'object', additionalProperties: true },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.observe(req, reply));
+
   // Consulta o estado do jogo
   fastify.get('/api/games/:sessionId/state', {
     schema: {

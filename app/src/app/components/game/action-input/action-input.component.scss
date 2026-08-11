@@ -20,7 +20,41 @@
 .action-input__actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.75rem;
   margin-top: 0.75rem;
+}
+
+.btn-action--observe {
+  color: var(--info) !important;
+  border-color: rgba(137, 180, 250, 0.5) !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 8px !important;
+  padding: 0 1.75rem !important;
+  height: 46px;
+  transition: all 0.25s ease !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  mat-icon {
+    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: rgba(137, 180, 250, 0.1) !important;
+    border-color: var(--info) !important;
+  }
+
+  &:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed;
+  }
 }
 
 .btn-action {
