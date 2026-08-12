@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, map } from 'rxjs';
 import { LoggingService } from './logging.service';
 import { SettingsService } from './settings.service';
 import type { GameSettings } from '../models/game-settings.model';
 import type { WorldTemplate } from '../models/world-template.model';
 import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse } from '../models/api-payloads.model';
+import type { SavedGameSummary, SessionBundle } from '../models/session-save.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -69,6 +70,34 @@ export class ApiService {
       tap({
         next: (res) => this.log.info('ApiService.getGameState', { sessionId }),
         error: (err) => this.log.error('ApiService.getGameState falhou', err, { sessionId }),
+      }),
+    );
+  }
+
+  listSaves(): Observable<SavedGameSummary[]> {
+    return this.http.get<SessionBundle[]>(`${this.baseUrl}/saves`).pipe(
+      map(bundles => bundles.map(({ state: _state, schemaVersion: _v, ...meta }) => meta)),
+      tap({
+        next: (saves) => this.log.info('ApiService.listSaves', { count: saves.length }),
+        error: (err) => this.log.error('ApiService.listSaves falhou', err),
+      }),
+    );
+  }
+
+  loadSave(sessionId: string): Observable<SessionBundle> {
+    return this.http.get<SessionBundle>(`${this.baseUrl}/saves/${sessionId}`).pipe(
+      tap({
+        next: (bundle) => this.log.info('ApiService.loadSave', { sessionId, turnNumber: bundle.state.turnNumber }),
+        error: (err) => this.log.error('ApiService.loadSave falhou', err, { sessionId }),
+      }),
+    );
+  }
+
+  deleteSave(sessionId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/saves/${sessionId}`).pipe(
+      tap({
+        next: () => this.log.info('ApiService.deleteSave', { sessionId }),
+        error: (err) => this.log.error('ApiService.deleteSave falhou', err, { sessionId }),
       }),
     );
   }

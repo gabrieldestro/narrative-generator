@@ -10,6 +10,7 @@ import { GameEngine } from '../application/GameEngine.js';
 import { CpuReflectionService } from '../application/npcAgent/CpuReflectionService.js';
 import { GameManagementService } from '../application/GameManagementService.js';
 import { SessionRepository } from '../infrastructure/SessionRepository.js';
+import { FileSaveStore } from '../infrastructure/FileSaveStore.js';
 import { GameController } from './controllers/GameController.js';
 import { registerGameRoutes } from './routes/gameRoutes.js';
 import { PinoLogger } from '../infrastructure/PinoLogger.js';
@@ -24,10 +25,11 @@ export interface AppOptions {
   llmModel?: BaseChatModel;
   worldRepo?: WorldTemplateRepository;
   sessionRepo?: SessionRepository;
+  saveStore?: FileSaveStore;
   logger?: ILogger;
 }
 
-export function buildApp(options: AppOptions = {}) {
+export async function buildApp(options: AppOptions = {}) {
   const logger = options.logger ?? new PinoLogger();
   const app = Fastify({
     logger: false,
@@ -45,6 +47,15 @@ export function buildApp(options: AppOptions = {}) {
   // Instancia dependências do Core caso não sejam fornecidas
   const worldRepo = options.worldRepo ?? new WorldTemplateRepository();
   const sessionRepo = options.sessionRepo ?? new SessionRepository();
+  const saveStore = options.saveStore ?? new FileSaveStore();
+
+  // Hidrata o cache em memória a partir do disco: assim, após um restart da API,
+  // as sessões persistem e `GET /api/games/:id/state` continua respondendo.
+  const savedBundles = await saveStore.list();
+  for (const bundle of savedBundles) {
+    sessionRepo.saveSession(bundle.id, bundle.state);
+  }
+  logger.info('Saves hidratados do disco', { count: savedBundles.length });
 
   const llmCallLogger = new LlmCallLogger('logs/llm_calls.jsonl');
   const llmContentLogger = new LlmContentLogger('logs/llm_content.jsonl');
@@ -86,6 +97,7 @@ export function buildApp(options: AppOptions = {}) {
     llmService,
     gameManagementService,
     sessionRepo,
+    saveStore,
     logger
   );
 
@@ -114,7 +126,7 @@ export async function startServer(port = 3000, host = '0.0.0.0') {
   dotenv.config();
 
   const logger = new PinoLogger();
-  const app = buildApp({ logger });
+  const app = await buildApp({ logger });
   try {
     const address = await app.listen({ port, host });
     logger.info('Servidor Narrativo rodando', { address });

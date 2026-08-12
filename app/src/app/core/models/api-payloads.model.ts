@@ -1,6 +1,7 @@
 import type { GameState } from './game-state.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 import type { GameSettings } from './game-settings.model';
+import type { SessionBundle, SavedGameSummary } from './session-save.model';
 
 export type ActionType = 'observe' | 'speak' | 'attack' | 'sneak' | 'use_item' | 'interact' | 'flee' | 'free';
 export type ActionIntent = 'curious' | 'aggressive' | 'cautious' | 'friendly' | 'intimidating' | 'desperate' | 'neutral';
@@ -51,3 +52,7 @@ export interface GameStateResponse {
   sessionId: string;
   state: GameState;
 }
+
+export type ListSavesResponse = SavedGameSummary[];
+
+export type LoadSaveResponse = SessionBundle;

@@ -1,12 +1,14 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
-import type { GameState, GameSettings, PlayerActionPayload, NpcDecision, DiceRoll } from '../../domain/types.js';
+import type { GameState, GameSettings, PlayerActionPayload, NpcDecision, DiceRoll, SessionBundle } from '../../domain/types.js';
+import { SAVE_SCHEMA_VERSION } from '../../domain/types.js';
 import type { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
 import type { SessionFactory } from '../../application/SessionFactory.js';
 import type { GameEngine } from '../../application/GameEngine.js';
 import type { LlmService } from '../../application/LlmService.js';
 import type { GameManagementService } from '../../application/GameManagementService.js';
 import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
+import type { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
 import type { ILogger } from '../../domain/ports.js';
 import { ActionBuilderService } from '../../application/ActionBuilderService.js';
 
@@ -37,9 +39,68 @@ export class GameController {
     private readonly llmService: LlmService,
     private readonly gameManagementService: GameManagementService,
     private readonly sessionRepo: SessionRepository,
+    private readonly saveStore: FileSaveStore,
     logger?: ILogger,
   ) {
     this.logger = logger ?? new NullLogger();
+  }
+
+  // Monta/atualiza o bundle de save e grava no disco (auto-save).
+  private async persistBundle(
+    sessionId: string,
+    state: GameState,
+    meta: { mode?: 'template' | 'custom'; title?: string } = {},
+  ): Promise<void> {
+    const existing = await this.saveStore.get(sessionId);
+    const now = new Date().toISOString();
+    const playerChar = state.characters.find((c) => c.isPlayer && (!c.status || c.status === 'active'));
+    const bundle: SessionBundle = {
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      id: sessionId,
+      mode: meta.mode ?? existing?.mode ?? 'custom',
+      title: meta.title ?? existing?.title ?? state.narrativeStyle,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      narrativeStyle: state.narrativeStyle,
+      writingStyle: state.writingStyle,
+      turnNumber: state.turnNumber,
+      playerCharacterName: playerChar?.name ?? 'Jogador',
+      lastNarrative: state.history.length > 0 ? state.history[state.history.length - 1]! : '',
+      state,
+    };
+    await this.saveStore.save(bundle);
+  }
+
+  public async listSaves(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const bundles = await this.saveStore.list();
+    this.logger.debug('Listando partidas salvas', { count: bundles.length });
+    return reply.status(200).send(bundles);
+  }
+
+  public async getSave(
+    req: FastifyRequest<{ Params: { sessionId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId } = req.params;
+    const bundle = await this.saveStore.get(sessionId);
+
+    if (!bundle) {
+      this.logger.warn('Save não encontrado', { sessionId });
+      return reply.status(404).send({ error: `Save '${sessionId}' não encontrado.` });
+    }
+
+    return reply.status(200).send(bundle);
+  }
+
+  public async deleteSave(
+    req: FastifyRequest<{ Params: { sessionId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId } = req.params;
+    await this.saveStore.delete(sessionId);
+    this.sessionRepo.deleteSession(sessionId);
+    this.logger.info('Save apagado', { sessionId });
+    return reply.status(204).send();
   }
 
   public async listWorlds(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -54,6 +115,7 @@ export class GameController {
   ): Promise<void> {
     const { mode, templateName, customPrompt, settings } = req.body;
     let state: GameState;
+    let title = '';
 
     if (settings) {
       this.gameEngine.updateSettings(settings);
@@ -72,9 +134,11 @@ export class GameController {
         return reply.status(404).send({ error: `Template '${templateName}' não encontrado.` });
       }
       state = this.sessionFactory.buildFromTemplate(template);
+      title = template.name;
       this.logger.info('Jogo criado a partir de template', { templateName: template.name });
     } else if (mode === 'custom' && customPrompt) {
       state = await this.sessionFactory.buildCustomScenario(customPrompt);
+      title = state.narrativeStyle;
       this.logger.info('Jogo criado a partir de cenário customizado');
     } else {
       return reply.status(400).send({
@@ -95,6 +159,7 @@ export class GameController {
 
     const sessionId = randomUUID();
     this.sessionRepo.saveSession(sessionId, state);
+    await this.persistBundle(sessionId, state, { mode: req.body.mode, title });
 
     return reply.status(201).send({
       sessionId,
@@ -144,6 +209,7 @@ export class GameController {
 
     // Atualiza o repositório de sessões
     this.sessionRepo.saveSession(sessionId, turnResult.state);
+    await this.persistBundle(sessionId, turnResult.state);
 
     return reply.status(200).send({
       sessionId,
@@ -207,6 +273,7 @@ export class GameController {
     reqLog.info('processTurnStream concluído', { durationMs: Date.now() - turnStart });
 
     this.sessionRepo.saveSession(sessionId, turnResult.state);
+    await this.persistBundle(sessionId, turnResult.state);
 
     sendSseEvent('done', {
       sessionId,
@@ -252,6 +319,7 @@ export class GameController {
     reqLog.info('observe concluído', { durationMs: Date.now() - observeStart });
 
     this.sessionRepo.saveSession(sessionId, state);
+    await this.persistBundle(sessionId, state);
 
     return reply.status(200).send({
       sessionId,

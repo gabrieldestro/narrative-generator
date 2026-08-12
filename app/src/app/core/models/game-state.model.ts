@@ -10,4 +10,5 @@ export interface GameState {
   turnNumber: number;
   longTermSummary?: string;
   locations?: Location[];
+  lastSceneLocation?: string;
 }

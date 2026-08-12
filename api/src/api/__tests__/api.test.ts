@@ -1,14 +1,23 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { buildApp } from '../server.js';
 import { SessionRepository } from '../../infrastructure/SessionRepository.js';
+import { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
 import { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
 
 describe('Fastify Game API', () => {
-  let app: ReturnType<typeof buildApp>;
+  let app: Awaited<ReturnType<typeof buildApp>>;
   let sessionRepo: SessionRepository;
+  let saveDir: string;
+  let saveStore: FileSaveStore;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    saveDir = await fs.mkdtemp(path.join(os.tmpdir(), 'saves-api-test-'));
+    saveStore = new FileSaveStore(saveDir);
+
     const fakeLlm = new FakeListChatModel({
       responses: [
         'Narrativa inicial de teste.',
@@ -22,11 +31,16 @@ describe('Fastify Game API', () => {
     sessionRepo = new SessionRepository();
     const worldRepo = new WorldTemplateRepository();
 
-    app = buildApp({
+    app = await buildApp({
       llmModel: fakeLlm,
       sessionRepo,
       worldRepo,
+      saveStore,
     });
+  });
+
+  afterEach(async () => {
+    await fs.rm(saveDir, { recursive: true, force: true });
   });
 
   it('GET /api/worlds deve listar templates de mundo', async () => {
@@ -139,10 +153,11 @@ describe('Fastify Game API', () => {
       ],
     });
     sessionRepo = new SessionRepository();
-    app = buildApp({
+    app = await buildApp({
       llmModel: fakeLlm,
       sessionRepo,
       worldRepo: new WorldTemplateRepository(),
+      saveStore: new FileSaveStore(saveDir),
     });
 
     // 1. Cria um jogo
@@ -240,5 +255,126 @@ describe('Fastify Game API', () => {
     });
 
     expect(response.statusCode).toBe(404);
+  });
+
+  it('POST /api/games/new -> GET /api/saves lista a partida com metadados corretos', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const listRes = await app.inject({ method: 'GET', url: '/api/saves' });
+    expect(listRes.statusCode).toBe(200);
+
+    const bundles = JSON.parse(listRes.payload);
+    const bundle = bundles.find((b: { id: string }) => b.id === sessionId);
+    expect(bundle).toBeDefined();
+    expect(bundle.mode).toBe('template');
+    expect(bundle.title).toBeDefined();
+    expect(bundle.turnNumber).toBe(1);
+    expect(bundle.createdAt).toBeDefined();
+    expect(bundle.updatedAt).toBeDefined();
+    expect(bundle.lastNarrative).toBeDefined();
+    expect(bundle.state.history.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('POST turn -> GET /api/saves/:id reflete novo turnNumber e updatedAt', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const beforeRes = await app.inject({ method: 'GET', url: `/api/saves/${sessionId}` });
+    const beforeBundle = JSON.parse(beforeRes.payload);
+
+    const turnRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn`,
+      payload: { playerText: 'Avanço pela masmorra com cuidado.' },
+    });
+    expect(turnRes.statusCode).toBe(200);
+
+    const afterRes = await app.inject({ method: 'GET', url: `/api/saves/${sessionId}` });
+    const afterBundle = JSON.parse(afterRes.payload);
+    expect(afterBundle.turnNumber).toBeGreaterThan(beforeBundle.turnNumber);
+    expect(afterBundle.updatedAt >= beforeBundle.updatedAt).toBe(true);
+    expect(afterBundle.state.history.length).toBeGreaterThan(beforeBundle.state.history.length);
+  });
+
+  it('restart simulado: novo buildApp com o mesmo diretório de saves mantém a sessão', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const restartedApp = await buildApp({
+      llmModel: new FakeListChatModel({ responses: [] }),
+      sessionRepo: new SessionRepository(),
+      worldRepo: new WorldTemplateRepository(),
+      saveStore: new FileSaveStore(saveDir),
+    });
+
+    const stateRes = await restartedApp.inject({
+      method: 'GET',
+      url: `/api/games/${sessionId}/state`,
+    });
+    expect(stateRes.statusCode).toBe(200);
+    const body = JSON.parse(stateRes.payload);
+    expect(body.sessionId).toBe(sessionId);
+    expect(body.state.history.length).toBeGreaterThan(0);
+  });
+
+  it('DELETE /api/saves/:id remove do disco e do cache', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const delRes = await app.inject({ method: 'DELETE', url: `/api/saves/${sessionId}` });
+    expect(delRes.statusCode).toBe(204);
+
+    const getSave = await app.inject({ method: 'GET', url: `/api/saves/${sessionId}` });
+    expect(getSave.statusCode).toBe(404);
+
+    const getState = await app.inject({ method: 'GET', url: `/api/games/${sessionId}/state` });
+    expect(getState.statusCode).toBe(404);
+  });
+
+  it('bundle de save não deve conter settings', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+        settings: { debug: true },
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const saveRes = await app.inject({ method: 'GET', url: `/api/saves/${sessionId}` });
+    const bundle = JSON.parse(saveRes.payload);
+    expect(bundle).not.toHaveProperty('settings');
+    expect(bundle.state).not.toHaveProperty('settings');
   });
 });

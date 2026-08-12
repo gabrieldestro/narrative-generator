@@ -57,6 +57,19 @@ export class GameStateService {
     this.hasProcessedFirstTurn.set(false);
   }
 
+  // Restaura uma partida salva: aplica o estado completo (incl. history) sem tocar nos settings.
+  restore(sessionId: string, state: GameState): void {
+    this.sessionId.set(sessionId);
+    this.gameState.set(state);
+    this.error.set(null);
+    this.currentTurnResult.set(null);
+    this.npcDecisions.set([]);
+    this.diceRolls.set([]);
+    this.arbiterResolution.set(null);
+    this.turnDebugHistory.set([]);
+    this.hasProcessedFirstTurn.set(false);
+  }
+
   setObservation(result: ObserveResponse): void {
     this.isLoading.set(false);
     this.gameState.set(result.updatedState);

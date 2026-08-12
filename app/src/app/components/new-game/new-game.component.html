@@ -9,6 +9,55 @@
 
 <div class="new-game__content">
   <h1 class="section-title">NOVA AVENTURA</h1>
+
+  <section class="saved-games" aria-label="Continuar aventuras">
+    <h2 class="saved-games__title">CONTINUAR AVENTURAS</h2>
+
+    @if (loadingSaves()) {
+      <div class="saved-games__grid" aria-label="Carregando partidas salvas">
+        @for (_ of [1, 2]; track $index) {
+          <div class="saved-game-card saved-game-card--skeleton" aria-hidden="true"></div>
+        }
+      </div>
+    } @else if (saves().length === 0) {
+      <p class="saved-games__empty">Nenhuma partida salva ainda.</p>
+    } @else {
+      <div class="saved-games__grid" role="list" aria-label="Lista de partidas salvas">
+        @for (save of saves(); track save.id) {
+          <mat-card class="saved-game-card" role="listitem" [attr.aria-label]="'Continuar: ' + save.title" (click)="onContinueSave(save)">
+            <mat-card-header>
+              <mat-card-title [matTooltip]="save.title" matTooltipPosition="above">{{ save.title }}</mat-card-title>
+              <mat-card-subtitle>{{ save.narrativeStyle }} · {{ save.writingStyle }}</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="saved-game-card__meta">
+                <span>Turno {{ save.turnNumber }}</span>
+                <span>{{ formatDate(save.updatedAt) }}</span>
+              </div>
+              <p class="saved-game-card__preview" [matTooltip]="save.lastNarrative">{{ save.lastNarrative }}</p>
+            </mat-card-content>
+            <mat-card-actions>
+              <button mat-raised-button class="btn-continue"
+                      (click)="onContinueSave(save); $event.stopPropagation()"
+                      [disabled]="operatingId() !== null"
+                      aria-label="Continuar {{ save.title }}">
+                Continuar
+              </button>
+              <button mat-icon-button class="btn-delete"
+                      (click)="requestDeleteSave(save); $event.stopPropagation()"
+                      [disabled]="operatingId() !== null"
+                      [attr.aria-label]="'Excluir ' + save.title">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </mat-card-actions>
+          </mat-card>
+        }
+      </div>
+    }
+  </section>
+
+  <div class="new-game__divider" role="separator" aria-label="ou">— ou —</div>
+
   <p class="ui-text--secondary">Escolha um Mundo Pré-Configurado</p>
 
   <ng-world-list (selectWorld)="onSelectWorld($event)" (useAsBase)="onUseAsBase($event)"/>
@@ -23,6 +72,6 @@
   </div>
 </div>
 
-@if (isCreating()) {
+@if (isCreating() || operatingId() !== null) {
   <ng-loading-overlay/>
 }

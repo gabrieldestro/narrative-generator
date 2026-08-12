@@ -5,6 +5,35 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
   // Lista templates de mundos
   fastify.get('/api/worlds', (req, reply) => controller.listWorlds(req, reply));
 
+  // Lista partidas salvas (tela "Continuar")
+  fastify.get('/api/saves', (req, reply) => controller.listSaves(req, reply));
+
+  // Bundle completo de uma partida salva (restauração)
+  fastify.get('/api/saves/:sessionId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: { type: 'string' },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.getSave(req, reply));
+
+  // Apaga uma partida salva (disco + cache)
+  fastify.delete('/api/saves/:sessionId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: { type: 'string' },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.deleteSave(req, reply));
+
   // Cria um novo jogo
   fastify.post('/api/games/new', {
     schema: {
