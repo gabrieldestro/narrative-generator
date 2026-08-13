@@ -23,6 +23,15 @@
         Observar
       </button>
       <button
+        mat-stroked-button
+        class="btn-action btn-action--narrate"
+        (click)="narrate()"
+        [disabled]="!playerText().trim()"
+        aria-label="Narrar a declaração do jogador">
+        <mat-icon>auto_stories</mat-icon>
+        Narrar
+      </button>
+      <button
         mat-raised-button
         class="btn-action"
         (click)="submit()"

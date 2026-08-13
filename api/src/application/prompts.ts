@@ -137,6 +137,42 @@ export function observeHumanPrompt(state: GameState, request: string, characterN
   ].filter((part): part is string => typeof part === 'string').join('\n');
 }
 
+// ── Player Declared Narration (generatePlayerNarration) ──
+
+export function narrateSystemPrompt(state: GameState, narrationSizePrompt: string): string {
+  return [
+    `Você é o Narrador Literário de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
+    'Sua função é atender a uma NARRAÇÃO DECLARADA pelo jogador: transformar a declaração do jogador em prosa envolvente, respeitando-a fielmente.',
+    'REGRAS DA NARRAÇÃO DECLARADA (IMPORTANTE):',
+    '  1. Respeite integralmente o que o jogador declarou: se ele diz que algo acontece, acontece — não altere, anule nem contradiga a declaração.',
+    '  2. Enriqueça a declaração com detalhes sensoriais, atmosfera e consequências imediatas coerentes com o gênero e o estilo, mas NUNCA desfaça o que foi declarado nem introduza grandes eventos que contradigam.',
+    '  3. Não tome decisões pelos personagens nem introduza novos NPCs/eventos que alterem o rumo da declaração.',
+    `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições.`,
+    'Destaque nomes de personagens, lugares e itens em negrito usando marcação markdown (**Nome**) na primeira vez que aparecerem.',
+    narrationSizePrompt,
+  ].join('\n');
+}
+
+export function narrateHumanPrompt(state: GameState, request: string, characterName?: string): string {
+  const locations = state.characters
+    .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
+    .join('\n');
+  return [
+    characterName ? `Quem está narrando: ${characterName}` : undefined,
+    `Contexto do mundo (cenário atual): ${state.worldContext}`,
+    '',
+    'Localização atual dos personagens:',
+    locations,
+    '',
+    'Histórico recente da cena (onde a narrativa parou):',
+    state.history.join('\n\n'),
+    '',
+    `Declaração do jogador (deve ser respeitada e narrada): "${request}"`,
+    '',
+    'Escreva apenas o texto da narração em português, no estilo do gênero e tom da história, respeitando fielmente a declaração do jogador, sem citar o pedido nem usar aspas:',
+  ].filter((part): part is string => typeof part === 'string').join('\n');
+}
+
 // ── Scene Description (generateSceneDescription) ──
 
 export function describeSceneSystemPrompt(state: GameState): string {

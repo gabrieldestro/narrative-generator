@@ -22,6 +22,8 @@ import {
   describeSceneHumanPrompt,
   observeSystemPrompt,
   observeHumanPrompt,
+  narrateSystemPrompt,
+  narrateHumanPrompt,
   summarizeSystemPrompt,
   summarizeHumanPrompt,
   updateWorldContextSystemPrompt,
@@ -241,6 +243,25 @@ export class LlmService {
 
     const response = await this.llm.invoke(messages);
     this.appLogger.info('[Observação] gerada', { characterName, durationMs: Date.now() - start });
+    return response.content as string;
+  }
+
+  async generatePlayerNarration(state: GameState, request: string, characterName?: string): Promise<string> {
+    const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
+    const messages = [
+      new SystemMessage(narrateSystemPrompt(state, sizePrompt)),
+      new HumanMessage(narrateHumanPrompt(state, request, characterName)),
+    ];
+
+    const start = Date.now();
+    if (this.logger) {
+      const response = await this.logger.measure('Narrador:Declarado', state.turnNumber, () => this.llm.invoke(messages));
+      this.appLogger.info('[Narração Declarada] gerada', { characterName, durationMs: Date.now() - start });
+      return response.content as string;
+    }
+
+    const response = await this.llm.invoke(messages);
+    this.appLogger.info('[Narração Declarada] gerada', { characterName, durationMs: Date.now() - start });
     return response.content as string;
   }
 

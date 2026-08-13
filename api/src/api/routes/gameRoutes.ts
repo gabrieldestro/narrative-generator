@@ -136,6 +136,28 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
     },
   }, (req: any, reply) => controller.observe(req, reply));
 
+  // Narra uma declaração do jogador respeitando o que foi dito e resolve o estado do mundo
+  fastify.post('/api/games/:sessionId/narrate', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: { type: 'string' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['playerText'],
+        properties: {
+          playerText: { type: 'string' },
+          characterName: { type: 'string' },
+          settings: { type: 'object', additionalProperties: true },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.narrate(req, reply));
+
   // Consulta o estado do jogo
   fastify.get('/api/games/:sessionId/state', {
     schema: {

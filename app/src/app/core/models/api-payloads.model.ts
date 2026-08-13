@@ -39,6 +39,12 @@ export interface ObserveResponse {
   updatedState: GameState;
 }
 
+export interface NarrateResponse {
+  sessionId: string;
+  narration: string;
+  updatedState: GameState;
+}
+
 export interface TurnResponse {
   sessionId: string;
   narrative: string;

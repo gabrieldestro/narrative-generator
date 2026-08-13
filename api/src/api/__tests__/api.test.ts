@@ -224,6 +224,95 @@ describe('Fastify Game API', () => {
     expect(observeRes.statusCode).toBe(404);
   });
 
+  it('POST /api/games/:sessionId/narrate deve narrar a declaração do jogador e resolver o estado sem avançar o turno', async () => {
+    const fakeLlm = new FakeListChatModel({
+      responses: [
+        'Narrativa inicial de teste.',
+        '{}',
+        'Narração declarada: Darian atravessa a porta de carvalho e revela a biblioteca proibida, onde poeira dourada dança no ar.',
+        '{"inventoryChanges": [{"characterName": "Darian", "action": "add", "item": "Chave da Biblioteca"}]}',
+        'A Biblioteca Proibida, coberta de teias de aranha e poeira dourada.',
+        '{"Darian": "Biblioteca Proibida"}',
+      ],
+    });
+    sessionRepo = new SessionRepository();
+    app = await buildApp({
+      llmModel: fakeLlm,
+      sessionRepo,
+      worldRepo: new WorldTemplateRepository(),
+      saveStore: new FileSaveStore(saveDir),
+    });
+
+    // 1. Cria um jogo
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+    const createdState = JSON.parse(createRes.payload).state;
+    const turnBefore = createdState.turnNumber;
+
+    // 2. Executa uma narração declarada
+    const narrateRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/narrate`,
+      payload: {
+        playerText: 'Darian empurra a porta de carvalho que range, revelando a biblioteca proibida.',
+      },
+    });
+
+    expect(narrateRes.statusCode).toBe(200);
+    const body = JSON.parse(narrateRes.payload);
+    expect(body).toHaveProperty('narration');
+    expect(body.narration).toContain('porta de carvalho');
+    expect(body).toHaveProperty('updatedState');
+
+    // A narração entra no histórico mas não avança o turno
+    expect(body.updatedState.turnNumber).toBe(turnBefore);
+    const lastEntry = body.updatedState.history[body.updatedState.history.length - 1];
+    expect(lastEntry).toContain(`Narração (Turno ${turnBefore}):`);
+
+    // O estado do mundo foi resolvido: novo item no inventário, novo contexto e nova localização
+    const darian = body.updatedState.characters.find((c: { name: string }) => c.name === 'Darian');
+    expect(darian.inventory).toContain('Chave da Biblioteca');
+    expect(darian.currentLocation).toBe('Biblioteca Proibida');
+    expect(body.updatedState.worldContext).toContain('Biblioteca Proibida');
+  });
+
+  it('POST /api/games/:sessionId/narrate deve retornar 400 sem playerText', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: {
+        mode: 'template',
+        templateName: 'fantasia_masmorra.json',
+      },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const narrateRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/narrate`,
+      payload: {},
+    });
+
+    expect(narrateRes.statusCode).toBe(400);
+  });
+
+  it('POST /api/games/:sessionId/narrate deve retornar 404 para sessão inexistente', async () => {
+    const narrateRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/nao-existe/narrate',
+      payload: { playerText: 'Narro a cena.' },
+    });
+
+    expect(narrateRes.statusCode).toBe(404);
+  });
+
   it('GET /api/games/:sessionId/state deve consultar o estado atual do jogo', async () => {
     // 1. Cria um jogo
     const createRes = await app.inject({

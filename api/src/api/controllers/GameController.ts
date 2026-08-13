@@ -328,6 +328,50 @@ export class GameController {
     });
   }
 
+  public async narrate(
+    req: FastifyRequest<{ Params: { sessionId: string }; Body: PlayerActionPayload }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId } = req.params;
+    const state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      this.logger.warn('Sessão não encontrada', { sessionId });
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+
+    const payload = req.body;
+    if (!payload || !payload.playerText) {
+      return reply.status(400).send({ error: "O campo 'playerText' é obrigatório no corpo da requisição." });
+    }
+
+    const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
+    reqLog.info('narrate chamado');
+
+    if (payload.settings) {
+      this.gameEngine.updateSettings(payload.settings);
+    }
+
+    // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
+    const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
+    const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
+
+    // Gera a narração respeitando a declaração do jogador e resolve o estado do mundo
+    // (bypassa árbitro, NPCs e dados, e não avança o turno)
+    const narrateStart = Date.now();
+    const narration = await this.gameEngine.recordPlayerNarration(state, payload.playerText, charName);
+    reqLog.info('narrate concluído', { durationMs: Date.now() - narrateStart });
+
+    this.sessionRepo.saveSession(sessionId, state);
+    await this.persistBundle(sessionId, state);
+
+    return reply.status(200).send({
+      sessionId,
+      narration,
+      updatedState: state
+    });
+  }
+
   public async getGameState(
     req: FastifyRequest<{ Params: { sessionId: string } }>,
     reply: FastifyReply

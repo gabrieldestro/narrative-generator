@@ -366,6 +366,47 @@ describe('GameEngine', () => {
     expect(savedState.history.some(h => h.startsWith('Turno 3: Aric avança pela caverna.'))).toBe(true);
   });
 
+  it('deve processar o comando /narrate respeitando a declaração e resolvendo o estado do mundo sem avançar o turno', async () => {
+    vi.mocked(mockRepo.load).mockResolvedValue(JSON.parse(JSON.stringify(existingState)));
+    vi.mocked(mockInput.question)
+      .mockResolvedValueOnce('s')        // carregar save
+      .mockResolvedValueOnce('')         // Enter para continuar
+      .mockResolvedValueOnce('/narrate Aric empurra a porta de carvalho e a biblioteca se revela.')  // comando narrate
+      .mockResolvedValueOnce('Explorar a caverna')  // ação real do turno
+      .mockResolvedValueOnce('n');       // continuar? → não
+
+    const narrateSpy = vi.spyOn(mockLlmService, 'generatePlayerNarration')
+      .mockResolvedValue('Aric atravessa a porta de carvalho e a biblioteca proibida se revela na escuridão.');
+    vi.spyOn(mockLlmService, 'extractStateChanges').mockResolvedValue({
+      inventoryChanges: [{ characterName: 'Aric', action: 'add', item: 'Chave da Biblioteca' }],
+      locationChanges: { discovered: [], newConnections: [] },
+      characterLifecycle: [],
+    });
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('A biblioteca proibida se revela diante de Aric.');
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Aric avança pela caverna.');
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({ Aric: 'Biblioteca Proibida', Elara: 'Floresta' });
+
+    await engine.start();
+
+    // A narração foi gerada a partir da declaração do jogador
+    expect(narrateSpy).toHaveBeenCalledTimes(1);
+    const [, request, narrator] = narrateSpy.mock.calls[0] as [GameState, string, string];
+    expect(request).toBe('Aric empurra a porta de carvalho e a biblioteca se revela.');
+    expect(narrator).toBe('Aric');
+
+    // A narração é registrada como "(Turno 3)" sem avançar o turno por si só;
+    // o turno 4 só existe após a ação real do jogador ser processada.
+    const savedState = vi.mocked(mockRepo.save).mock.calls.find(
+      (call) => (call[0] as GameState).turnNumber === 4
+    )?.[0] as GameState;
+    expect(savedState).toBeDefined();
+    expect(savedState.history.some(h => h.startsWith('Narração (Turno 3): Aric atravessa a porta de carvalho'))).toBe(true);
+    expect(savedState.characters.find(c => c.name === 'Aric')?.inventory).toContain('Chave da Biblioteca');
+    expect(savedState.characters.find(c => c.name === 'Aric')?.currentLocation).toBe('Biblioteca Proibida');
+    expect(savedState.worldContext).toBe('A biblioteca proibida se revela diante de Aric.');
+  });
+
   it('god mode: apenas o jogador rola 20; NPCs rolam normalmente', async () => {
     const godEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { godMode: true, arbiterHistoryTurns: 0 });
     const state = JSON.parse(JSON.stringify(existingState));

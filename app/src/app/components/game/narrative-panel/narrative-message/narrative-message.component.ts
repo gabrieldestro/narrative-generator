@@ -3,7 +3,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
 import { GameStateService } from '../../../../core/services/game-state.service';
 
-export type NarrativeMessageType = 'narrative' | 'system' | 'action' | 'observation';
+export type NarrativeMessageType = 'narrative' | 'system' | 'action' | 'observation' | 'narration';
 
 export interface NarrativeMessage {
   type: NarrativeMessageType;

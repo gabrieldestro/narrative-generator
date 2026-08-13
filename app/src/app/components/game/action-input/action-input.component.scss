@@ -57,6 +57,39 @@
   }
 }
 
+.btn-action--narrate {
+  color: var(--accent) !important;
+  border-color: rgba(255, 213, 79, 0.5) !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 8px !important;
+  padding: 0 1.75rem !important;
+  height: 46px;
+  transition: all 0.25s ease !important;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  mat-icon {
+    font-size: 1.2rem;
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: rgba(255, 213, 79, 0.1) !important;
+    border-color: var(--accent) !important;
+  }
+
+  &:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed;
+  }
+}
+
 .btn-action {
   background: linear-gradient(135deg, var(--accent) 0%, #ffb74d 100%) !important;
   color: var(--text-inverse) !important;

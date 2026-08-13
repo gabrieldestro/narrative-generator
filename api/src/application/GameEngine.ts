@@ -353,6 +353,49 @@ export class GameEngine {
     return observation;
   }
 
+  /**
+   * Processa uma NARRAÇÃO DECLARADA do jogador: o LLM narra respeitando
+   * fielmente a declaração (bypassa árbitro, NPCs e dados) e, em seguida,
+   * o estado do mundo é resolvido como no fim de um turno (itens, locais,
+   * ciclo de vida, contexto do mundo e localizações) SEM avançar o turno.
+   */
+  public async recordPlayerNarration(state: GameState, request: string, characterName?: string): Promise<string> {
+    const narration = await this.llmService!.generatePlayerNarration(state, request, characterName);
+    state.history.push(`Narração (Turno ${state.turnNumber}): ${narration}`);
+
+    // Executa a extração automática pós-narração pelo LLM
+    this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
+    const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, narration);
+    state.characters = stateWithUpdates.characters;
+    if (stateWithUpdates.locations !== undefined) {
+      state.locations = stateWithUpdates.locations;
+    }
+
+    if (state.history.length > this.settings.memoryWindowSize) {
+      this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
+      const excessCount = state.history.length - this.settings.memoryWindowSize;
+      const oldestTurns = state.history.slice(0, excessCount);
+      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+      state.history = state.history.slice(excessCount);
+    }
+
+    this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
+    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, narration, state.turnNumber);
+
+    this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
+    const locations = await this.llmService!.extractCharacterLocations(state, narration);
+    if (Object.keys(locations).length > 0) {
+      for (const char of state.characters) {
+        const loc = locations[char.name];
+        if (loc) {
+          char.currentLocation = loc;
+        }
+      }
+    }
+
+    return narration;
+  }
+
   public async handleCliCommand(state: GameState, commandText: string): Promise<void> {
     const parts = commandText.trim().split(" ");
     const command = parts[0]!.toLowerCase();
@@ -363,6 +406,7 @@ export class GameEngine {
         this.output.writeLine("\n--- Comandos Administrativos Disponíveis ---");
         this.output.writeLine("/help - Mostra este menu de ajuda.");
         this.output.writeLine("/observe <detalhe da cena> - Detalha/observa um aspecto da cena sem avançar o turno.");
+        this.output.writeLine("/narrate <narração declarada> - Força o narrador a narrar o que você declarou e resolve o estado do mundo, sem avançar o turno.");
         this.output.writeLine("/status ou /chars - Mostra os personagens, locais, inventários e status.");
         this.output.writeLine("/map - Mostra o mapa de localizações conhecidas.");
         this.output.writeLine("/add-item <personagem> <item> - Adiciona um item ao inventário.");
@@ -388,6 +432,23 @@ export class GameEngine {
         const observation = await this.recordObservation(state, observeText, charName);
         this.output.writeLine("--------------------------------------------------");
         this.output.writeLine(observation);
+        this.output.writeLine("--------------------------------------------------");
+        break;
+      }
+
+      case "/narrate": {
+        const narrateText = args.join(" ").trim();
+        if (!narrateText) {
+          this.output.writeLine("Uso: /narrate <o que você declara que acontece na cena>");
+          break;
+        }
+        const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+        const charName = playerChar?.name ?? 'Jogador';
+
+        this.output.writeLine(`\n[Narração Declarada] ${charName} declara a cena...`);
+        const narration = await this.recordPlayerNarration(state, narrateText, charName);
+        this.output.writeLine("--------------------------------------------------");
+        this.output.writeLine(narration);
         this.output.writeLine("--------------------------------------------------");
         break;
       }

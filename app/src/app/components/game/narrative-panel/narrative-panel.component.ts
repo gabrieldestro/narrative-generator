@@ -31,6 +31,16 @@ export class NarrativePanelComponent {
         continue;
       }
 
+      // Narrações declaradas também não avançam o turno, mas seguem a história
+      if (parsed.isNarration) {
+        msgs.push({
+          type: 'narration',
+          text: parsed.narrative,
+          turnNumber: parsed.turnNumber
+        });
+        continue;
+      }
+
       // Push turn divider
       msgs.push({
         type: 'system',
@@ -68,7 +78,7 @@ export class NarrativePanelComponent {
     });
   }
 
-  private parseHistoryEntry(entry: string): { turnNumber: number, actions?: string, narrative: string, isInitial: boolean, isObservation?: boolean } {
+  private parseHistoryEntry(entry: string): { turnNumber: number, actions?: string, narrative: string, isInitial: boolean, isObservation?: boolean, isNarration?: boolean } {
     if (entry.startsWith('Narrativa Inicial:')) {
       return {
         turnNumber: 1,
@@ -84,6 +94,16 @@ export class NarrativePanelComponent {
         narrative: observeMatch[2].trim(),
         isInitial: false,
         isObservation: true
+      };
+    }
+
+    const narrateMatch = entry.match(/^Narração \(Turno (\d+)\):\s*([\s\S]*)$/i);
+    if (narrateMatch) {
+      return {
+        turnNumber: parseInt(narrateMatch[1], 10),
+        narrative: narrateMatch[2].trim(),
+        isInitial: false,
+        isNarration: true
       };
     }
     
