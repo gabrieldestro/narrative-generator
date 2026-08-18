@@ -85,12 +85,26 @@ export class FileSaveStore implements ISaveStore {
   // Migração de versão: bundles antigos (sem schemaVersion) são tratados como v1.
   // Nunca destrói dados — preserva campos desconhecidos ao re-gravar.
   public migrate(bundle: SessionBundle): SessionBundle {
-    const raw = bundle as SessionBundle & { schemaVersion?: number };
-    const schemaVersion = raw.schemaVersion ?? 1;
-    if (schemaVersion !== SAVE_SCHEMA_VERSION) {
-      this.logger.warn('schemaVersion desconhecido, tratando como v1', { id: bundle.id, schemaVersion });
+    const raw = bundle as any;
+    let schemaVersion = raw.schemaVersion ?? 1;
+    let state = { ...bundle.state };
+
+    if (schemaVersion === 1) {
+      if (!state.concepts) {
+        state.concepts = [];
+      }
+      schemaVersion = 2;
     }
-    return { ...bundle, schemaVersion: SAVE_SCHEMA_VERSION };
+
+    if (schemaVersion !== SAVE_SCHEMA_VERSION) {
+      this.logger.warn('schemaVersion desconhecido, tratando como v2', { id: bundle.id, schemaVersion });
+    }
+
+    return {
+      ...bundle,
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      state,
+    };
   }
 
   private async readBundle(filePath: string): Promise<SessionBundle | null> {

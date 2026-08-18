@@ -1,0 +1,32 @@
+<div class="character-sheet" [class.character-sheet--compact]="!expanded">
+  <div class="character-sheet__header" (click)="expanded = !expanded">
+    <span class="character-sheet__avatar">👤</span>
+    <span class="character-sheet__name">{{ character.name }}</span>
+    <ng-status-badge [type]="statusType"/>
+  </div>
+
+  @if (expanded) {
+    <div class="character-sheet__body">
+      <div class="character-sheet__field">
+        <span class="character-sheet__label">Local:</span>
+        <span>{{ character.currentLocation || 'Desconhecido' }}</span>
+      </div>
+      <div class="character-sheet__field">
+        <span class="character-sheet__label">Descrição:</span>
+        <span>{{ character.description }}</span>
+      </div>
+      @if (character.currentObjective) {
+        <div class="character-sheet__field">
+          <span class="character-sheet__label">Objetivo:</span>
+          <span>{{ character.currentObjective }}</span>
+        </div>
+      }
+      @if (character.longTermObjective) {
+        <div class="character-sheet__field">
+          <span class="character-sheet__label">Objetivo Final:</span>
+          <span>{{ character.longTermObjective }}</span>
+        </div>
+      }
+    </div>
+  }
+</div>

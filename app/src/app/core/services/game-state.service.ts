@@ -2,6 +2,7 @@ import { Injectable, signal, computed } from '@angular/core';
 import type { GameState } from '../models/game-state.model';
 import type { Character } from '../models/character.model';
 import type { Location } from '../models/location.model';
+import type { WorldConcept } from '../models/world-concept.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 import type { TurnResponse, ObserveResponse, NarrateResponse } from '../models/api-payloads.model';
 
@@ -34,6 +35,7 @@ export class GameStateService {
     this.characters().filter(c => !c.isPlayer && c.status === 'active')
   );
   readonly locations = computed(() => this.gameState()?.locations ?? []);
+  readonly concepts = computed(() => this.gameState()?.concepts ?? []);
   readonly turnNumber = computed(() => this.gameState()?.turnNumber ?? 0);
   readonly history = computed(() => this.gameState()?.history ?? []);
   readonly worldContext = computed(() => this.gameState()?.worldContext ?? '');

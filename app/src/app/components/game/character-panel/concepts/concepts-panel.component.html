@@ -1,0 +1,24 @@
+<div class="concepts-panel">
+  <h4 class="section-title">CONHECIMENTO DO MUNDO</h4>
+  @if (concepts.length === 0) {
+    <p class="concepts-panel__empty">Nenhum conhecimento adquirido</p>
+  } @else {
+    <div class="concepts-panel__groups">
+      @for (type of conceptTypes; track type) {
+        @if (getConceptsByType(type).length > 0) {
+          <div class="concepts-panel__group">
+            <h5 class="concepts-panel__group-title">{{ typeLabels[type] }}</h5>
+            <ul class="concepts-panel__list">
+              @for (concept of getConceptsByType(type); track concept.id) {
+                <li class="concepts-panel__item">
+                  <strong class="concepts-panel__item-name">{{ concept.name }}</strong>
+                  <span class="concepts-panel__item-desc">{{ concept.description }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      }
+    </div>
+  }
+</div>

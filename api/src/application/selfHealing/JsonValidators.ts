@@ -18,6 +18,12 @@ export function validateStateChanges(value: unknown): boolean {
     if (locationChanges.newConnections !== undefined && !Array.isArray(locationChanges.newConnections)) return false;
   }
 
+  if (value.conceptChanges !== undefined) {
+    if (!isRecord(value.conceptChanges)) return false;
+    const conceptChanges = value.conceptChanges;
+    if (conceptChanges.discovered !== undefined && !Array.isArray(conceptChanges.discovered)) return false;
+  }
+
   if (value.characterLifecycle !== undefined && !Array.isArray(value.characterLifecycle)) return false;
 
   return true;
@@ -26,6 +32,7 @@ export function validateStateChanges(value: unknown): boolean {
 export function normalizeStateChanges(value: unknown): {
   inventoryChanges: unknown[];
   locationChanges: { discovered: unknown[]; newConnections: unknown[] };
+  conceptChanges: { discovered: unknown[] };
   characterLifecycle: unknown[];
 } {
   const record = (validateStateChanges(value) ? value : {}) as Record<string, any>;
@@ -34,6 +41,9 @@ export function normalizeStateChanges(value: unknown): {
     locationChanges: {
       discovered: Array.isArray(record.locationChanges?.discovered) ? record.locationChanges.discovered : [],
       newConnections: Array.isArray(record.locationChanges?.newConnections) ? record.locationChanges.newConnections : [],
+    },
+    conceptChanges: {
+      discovered: Array.isArray(record.conceptChanges?.discovered) ? record.conceptChanges.discovered : [],
     },
     characterLifecycle: Array.isArray(record.characterLifecycle) ? record.characterLifecycle : [],
   };

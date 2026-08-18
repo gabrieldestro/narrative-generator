@@ -1,3 +1,6 @@
+import type { Location } from './location.model';
+import type { WorldConcept } from './world-concept.model';
+
 export interface WorldConfig {
   narrativeStyle: string;
   writingStyle: string;
@@ -20,4 +23,5 @@ export interface WorldTemplate extends WorldConfig {
   description: string;
   characters: CharacterTemplate[];
   locations?: Location[];
+  concepts?: WorldConcept[];
 }

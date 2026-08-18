@@ -1,4 +1,4 @@
-import type { GameState, WorldTemplate, CharacterTemplate, Character, Location } from "../domain/types.js";
+import type { GameState, WorldTemplate, CharacterTemplate, Character, Location, WorldConcept } from "../domain/types.js";
 import type { IUserInput, IOutputWriter } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { WorldTemplateRepository } from "../infrastructure/WorldTemplateRepository.js";
@@ -42,6 +42,7 @@ export class SessionFactory {
       history: [],
       characters,
       locations: template.locations ?? [],
+      concepts: template.concepts ?? [],
       lastSceneLocation: playerChar?.currentLocation ?? 'Ponto de Partida',
     };
   }
@@ -112,7 +113,8 @@ export class SessionFactory {
     writingStyle: string,
     context: string,
     chars: CharacterTemplate[],
-    locations: Location[] = []
+    locations: Location[] = [],
+    concepts: WorldConcept[] = []
   ): Promise<GameState> {
     const characters: Character[] = chars.map((c, i) => {
       const character: Character = {
@@ -142,6 +144,7 @@ export class SessionFactory {
       history: [],
       characters,
       locations,
+      concepts,
       lastSceneLocation: playerChar?.currentLocation ?? 'Ponto de Partida',
     };
     if (this.repository) {
@@ -177,7 +180,8 @@ export class SessionFactory {
       selected.writingStyle,
       selected.worldContext,
       selected.characters,
-      selected.locations ?? []
+      selected.locations ?? [],
+      selected.concepts ?? []
     );
     this.output.writeLine(`\n==================================================`);
     this.output.writeLine(`Contexto Inicial: ${state.worldContext}`);

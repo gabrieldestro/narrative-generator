@@ -85,6 +85,7 @@ describe('LlmService.extractStateChanges (reparo de JSON)', () => {
     expect(result).toEqual({
       inventoryChanges: [],
       locationChanges: { discovered: [], newConnections: [] },
+      conceptChanges: { discovered: [] },
       characterLifecycle: [],
     });
   });

@@ -1,4 +1,4 @@
-import type { GameState, Character, Location, CharacterStatus } from "../domain/types.js";
+import type { GameState, Character, Location, CharacterStatus, WorldConcept } from "../domain/types.js";
 import type { LlmService } from "./LlmService.js";
 import type { ILogger } from "../domain/ports.js";
 
@@ -175,6 +175,37 @@ export class GameManagementService {
   }
 
   /**
+   * Adiciona um conceito abstrato ao estado do jogo.
+   * Evita duplicidade baseada no ID do conceito.
+   */
+  public addConcept(
+    state: GameState,
+    concept: WorldConcept
+  ): GameState {
+    const concepts = state.concepts ?? [];
+    const exists = concepts.some((c) => c.id === concept.id);
+    if (exists) {
+      this.logger.warn('[StateUpdate] conceito já existe', { id: concept.id });
+      return state;
+    }
+    this.logger.info('[StateUpdate] conceito adicionado', { id: concept.id, name: concept.name, type: concept.type });
+    return { ...state, concepts: [...concepts, concept] };
+  }
+
+  /**
+   * Remove um conceito abstrato do estado do jogo pelo ID.
+   */
+  public removeConcept(
+    state: GameState,
+    conceptId: string
+  ): GameState {
+    const concepts = (state.concepts ?? [])
+      .filter((c) => c.id !== conceptId);
+    this.logger.info('[StateUpdate] conceito removido', { id: conceptId });
+    return { ...state, concepts };
+  }
+
+  /**
    * Executa a extração automática pós-narração usando o LLM e aplica as mutações ao estado
    */
   public async applyAutomaticStateUpdates(
@@ -278,10 +309,23 @@ export class GameManagementService {
       }
     }
 
+    // 5. Processar novos conceitos descobertos
+    if (changes.conceptChanges?.discovered) {
+      for (const concept of changes.conceptChanges.discovered) {
+        updatedState = this.addConcept(updatedState, {
+          id: concept.id,
+          type: concept.type,
+          name: concept.name,
+          description: concept.description,
+        });
+      }
+    }
+
     this.logger.info('[StateUpdate] alterações aplicadas', {
       inventoryChanges: changes.inventoryChanges?.length ?? 0,
       lifecycleChanges: changes.characterLifecycle?.length ?? 0,
       locationChanges: changes.locationChanges?.discovered?.length ?? 0,
+      conceptChanges: changes.conceptChanges?.discovered?.length ?? 0,
     });
 
     return updatedState;

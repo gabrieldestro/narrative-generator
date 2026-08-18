@@ -1,5 +1,25 @@
 import type { GameState } from '../domain/types.js';
 
+export function formatWorldConcepts(state: GameState): string {
+  if (!state.concepts || state.concepts.length === 0) return '';
+  const typeLabels: Record<string, string> = {
+    item: 'Item',
+    faction: 'Facção',
+    state: 'Estado/Nação',
+    region: 'Região',
+    place: 'Lugar',
+    custom: 'Conceito'
+  };
+  const lines = state.concepts.map(c => {
+    const label = typeLabels[c.type] || 'Conceito';
+    return `- [${label}] ${c.name}: ${c.description}`;
+  });
+  return [
+    'Conhecimento do Mundo:',
+    ...lines,
+  ].join('\n');
+}
+
 // ── Agent: Arbiter (arbitrateLogic) ──
 
 export const arbiterSystemPrompt =
@@ -9,8 +29,10 @@ export function arbiterHumanPrompt(state: GameState, actions: string[], recentHi
   const locations = state.characters
     .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
     .join('\n');
+  const conceptsStr = formatWorldConcepts(state);
   const promptParts = [
     `Cenário atual: ${state.worldContext}`,
+    conceptsStr ? `\n${conceptsStr}` : '',
     '',
     `Locais dos personagens:\n${locations}`,
     '',
@@ -61,6 +83,11 @@ export function narratorSystemPrompt(
     `Você é o Narrador Literário de um RPG do gênero: ${state.narrativeStyle} e estilo de escrita/tom: ${state.writingStyle}.`,
     `Sua função é transformar as mecânicas frias decididas pelo 'Árbitro' em uma prosa envolvente, descritiva e dramática seguindo estritamente a atmosfera, tom e clichês do gênero ${state.narrativeStyle} sob o estilo de escrita ${state.writingStyle}.`,
   ];
+  const conceptsStr = formatWorldConcepts(state);
+  if (conceptsStr) {
+    promptParts.push('');
+    promptParts.push(conceptsStr);
+  }
   if (state.longTermSummary) {
     promptParts.push(`Memória de Longo Prazo (Resumo dos eventos anteriores): ${state.longTermSummary}`);
   }
@@ -85,7 +112,9 @@ export function narratorHumanPrompt(state: GameState, actions: string[], logical
   const locations = state.characters
     .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
     .join('\n');
+  const conceptsStr = formatWorldConcepts(state);
   return [
+    conceptsStr ? `${conceptsStr}\n` : '',
     `Contexto Histórico: \n${state.history.join('\n\n')}`,
     '',
     'Localização atual dos personagens:',
@@ -121,9 +150,11 @@ export function observeHumanPrompt(state: GameState, request: string, characterN
   const locations = state.characters
     .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
     .join('\n');
+  const conceptsStr = formatWorldConcepts(state);
   return [
     characterName ? `Quem está observando: ${characterName}` : undefined,
     `Contexto do mundo (cenário atual): ${state.worldContext}`,
+    conceptsStr ? `\n${conceptsStr}` : undefined,
     '',
     'Localização atual dos personagens:',
     locations,
@@ -157,9 +188,11 @@ export function narrateHumanPrompt(state: GameState, request: string, characterN
   const locations = state.characters
     .map(c => `${c.name} está em: ${c.currentLocation ?? 'local desconhecido'}`)
     .join('\n');
+  const conceptsStr = formatWorldConcepts(state);
   return [
     characterName ? `Quem está narrando: ${characterName}` : undefined,
     `Contexto do mundo (cenário atual): ${state.worldContext}`,
+    conceptsStr ? `\n${conceptsStr}` : undefined,
     '',
     'Localização atual dos personagens:',
     locations,
@@ -187,9 +220,11 @@ export function describeSceneSystemPrompt(state: GameState): string {
 }
 
 export function describeSceneHumanPrompt(state: GameState, location: string): string {
+  const conceptsStr = formatWorldConcepts(state);
   return [
     `Local atual: ${location}`,
     `Contexto do mundo: ${state.worldContext}`,
+    conceptsStr ? `\n${conceptsStr}` : '',
     '',
     'Escreva a descrição deste local (apenas o texto da descrição):',
   ].join('\n');
@@ -213,8 +248,10 @@ export function initialNarrativeHumanPrompt(state: GameState): string {
     if (c.currentLocation) line += `. Local inicial: ${c.currentLocation}`;
     return line;
   }).join('\n');
+  const conceptsStr = formatWorldConcepts(state);
   return [
     `Cenário: ${state.worldContext}`,
+    conceptsStr ? `\n${conceptsStr}` : '',
     '',
     'Personagens:',
     chars,
@@ -345,7 +382,10 @@ export function extractStateChangesSystemPrompt(): string {
     '   - Se a narrativa revelar explicitamente uma nova área física conectada (ex: uma porta secreta se abre para o "Porão", ou eles descem para o "Túnel Sombrio"), adicione essa área em "discovered" com um id descritivo (camelCase), o nome legível, descrição concisa e conectividade inicial.',
     '   - Adicione também conexões bidirecionais se apropriado em "newConnections" (ex: de local_atual para novo_local).',
     '',
-    '3. CICLO DE VIDA DE PERSONAGENS (characterLifecycle):',
+    '3. DESCOBERTA DE CONCEITOS DO MUNDO (conceptChanges):',
+    '   - Se a narrativa revelar explicitamente um novo elemento abstrato relevante do mundo (item especial/lendário, facção ativa, estado/nação, região geográfica, lugar central/cidade no geral, costume ou elemento mágico novo), adicione em "discovered" com id (camelCase), type ("item" | "faction" | "state" | "region" | "place" | "custom"), nome legível (name) e descrição concisa.',
+    '',
+    '4. CICLO DE VIDA DE PERSONAGENS (characterLifecycle):',
     '   - Morte ou Desaparecimento: Se um personagem ativo morreu, foi pulverizado, desintegrou-se ou sumiu/perdeu-se na neblina sem rumo, defina seu status como "dead" ou "lost".',
     '   - Novo Personagem: Se um novo NPC apareceu ativamente e interagiu ou foi introduzido em detalhes, defina seu status como "discovered" e preencha descrição, personalidade e a localização inicial dele.',
     '',
@@ -365,6 +405,11 @@ export const STATE_CHANGES_FORMAT_SPEC = `{
       { "from": "id_origem", "to": "id_destino" }
     ]
   },
+  "conceptChanges": {
+    "discovered": [
+      { "id": "id_unico", "type": "item" | "faction" | "state" | "region" | "place" | "custom", "name": "Nome", "description": "Descrição detalhada" }
+    ]
+  },
   "characterLifecycle": [
     { "characterName": "Nome", "status": "dead" | "lost" | "active" | "discovered", "description": "Se discovered", "personality": "Se discovered", "location": "ID do local se discovered" }
   ]
@@ -377,6 +422,9 @@ export function extractStateChangesHumanPrompt(state: GameState, lastNarration: 
   const locationsInfo = (state.locations || [])
     .map(l => `- ID: ${l.id} ("${l.name}", Conecta com: [${l.connectedTo ? l.connectedTo.join(', ') : ''}])`)
     .join('\n');
+  const conceptsInfo = (state.concepts || [])
+    .map(c => `- ID: ${c.id} (Tipo: ${c.type}, "${c.name}": ${c.description})`)
+    .join('\n');
 
   return [
     '### ESTADO ATUAL DO JOGO:',
@@ -385,6 +433,9 @@ export function extractStateChangesHumanPrompt(state: GameState, lastNarration: 
     '',
     'Mapa de Localizações Conhecidas:',
     locationsInfo,
+    '',
+    'Conceitos do Mundo Conhecidos:',
+    conceptsInfo,
     '',
     '### ÚLTIMA NARRATIVA LITERÁRIA DO TURNO:',
     lastNarration,

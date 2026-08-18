@@ -52,6 +52,7 @@ describe('normalizeStateChanges', () => {
     expect(result).toEqual({
       inventoryChanges: [],
       locationChanges: { discovered: [], newConnections: [] },
+      conceptChanges: { discovered: [] },
       characterLifecycle: [],
     });
   });
@@ -62,6 +63,7 @@ describe('normalizeStateChanges', () => {
     });
     expect(result.inventoryChanges).toHaveLength(1);
     expect(result.locationChanges).toEqual({ discovered: [], newConnections: [] });
+    expect(result.conceptChanges).toEqual({ discovered: [] });
     expect(result.characterLifecycle).toEqual([]);
   });
 

@@ -409,12 +409,15 @@ export class GameEngine {
         this.output.writeLine("/narrate <narração declarada> - Força o narrador a narrar o que você declarou e resolve o estado do mundo, sem avançar o turno.");
         this.output.writeLine("/status ou /chars - Mostra os personagens, locais, inventários e status.");
         this.output.writeLine("/map - Mostra o mapa de localizações conhecidas.");
+        this.output.writeLine("/concepts - Mostra a lista de conceitos abstratos conhecidos do mundo.");
         this.output.writeLine("/add-item <personagem> <item> - Adiciona um item ao inventário.");
         this.output.writeLine("/remove-item <personagem> <item> - Remove um item do inventário.");
         this.output.writeLine("/add-char - Cria interativamente um novo personagem.");
         this.output.writeLine("/remove-char <personagem> - Marca o personagem como perdido ('lost').");
         this.output.writeLine("/add-location - Adiciona manualmente uma localização ao mapa.");
         this.output.writeLine("/remove-location <id> - Remove uma localização do mapa pelo ID.");
+        this.output.writeLine("/add-concept - Adiciona manualmente um conceito abstrato do mundo.");
+        this.output.writeLine("/remove-concept <id> - Remove um conceito abstrato pelo ID.");
         this.output.writeLine("/extract - Extrai mudanças de estado da última narrativa automaticamente.");
         this.output.writeLine("/extract-char - Gera ficha de um personagem a partir do histórico via LLM.");
         break;
@@ -473,6 +476,27 @@ export class GameEngine {
             this.output.writeLine(`- ${loc.name} (ID: ${loc.id})`);
             this.output.writeLine(`  Descrição: ${loc.description}`);
             this.output.writeLine(`  Conexões: [${loc.connectedTo.join(', ')}]`);
+          }
+        }
+        break;
+
+      case "/concepts":
+        this.output.writeLine("\n--- Conceitos Abstratos do Mundo ---");
+        if (!state.concepts || state.concepts.length === 0) {
+          this.output.writeLine("(Sem conceitos abstratos cadastrados)");
+        } else {
+          const typeLabels: Record<string, string> = {
+            item: 'Item',
+            faction: 'Facção',
+            state: 'Estado/Nação',
+            region: 'Região',
+            place: 'Lugar',
+            custom: 'Conceito'
+          };
+          for (const c of state.concepts) {
+            const label = typeLabels[c.type] || 'Conceito';
+            this.output.writeLine(`- [${label}] ${c.name} (ID: ${c.id})`);
+            this.output.writeLine(`  Descrição: ${c.description}`);
           }
         }
         break;
@@ -589,6 +613,50 @@ export class GameEngine {
         state.locations = updatedState.locations ?? [];
         this.output.writeLine(`Local "${existingLoc.name}" (ID: ${locationId}) removido do mapa.`);
         this.output.writeLine("  Referências nos demais locais foram limpas automaticamente.");
+        break;
+      }
+
+      case "/add-concept": {
+        const conceptId = await this.input.question("ID único do conceito (ex: olhar_de_merlim, arasaka): ");
+        if (!conceptId.trim()) {
+          this.output.writeLine("ID inválido. Operação cancelada.");
+          break;
+        }
+        const conceptTypeRaw = await this.input.question("Tipo (item, faction, state, region, place, custom): ");
+        const type = conceptTypeRaw.trim().toLowerCase();
+        const validTypes = ['item', 'faction', 'state', 'region', 'place', 'custom'];
+        if (!validTypes.includes(type)) {
+          this.output.writeLine(`Tipo inválido "${type}". Deve ser um de: ${validTypes.join(', ')}. Operação cancelada.`);
+          break;
+        }
+        const conceptName = await this.input.question("Nome do conceito: ");
+        const conceptDesc = await this.input.question("Descrição breve: ");
+        const updatedState = this.gameManagementService.addConcept(state, {
+          id: conceptId.trim(),
+          type: type as any,
+          name: conceptName,
+          description: conceptDesc,
+        });
+        state.concepts = updatedState.concepts ?? [];
+        this.output.writeLine(`Conceito "${conceptName}" (ID: ${conceptId.trim()}) adicionado com sucesso!`);
+        break;
+      }
+
+      case "/remove-concept": {
+        if (args.length < 1) {
+          this.output.writeLine("Uso: /remove-concept <id_do_conceito>");
+          this.output.writeLine("Dica: use /concepts para ver os IDs disponíveis.");
+          break;
+        }
+        const conceptId = args[0]!;
+        const existingConcept = (state.concepts ?? []).find((c) => c.id === conceptId);
+        if (!existingConcept) {
+          this.output.writeLine(`Conceito com ID "${conceptId}" não encontrado. Use /concepts para ver os IDs disponíveis.`);
+          break;
+        }
+        const updatedState = this.gameManagementService.removeConcept(state, conceptId);
+        state.concepts = updatedState.concepts ?? [];
+        this.output.writeLine(`Conceito "${existingConcept.name}" (ID: ${conceptId}) removido.`);
         break;
       }
 

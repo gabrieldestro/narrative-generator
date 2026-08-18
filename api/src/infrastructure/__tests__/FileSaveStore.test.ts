@@ -109,6 +109,16 @@ describe('FileSaveStore', () => {
     expect(migrated.state.turnNumber).toBe(1);
   });
 
+  it('migrate deve preencher state.concepts: [] em bundles v1', () => {
+    const legacy = makeBundle('legacy') as any;
+    legacy.schemaVersion = 1;
+    delete legacy.state.concepts;
+
+    const migrated = store.migrate(legacy as unknown as SessionBundle);
+    expect(migrated.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+    expect(migrated.state.concepts).toEqual([]);
+  });
+
   it('migrate preserva campos desconhecidos ao re-gravar', () => {
     const extra = JSON.parse(JSON.stringify(makeBundle('com-extra'))) as Record<string, unknown>;
     extra['campoFuturo'] = { algum: 'dado' };

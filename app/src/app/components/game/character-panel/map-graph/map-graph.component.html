@@ -1,0 +1,16 @@
+<div class="map-graph">
+  <h4 class="section-title">MAPA</h4>
+  @if (locations.length === 0) {
+    <p class="map-graph__empty">Nenhum local descoberto</p>
+  } @else {
+    <div class="map-graph__nodes">
+      @for (loc of locations; track loc.id) {
+        <div class="map-graph__node"
+          [class.map-graph__node--current]="loc.id === currentLocationId"
+          [class.map-graph__node--unvisited]="!loc.connectedTo || loc.connectedTo.length === 0">
+          <span class="map-graph__node-name">{{ loc.name }}</span>
+        </div>
+      }
+    </div>
+  }
+</div>

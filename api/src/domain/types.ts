@@ -21,6 +21,15 @@ export interface Location {
   connectedTo: string[]; // IDs de outras localizações conectadas
 }
 
+export type ConceptType = 'item' | 'faction' | 'state' | 'region' | 'place' | 'custom';
+
+export interface WorldConcept {
+  id: string;
+  type: ConceptType;
+  name: string;
+  description: string;
+}
+
 export type CharacterStatus = 'active' | 'dead' | 'lost';
 
 export type ActionType = 'observe' | 'speak' | 'attack' | 'sneak' | 'use_item' | 'interact' | 'flee' | 'free';
@@ -75,6 +84,7 @@ export interface WorldTemplate extends WorldConfig {
   description: string;
   characters: CharacterTemplate[];
   locations?: Location[]; // Configuração de mapa inicial (opcional)
+  concepts?: WorldConcept[]; // Conceitos abstratos iniciais (opcional)
 }
 
 // Templates de prompt para cada tamanho de narração
@@ -142,11 +152,12 @@ export interface GameState extends WorldConfig {
   longTermSummary?: string; // Memória de longo prazo sumarizada (opcional)
   locations?: Location[]; // Lista de localizações do mundo atual
   lastSceneLocation?: string; // Local em que a descrição de cenário foi apresentada pela última vez
+  concepts?: WorldConcept[]; // Lista de conceitos abstratos do mundo atual
 }
 
 // Versão do schema de save. Incremente quando `GameState` mudar de forma incompatível
 // e adicione um passo de migração em `FileSaveStore.migrate`.
-export const SAVE_SCHEMA_VERSION = 1 as const;
+export const SAVE_SCHEMA_VERSION = 2 as const;
 
 // Pacote de save: agrupa estado + metadados necessários para reconstruir/restaurar um jogo.
 // Settings são GLOBAIS (localStorage) e NÃO entram aqui.

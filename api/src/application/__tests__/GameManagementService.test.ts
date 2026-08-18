@@ -134,4 +134,58 @@ describe("GameManagementService", () => {
     expect(floresta?.connectedTo).toContain("caverna");
     expect(caverna?.connectedTo).toContain("floresta");
   });
+
+  it("should add a concept successfully", () => {
+    const service = new GameManagementService(mockLlmService);
+    const state = createInitialState();
+
+    const newState = service.addConcept(state, {
+      id: "olhar_de_merlim",
+      type: "item",
+      name: "Olhar de Merlim",
+      description: "Um cristal de magia."
+    });
+
+    expect(newState.concepts).toHaveLength(1);
+    expect(newState.concepts?.[0].id).toBe("olhar_de_merlim");
+  });
+
+  it("should remove a concept successfully", () => {
+    const service = new GameManagementService(mockLlmService);
+    let state = createInitialState();
+    state = service.addConcept(state, {
+      id: "olhar_de_merlim",
+      type: "item",
+      name: "Olhar de Merlim",
+      description: "Um cristal de magia."
+    });
+
+    const newState = service.removeConcept(state, "olhar_de_merlim");
+    expect(newState.concepts).toHaveLength(0);
+  });
+
+  it("should automatically discover concepts", async () => {
+    const service = new GameManagementService(mockLlmService);
+    const state = createInitialState();
+
+    vi.mocked(mockLlmService.extractStateChanges).mockResolvedValueOnce({
+      inventoryChanges: [],
+      locationChanges: { discovered: [], newConnections: [] },
+      characterLifecycle: [],
+      conceptChanges: {
+        discovered: [
+          {
+            id: "ordem_de_avalon",
+            type: "faction",
+            name: "Ordem de Avalon",
+            description: "Uma facção de cavaleiros sagrados."
+          }
+        ]
+      }
+    });
+
+    const newState = await service.applyAutomaticStateUpdates(state, "Eles ouviram falar da lendária Ordem de Avalon.");
+    expect(newState.concepts).toHaveLength(1);
+    expect(newState.concepts?.[0].id).toBe("ordem_de_avalon");
+  });
 });

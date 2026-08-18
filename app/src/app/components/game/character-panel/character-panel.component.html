@@ -1,0 +1,14 @@
+<div class="character-panel">
+  @for (char of gameState.characters(); track char.id) {
+    <ng-character-sheet [character]="char"/>
+  }
+
+  <ng-inventory-panel [items]="gameState.playerCharacter()?.inventory ?? []"/>
+
+  <ng-map-graph
+    [locations]="gameState.locations()"
+    [currentLocationId]="gameState.playerCharacter()?.currentLocation ?? null"
+  />
+
+  <ng-concepts-panel [concepts]="gameState.concepts()"/>
+</div>
