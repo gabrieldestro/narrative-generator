@@ -56,3 +56,52 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: $text-muted;
 }
+
+// ─── Botões Material mais arredondados ───
+
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-stroked-button,
+.mat-mdc-flat-button,
+.mat-mdc-outlined-button,
+.mat-mdc-unelevated-button {
+  border-radius: $radius-lg !important;
+}
+
+// Botões preenchidos: força texto escuro (consistência com o fundo amarelo)
+.mat-mdc-raised-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-flat-button {
+  --mat-button-protected-label-text-color: var(--text-inverse) !important;
+  --mat-button-filled-label-text-color: var(--text-inverse) !important;
+  --mdc-filled-button-label-text-color: var(--text-inverse) !important;
+  color: var(--text-inverse) !important;
+
+  &:disabled,
+  &.mat-mdc-button-disabled {
+    color: #595959 !important;
+  }
+}
+
+// ─── Inputs Material (outline) mais arredondados ───
+
+.mat-mdc-form-field {
+  .mat-mdc-text-field-wrapper,
+  .mat-mdc-form-field-flex {
+    border-radius: $radius-lg !important;
+  }
+
+  // Preenche o wrapper inteiro (incluindo o padding horizontal do outline)
+  // para não sobrar "barras" escuras entre a borda e o fundo preenchido.
+  .mat-mdc-text-field-wrapper {
+    background: var(--bg-elevated) !important;
+  }
+
+  .mdc-notched-outline__leading {
+    border-radius: $radius-lg 0 0 $radius-lg;
+  }
+
+  .mdc-notched-outline__trailing {
+    border-radius: 0 $radius-lg $radius-lg 0;
+  }
+}

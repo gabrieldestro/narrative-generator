@@ -4,19 +4,18 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import type { ActionIntent } from '../../../../core/models/api-payloads.model';
 
 interface ActionIntentOption {
-  icon: string;
   label: string;
   value: ActionIntent;
 }
 
 const ACTION_INTENTS: ActionIntentOption[] = [
-  { icon: '🔍', label: 'Curioso', value: 'curious' },
-  { icon: '😠', label: 'Agressivo', value: 'aggressive' },
-  { icon: '😟', label: 'Cauteloso', value: 'cautious' },
-  { icon: '😊', label: 'Amigável', value: 'friendly' },
-  { icon: '💀', label: 'Intimidador', value: 'intimidating' },
-  { icon: '😰', label: 'Desesperado', value: 'desperate' },
-  { icon: '😐', label: 'Neutro', value: 'neutral' },
+  { label: 'Curioso', value: 'curious' },
+  { label: 'Agressivo', value: 'aggressive' },
+  { label: 'Cauteloso', value: 'cautious' },
+  { label: 'Amigável', value: 'friendly' },
+  { label: 'Intimidador', value: 'intimidating' },
+  { label: 'Desesperado', value: 'desperate' },
+  { label: 'Neutro', value: 'neutral' },
 ];
 
 @Component({

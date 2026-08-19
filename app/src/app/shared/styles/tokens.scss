@@ -99,6 +99,7 @@ $transition-slow:   400ms ease;
   --text-primary: #{$text-primary};
   --text-secondary: #{$text-secondary};
   --text-muted: #{$text-muted};
+  --text-inverse: #{$text-inverse};
   --accent: #{$accent};
   --accent-hover: #{$accent-hover};
   --accent-muted: #{$accent-muted};
@@ -116,5 +117,10 @@ $transition-slow:   400ms ease;
   --font-mono: #{$font-mono};
   --max-reading-width: #{$max-reading-width};
   --glow-primary: #{$glow-primary};
+  --radius-sm: #{$radius-sm};
+  --radius-md: #{$radius-md};
+  --radius-lg: #{$radius-lg};
+  --radius-xl: #{$radius-xl};
+  --radius-full: #{$radius-full};
 }
 

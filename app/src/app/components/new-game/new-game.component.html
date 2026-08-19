@@ -8,17 +8,15 @@
 </mat-toolbar>
 
 <div class="new-game__content">
-  <h1 class="section-title">NOVA AVENTURA</h1>
-
   <div class="new-game__layout">
     <section class="new-game__worlds" aria-label="Mundos pré-configurados">
-      <p class="ui-text--secondary">Escolha um Mundo Pré-Configurado</p>
+      <p class="section-label">Escolha um Mundo Pré-Configurado</p>
       <ng-world-list (selectWorld)="onSelectWorld($event)" (useAsBase)="onUseAsBase($event)"/>
     </section>
 
     <aside class="new-game__sidebar">
       <section class="saved-games" aria-label="Continuar aventuras">
-        <h2 class="saved-games__title">CONTINUAR AVENTURAS</h2>
+        <h2 class="section-label">CONTINUAR AVENTURAS</h2>
 
         @if (loadingSaves()) {
           <div class="saved-games__grid" aria-label="Carregando partidas salvas">

@@ -4,20 +4,19 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import type { ActionType } from '../../../../core/models/api-payloads.model';
 
 interface ActionTypeOption {
-  icon: string;
   label: string;
   value: ActionType;
 }
 
 const ACTION_TYPES: ActionTypeOption[] = [
-  { icon: '👁', label: 'Observar', value: 'observe' },
-  { icon: '💬', label: 'Falar', value: 'speak' },
-  { icon: '⚔', label: 'Atacar', value: 'attack' },
-  { icon: '🐾', label: 'Furtividade', value: 'sneak' },
-  { icon: '🎒', label: 'Usar Item', value: 'use_item' },
-  { icon: '🤝', label: 'Interagir', value: 'interact' },
-  { icon: '🏃', label: 'Fugir', value: 'flee' },
-  { icon: '✏️', label: 'Livre', value: 'free' },
+  { label: 'Observar', value: 'observe' },
+  { label: 'Falar', value: 'speak' },
+  { label: 'Atacar', value: 'attack' },
+  { label: 'Furtividade', value: 'sneak' },
+  { label: 'Usar Item', value: 'use_item' },
+  { label: 'Interagir', value: 'interact' },
+  { label: 'Fugir', value: 'flee' },
+  { label: 'Livre', value: 'free' },
 ];
 
 @Component({

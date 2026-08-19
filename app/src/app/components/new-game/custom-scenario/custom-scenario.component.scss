@@ -149,7 +149,7 @@
   font-weight: 700 !important;
   font-size: 1rem !important;
   letter-spacing: 0.04em !important;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   padding: 0 1.5rem !important;
   height: 48px;
   box-shadow: 0 4px 12px rgba(255, 213, 79, 0.2) !important;
@@ -176,17 +176,18 @@
 }
 
 .btn-cancel {
-  border: 1px solid var(--border-light) !important;
-  color: var(--text-muted) !important;
+  background: var(--bg-hover) !important;
+  border: 1px solid rgba(137, 180, 250, 0.25) !important;
+  color: var(--text-secondary) !important;
   font-family: 'Outfit', sans-serif !important;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   height: 48px;
   transition: all 0.2s ease !important;
 
   &:hover {
     border-color: var(--error) !important;
     color: var(--error) !important;
-    background: rgba(243, 139, 168, 0.05) !important;
+    background: rgba(243, 139, 168, 0.12) !important;
   }
 }
 

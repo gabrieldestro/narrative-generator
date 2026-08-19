@@ -11,31 +11,22 @@ mat-toolbar {
 }
 
 .new-game__content {
-  padding: 3rem 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 2rem 1.5rem;
   min-height: calc(100vh - 64px);
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
 }
 
-.section-title {
+.section-label {
   font-family: 'Outfit', sans-serif;
-  font-weight: 800;
-  font-size: 2.25rem;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  margin-bottom: 0.5rem;
-  text-align: center;
-}
-
-.ui-text--secondary {
-  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
   color: var(--text-muted);
-  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
   text-align: center;
-  margin-bottom: 2rem;
+  margin: 0 0 1rem;
 }
 
 .new-game__layout {
@@ -82,7 +73,7 @@ mat-toolbar {
     font-size: 0.95rem;
     padding: 0.75rem 1.5rem !important;
     width: 100%;
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     box-shadow: 0 4px 12px rgba(255, 213, 79, 0.2) !important;
     transition: all 0.2s ease;
 
@@ -95,17 +86,6 @@ mat-toolbar {
 
 .saved-games {
   width: 100%;
-}
-
-.saved-games__title {
-  font-family: 'Outfit', sans-serif;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  text-align: center;
-  margin-bottom: 1rem;
 }
 
 .saved-games__empty {
@@ -213,7 +193,7 @@ mat-toolbar {
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   letter-spacing: 0.04em;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   font-size: 0.8rem;
   box-shadow: 0 4px 10px rgba(255, 213, 79, 0.25) !important;
   transition: all 0.2s ease;

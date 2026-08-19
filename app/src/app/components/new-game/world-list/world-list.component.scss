@@ -33,5 +33,25 @@
 .world-list__error {
   text-align: center;
   padding: 2rem;
-  color: #e53935;
+  color: var(--error);
+}
+
+.world-list__retry {
+  margin-top: 1rem;
+  background: var(--bg-hover) !important;
+  border: 1px solid rgba(137, 180, 250, 0.3) !important;
+  color: var(--text-secondary) !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.6rem 1.5rem;
+  border-radius: 12px !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(137, 180, 250, 0.12) !important;
+    border-color: var(--info) !important;
+    color: var(--info) !important;
+  }
 }

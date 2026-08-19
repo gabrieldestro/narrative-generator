@@ -102,7 +102,7 @@ mat-card-actions {
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   letter-spacing: 0.05em;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   box-shadow: 0 4px 10px rgba(255, 213, 79, 0.25) !important;
   font-size: 0.9rem;
   min-width: 120px;
@@ -115,17 +115,20 @@ mat-card-actions {
 }
 
 .btn-base {
-  border: 1px solid rgba(255, 213, 79, 0.25) !important;
-  color: #ffd54f !important;
+  background: var(--bg-hover) !important;
+  border: 1px solid rgba(137, 180, 250, 0.3) !important;
+  color: var(--text-secondary) !important;
   font-family: 'Outfit', sans-serif;
   font-weight: 600;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   font-size: 0.9rem;
   min-width: 120px;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(255, 213, 79, 0.05) !important;
+    background: rgba(137, 180, 250, 0.12) !important;
+    border-color: var(--info) !important;
+    color: var(--info) !important;
     transform: translateY(-2px);
   }
 }

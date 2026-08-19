@@ -13,7 +13,7 @@
 } @else if (error()) {
   <div class="world-list__error" role="alert">
     <p>{{ error() }}</p>
-    <button (click)="loadWorlds()" aria-label="Tentar carregar mundos novamente">Tentar novamente</button>
+    <button class="world-list__retry" (click)="loadWorlds()" aria-label="Tentar carregar mundos novamente">Tentar novamente</button>
   </div>
 } @else {
   <div class="world-list__grid" role="list" aria-label="Lista de mundos disponíveis">

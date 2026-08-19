@@ -3,7 +3,7 @@
   <mat-select [value]="value" (valueChange)="onChange($event)" [disabled]="disabled">
     @for (opt of options; track opt.value) {
       <mat-option [value]="opt.value">
-        {{ opt.icon }} {{ opt.label }}
+        {{ opt.label }}
       </mat-option>
     }
   </mat-select>
