@@ -1,0 +1,10 @@
+.enrich-btn {
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+  color: #b388ff;
+
+  ::ng-deep .mat-progress-spinner circle {
+    stroke: #b388ff;
+  }
+}

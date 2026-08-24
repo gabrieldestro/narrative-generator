@@ -12,6 +12,7 @@ import { GameManagementService } from '../application/GameManagementService.js';
 import { SessionRepository } from '../infrastructure/SessionRepository.js';
 import { FileSaveStore } from '../infrastructure/FileSaveStore.js';
 import { GameController } from './controllers/GameController.js';
+import { EnrichController } from './controllers/EnrichController.js';
 import { registerGameRoutes } from './routes/gameRoutes.js';
 import { PinoLogger } from '../infrastructure/PinoLogger.js';
 import { LlmCallLogger } from '../infrastructure/LlmCallLogger.js';
@@ -101,7 +102,9 @@ export async function buildApp(options: AppOptions = {}) {
     logger
   );
 
-  registerGameRoutes(app, gameController);
+  const enrichController = new EnrichController(llmService, logger);
+
+  registerGameRoutes(app, gameController, enrichController);
 
   app.post('/api/logs', async (req, reply) => {
     const body = req.body as { logs?: Array<{ level: string; message: string; context?: Record<string, unknown> }> };

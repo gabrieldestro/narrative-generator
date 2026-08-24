@@ -10,6 +10,7 @@ import type { GameManagementService } from '../../application/GameManagementServ
 import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
 import type { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
 import type { ILogger } from '../../domain/ports.js';
+import type { WorldTemplate } from '../../domain/types.js';
 import { ActionBuilderService } from '../../application/ActionBuilderService.js';
 
 class NullLogger implements ILogger {
@@ -26,6 +27,7 @@ export interface CreateGameRequestBody {
   mode: 'template' | 'custom';
   templateName?: string;
   customPrompt?: string;
+  world?: WorldTemplate;          // novo: cenário estruturado (custom mode)
   settings?: Partial<GameSettings>;
 }
 
@@ -113,7 +115,7 @@ export class GameController {
     req: FastifyRequest<{ Body: CreateGameRequestBody }>,
     reply: FastifyReply
   ): Promise<void> {
-    const { mode, templateName, customPrompt, settings } = req.body;
+    const { mode, templateName, customPrompt, world, settings } = req.body;
     let state: GameState;
     let title = '';
 
@@ -136,13 +138,17 @@ export class GameController {
       state = this.sessionFactory.buildFromTemplate(template);
       title = template.name;
       this.logger.info('Jogo criado a partir de template', { templateName: template.name });
+    } else if (mode === 'custom' && world) {
+      state = this.sessionFactory.buildFromCustomWorld(world);
+      title = world.name || state.narrativeStyle;
+      this.logger.info('Jogo criado a partir de cenário customizado estruturado', { name: world.name });
     } else if (mode === 'custom' && customPrompt) {
       state = await this.sessionFactory.buildCustomScenario(customPrompt);
       title = state.narrativeStyle;
-      this.logger.info('Jogo criado a partir de cenário customizado');
+      this.logger.info('Jogo criado a partir de cenário customizado (prompt legado)');
     } else {
       return reply.status(400).send({
-        error: "Parâmetros inválidos. Forneça 'mode': 'template' com 'templateName', ou 'mode': 'custom' com 'customPrompt'."
+        error: "Parâmetros inválidos. Forneça 'mode': 'template' com 'templateName', ou 'mode': 'custom' com 'world' ou 'customPrompt'."
       });
     }
 

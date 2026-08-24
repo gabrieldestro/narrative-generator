@@ -1,0 +1,54 @@
+<div class="editor">
+  <div class="editor__head">
+    <h3 class="editor__title">
+      <mat-icon>map</mat-icon>
+      Lugares ({{ locations.length }})
+    </h3>
+    <button mat-stroked-button color="primary" type="button" (click)="addLocation()">
+      <mat-icon>add</mat-icon>
+      Adicionar lugar
+    </button>
+  </div>
+
+  @if (locations.length === 0) {
+    <p class="editor__empty">Nenhum lugar ainda. Adicione vilas, masmorras, cidades…</p>
+  }
+
+  @for (loc of locations; track loc.id; let i = $index) {
+    <mat-divider></mat-divider>
+    <div class="loc-row">
+      <div class="loc-row__header">
+        <mat-form-field appearance="outline" class="field field--grow">
+          <mat-label>Nome</mat-label>
+          <input matInput [(ngModel)]="loc.name" placeholder="Ex: Taverna do Dragão" />
+        </mat-form-field>
+        <button mat-icon-button color="warn" type="button" (click)="removeLocation(i)" aria-label="Remover lugar">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </div>
+
+      <div class="field-with-enrich">
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>Descrição</mat-label>
+          <textarea matInput [(ngModel)]="loc.description" rows="3"
+            placeholder="Atmosfera, pontos de interesse…"></textarea>
+        </mat-form-field>
+        <ng-enrich-button
+          [field]="'Descrição do lugar ' + (loc.name || 'local')"
+          [value]="loc.description"
+          [getContext]="getContext"
+          (enriched)="loc.description = $event">
+        </ng-enrich-button>
+      </div>
+
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Conecta-se a</mat-label>
+        <mat-select [(ngModel)]="loc.connectedTo" multiple>
+          @for (other of otherLocations(loc); track other.id) {
+            <mat-option [value]="other.id">{{ other.name || '(sem nome)' }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+  }
+</div>

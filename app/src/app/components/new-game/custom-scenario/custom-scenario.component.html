@@ -15,7 +15,8 @@
       @if (isEditing) {
         Os campos foram pré-preenchidos com os dados do mundo base. Ajuste como desejar.
       } @else {
-        Defina o gênero, estilo e contexto para que a IA gere uma aventura única para você.
+        Defina o gênero, estilo e contexto e complemente com personagens, lugares e itens. Use o botão
+        <mat-icon class="inline-icon">auto_awesome</mat-icon> para a IA enriquecer qualquer campo.
       }
     </p>
   </div>
@@ -60,20 +61,47 @@
           Contexto do Mundo
           <span class="form-section__required">*</span>
         </label>
-        <mat-form-field appearance="outline" class="form-section__field">
-          <textarea
-            matInput
-            [(ngModel)]="worldContext"
-            placeholder="Descreva o mundo, os conflitos centrais, personagens importantes e o tom geral da aventura…"
-            rows="8"
-            id="input-world-context">
-          </textarea>
-          @if (!worldContext && submitted) {
-            <mat-error>O contexto do mundo é obrigatório</mat-error>
-          }
-        </mat-form-field>
+        <div class="field-with-enrich">
+          <mat-form-field appearance="outline" class="form-section__field">
+            <textarea
+              matInput
+              [(ngModel)]="worldContext"
+              placeholder="Descreva o mundo, os conflitos centrais, personagens importantes e o tom geral da aventura…"
+              rows="8"
+              id="input-world-context">
+            </textarea>
+            @if (!worldContext && submitted) {
+              <mat-error>O contexto do mundo é obrigatório</mat-error>
+            }
+          </mat-form-field>
+          <ng-enrich-button
+            field="Contexto do mundo"
+            [value]="worldContext"
+            [getContext]="getContext"
+            (enriched)="worldContext = $event">
+          </ng-enrich-button>
+        </div>
         <p class="form-section__hint">Quanto mais detalhes, mais rica será a aventura gerada pela IA.</p>
       </div>
+
+      <ng-characters-editor
+        [characters]="characters"
+        [locations]="locations"
+        [getContext]="getContext"
+        (charactersChange)="characters = $event">
+      </ng-characters-editor>
+
+      <ng-places-editor
+        [locations]="locations"
+        [getContext]="getContext"
+        (locationsChange)="locations = $event">
+      </ng-places-editor>
+
+      <ng-concepts-editor
+        [concepts]="concepts"
+        [getContext]="getContext"
+        (conceptsChange)="concepts = $event">
+      </ng-concepts-editor>
 
       <div class="create-world__actions">
         <button
@@ -114,6 +142,12 @@
           @if (!narrativeStyle && !writingStyle) {
             <span class="preview-chip preview-chip--empty">Gênero · Estilo</span>
           }
+        </div>
+
+        <div class="preview-card__counts">
+          <span class="preview-count"><mat-icon>group</mat-icon> {{ characters.length }} personagens</span>
+          <span class="preview-count"><mat-icon>map</mat-icon> {{ locations.length }} lugares</span>
+          <span class="preview-count"><mat-icon>category</mat-icon> {{ concepts.length }} itens</span>
         </div>
 
         <div class="preview-card__divider"></div>

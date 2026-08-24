@@ -74,11 +74,11 @@ export class LlmService {
     this.selfHealing = new SelfHealingService(llm, logger, this.appLogger, this.settings);
   }
 
-  async generateInitialContext(style: string, writingStyle: string): Promise<string> {
+  async generateInitialContext(style: string, writingStyle: string, baseContext?: string): Promise<string> {
     const start = Date.now();
     const messages = [
       new SystemMessage(initialContextSystemPrompt(writingStyle)),
-      new HumanMessage(initialContextHumanPrompt(style, writingStyle)),
+      new HumanMessage(initialContextHumanPrompt(style, writingStyle, baseContext)),
     ];
     const response = await this.llm.invoke(messages);
     this.appLogger.info('[ContextoInicial] gerado', { style, writingStyle, durationMs: Date.now() - start });

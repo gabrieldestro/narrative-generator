@@ -466,4 +466,70 @@ describe('Fastify Game API', () => {
     expect(bundle).not.toHaveProperty('settings');
     expect(bundle.state).not.toHaveProperty('settings');
   });
+
+  it('POST /api/games/enrich deve retornar texto enriquecido', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/games/enrich',
+      payload: {
+        field: 'Descrição de Aria',
+        value: 'Ladina ágil',
+        context: {
+          narrativeStyle: 'Fantasia Medieval',
+          writingStyle: 'Épico',
+          worldContext: 'Mundo sombrio',
+          characters: [{ name: 'Aria', description: 'Ladina ágil' }],
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body).toHaveProperty('enriched');
+    expect(typeof body.enriched).toBe('string');
+    expect(body.enriched.length).toBeGreaterThan(0);
+  });
+
+  it('POST /api/games/enrich deve retornar 400 sem field/value', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/games/enrich',
+      payload: { field: 'x' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('POST /api/games/new (mode custom + world) deve criar jogo estruturado', async () => {
+    const world = {
+      name: 'Mundo Custom',
+      description: 'desc',
+      narrativeStyle: 'Fantasia Medieval',
+      writingStyle: 'Épico',
+      worldContext: 'Um mundo de teste',
+      characters: [
+        { name: 'Aria', description: 'Ladina', personality: 'Astuta', isPlayer: true, initialLocation: 'Taverna', inventory: ['Adaga'] },
+        { name: 'Brenn', description: 'Guerreiro', personality: 'Leal', isPlayer: false },
+      ],
+      locations: [{ id: 'l1', name: 'Taverna', description: '', connectedTo: [] }],
+      concepts: [{ id: 'c1', type: 'faction', name: 'Ladinos', description: '' }],
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: { mode: 'custom', world },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.payload);
+    expect(body).toHaveProperty('sessionId');
+    expect(body.state.characters.length).toBe(2);
+    expect(body.state.characters[0].name).toBe('Aria');
+    expect(body.state.characters[0].currentLocation).toBe('Taverna');
+    expect(body.state.characters[0].inventory).toEqual(['Adaga']);
+    expect(body.state.characters[0].isPlayer).toBe(true);
+    expect(body.state.locations.length).toBe(1);
+    expect(body.state.concepts.length).toBe(1);
+    expect(body.state.lastSceneLocation).toBe('Taverna');
+  });
 });

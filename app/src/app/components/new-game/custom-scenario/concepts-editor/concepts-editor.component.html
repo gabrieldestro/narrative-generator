@@ -1,0 +1,53 @@
+<div class="editor">
+  <div class="editor__head">
+    <h3 class="editor__title">
+      <mat-icon>category</mat-icon>
+      Itens &amp; Conceitos ({{ concepts.length }})
+    </h3>
+    <button mat-stroked-button color="primary" type="button" (click)="addConcept()">
+      <mat-icon>add</mat-icon>
+      Adicionar conceito
+    </button>
+  </div>
+
+  @if (concepts.length === 0) {
+    <p class="editor__empty">Nenhum conceito ainda. Adicione itens, facções, regiões…</p>
+  }
+
+  @for (concept of concepts; track concept.id; let i = $index) {
+    <mat-divider></mat-divider>
+    <div class="concept-row">
+      <div class="concept-row__header">
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>Tipo</mat-label>
+          <mat-select [(ngModel)]="concept.type">
+            @for (t of types; track t) {
+              <mat-option [value]="t">{{ t }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="field field--grow">
+          <mat-label>Nome</mat-label>
+          <input matInput [(ngModel)]="concept.name" placeholder="Ex: Espada Flamejante" />
+        </mat-form-field>
+        <button mat-icon-button color="warn" type="button" (click)="removeConcept(i)" aria-label="Remover conceito">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </div>
+
+      <div class="field-with-enrich">
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>Descrição</mat-label>
+          <textarea matInput [(ngModel)]="concept.description" rows="2"
+            placeholder="O que é e por que importa no mundo…"></textarea>
+        </mat-form-field>
+        <ng-enrich-button
+          [field]="'Descrição do conceito ' + (concept.name || concept.type)"
+          [value]="concept.description"
+          [getContext]="getContext"
+          (enriched)="concept.description = $event">
+        </ng-enrich-button>
+      </div>
+    </div>
+  }
+</div>

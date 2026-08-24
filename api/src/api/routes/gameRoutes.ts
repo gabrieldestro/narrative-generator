@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { GameController } from '../controllers/GameController.js';
+import type { EnrichController } from '../controllers/EnrichController.js';
 
-export function registerGameRoutes(fastify: FastifyInstance, controller: GameController) {
+export function registerGameRoutes(fastify: FastifyInstance, controller: GameController, enrichController?: EnrichController) {
   // Lista templates de mundos
   fastify.get('/api/worlds', (req, reply) => controller.listWorlds(req, reply));
 
@@ -49,6 +50,23 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
       },
     },
   }, (req: any, reply) => controller.createGame(req, reply));
+
+  // Enriquecer um campo do formulário de cenário customizado via LLM
+  if (enrichController) {
+    fastify.post('/api/games/enrich', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['field', 'value'],
+          properties: {
+            field: { type: 'string' },
+            value: { type: 'string' },
+            context: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    }, (req: any, reply) => enrichController.enrich(req, reply));
+  }
 
   // Processa 1 turno do jogo
   fastify.post('/api/games/:sessionId/turn', {

@@ -3,6 +3,7 @@ import type { IUserInput, IOutputWriter } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { WorldTemplateRepository } from "../infrastructure/WorldTemplateRepository.js";
 import type { LlmService } from "./LlmService.js";
+import { normalizeWorldTemplate } from "./worldNormalizer.js";
 
 export class SessionFactory {
   constructor(
@@ -53,7 +54,7 @@ export class SessionFactory {
     writingStyle = "Equilibrado"
   ): Promise<GameState> {
     const worldContext = this.llmService
-      ? await this.llmService.generateInitialContext(style, writingStyle)
+      ? await this.llmService.generateInitialContext(promptText, style, writingStyle)
       : promptText;
 
     const [playerDesc, playerPersonality] = this.llmService
@@ -82,6 +83,41 @@ export class SessionFactory {
       characters,
       locations: [],
       lastSceneLocation: "Ponto de Partida",
+    };
+  }
+
+  public buildFromCustomWorld(input: Partial<WorldTemplate>): GameState {
+    const template = normalizeWorldTemplate(input);
+    const characters: Character[] = template.characters.map((c, i) => {
+      const character: Character = {
+        id: String(i + 1),
+        name: c.name,
+        description: c.description,
+        personality: c.personality,
+        isPlayer: c.isPlayer ?? false,
+        currentLocation: c.initialLocation ?? 'Ponto de Partida',
+        inventory: c.inventory ?? [],
+        status: 'active',
+      };
+      if (c.longTermObjective !== undefined) {
+        character.longTermObjective = c.longTermObjective;
+        character.currentObjective = c.longTermObjective;
+      }
+      return character;
+    });
+
+    const playerChar = characters.find(c => c.isPlayer);
+
+    return {
+      worldContext: template.worldContext,
+      narrativeStyle: template.narrativeStyle,
+      writingStyle: template.writingStyle,
+      turnNumber: 1,
+      history: [],
+      characters,
+      locations: template.locations ?? [],
+      concepts: template.concepts ?? [],
+      lastSceneLocation: playerChar?.currentLocation ?? 'Ponto de Partida',
     };
   }
 

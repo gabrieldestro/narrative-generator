@@ -5,7 +5,7 @@ import { LoggingService } from './logging.service';
 import { SettingsService } from './settings.service';
 import type { GameSettings } from '../models/game-settings.model';
 import type { WorldTemplate } from '../models/world-template.model';
-import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse, NarrateResponse } from '../models/api-payloads.model';
+import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse, NarrateResponse, EnrichPayload, EnrichResponse } from '../models/api-payloads.model';
 import type { SavedGameSummary, SessionBundle } from '../models/session-save.model';
 
 @Injectable({ providedIn: 'root' })
@@ -108,6 +108,15 @@ export class ApiService {
       tap({
         next: () => this.log.info('ApiService.deleteSave', { sessionId }),
         error: (err) => this.log.error('ApiService.deleteSave falhou', err, { sessionId }),
+      }),
+    );
+  }
+
+  enrichField(payload: EnrichPayload): Observable<EnrichResponse> {
+    return this.http.post<EnrichResponse>(`${this.baseUrl}/games/enrich`, payload).pipe(
+      tap({
+        next: (res) => this.log.info('ApiService.enrichField', { field: payload.field, length: res.enriched?.length }),
+        error: (err) => this.log.error('ApiService.enrichField falhou', err, { field: payload.field }),
       }),
     );
   }

@@ -266,8 +266,11 @@ export function initialContextSystemPrompt(writingStyle: string): string {
   return `Você é um gerador de cenários de RPG. Crie apenas a descrição inicial de onde o jogo começa. Adapte o tom da descrição para o estilo de escrita: ${writingStyle}.`;
 }
 
-export function initialContextHumanPrompt(style: string, writingStyle: string): string {
-  return `Descreva o local inicial (em até 3 frases) onde os personagens começam uma aventura do gênero ${style} no estilo de escrita ${writingStyle}. Responda em português.`;
+export function initialContextHumanPrompt(style: string, writingStyle: string, baseContext?: string): string {
+  const base = baseContext && baseContext.trim()
+    ? `\n\nContexto base fornecido pelo usuário (respeite e enriqueça, não contradiga):\n${baseContext.trim()}`
+    : '';
+  return `Descreva o local inicial (em até 3 frases) onde os personagens começam uma aventura do gênero ${style} no estilo de escrita ${writingStyle}.${base} Responda em português.`;
 }
 
 export function playerCharacterSystemPrompt(writingStyle: string): string {
@@ -513,6 +516,65 @@ export function jsonRepairHumanPrompt(invalidJson: string, schemaSpec: string, c
     'JSON:',
   ].join('\n');
 }
+
+// ── Enrich Field (botão "Enriquecer" do formulário de cenário custom) ──
+
+function summaryOfField(
+  label: string,
+  values: { name?: string | undefined; description?: string | undefined; type?: string | undefined }[] | undefined,
+): string {
+  if (!values || values.length === 0) return '';
+  const lines = values.map((v) => `- ${v.name ?? '?'}${v.type ? ` (${v.type})` : ''}: ${v.description ?? ''}`).join('\n');
+  return `\n${label}:\n${lines}`;
+}
+
+export function enrichFieldSystemPrompt(): string {
+  return [
+    'Você é um assistente de criação de mundos para RPG narrativo.',
+    'Sua função é reescrever um único campo de um formulário, tornando-o mais rico, vívido e imersivo.',
+    'Mantenha a intenção original do usuário e seja coerente com o restante do mundo informado como contexto.',
+    'Responda APENAS com o texto melhorado, sem explicações, sem prefixos e sem aspas.',
+  ].join('\n');
+}
+
+export function enrichFieldHumanPrompt(
+  field: string,
+  value: string,
+  context: {
+    narrativeStyle?: string | undefined;
+    writingStyle?: string | undefined;
+    worldContext?: string | undefined;
+    characters?: { name?: string | undefined; description?: string | undefined }[] | undefined;
+    locations?: { name?: string | undefined; description?: string | undefined }[] | undefined;
+    concepts?: { name?: string | undefined; type?: string | undefined; description?: string | undefined }[] | undefined;
+  },
+): string {
+  const ctxParts: string[] = [];
+  if (context.narrativeStyle) ctxParts.push(`Gênero: ${context.narrativeStyle}`);
+  if (context.writingStyle) ctxParts.push(`Estilo: ${context.writingStyle}`);
+  if (context.worldContext) ctxParts.push(`Contexto do mundo: ${context.worldContext}`);
+  ctxParts.push(summaryOfField('Personagens', context.characters));
+  ctxParts.push(summaryOfField('Lugares', context.locations));
+  ctxParts.push(summaryOfField('Itens/Conceitos', context.concepts));
+  const contextStr = ctxParts.filter((p) => p && p.trim().length > 0).join('\n');
+
+  return [
+    `Campo a enriquecer: ${field}`,
+    '',
+    '--- Texto atual do campo ---',
+    value && value.trim() ? value : '(vazio — crie uma descrição adequada ao contexto do mundo)',
+    '',
+    '--- Contexto dos outros campos preenchidos ---',
+    contextStr || '(nenhum outro campo preenchido)',
+    '',
+    'Instruções:',
+    '- Expanda o texto do campo, preservando a intenção original.',
+    '- Torne a descrição mais vívida e imersiva, coerente com o contexto do mundo.',
+    '- Se o campo estiver vazio, gere uma descrição padrão adequada ao gênero/estilo.',
+    '- Retorne APENAS o texto melhorado.',
+  ].join('\n');
+}
+
 
 export function contextReductionNote(level: number): string {
   return `Atenção: parte do histórico foi condensada para caber no contexto (nível de redução ${level}). Continue coerente com o resumo e com as ações deste turno.`;

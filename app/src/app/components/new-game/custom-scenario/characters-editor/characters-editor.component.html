@@ -1,0 +1,97 @@
+<div class="editor">
+  <div class="editor__head">
+    <h3 class="editor__title">
+      <mat-icon>group</mat-icon>
+      Personagens ({{ characters.length }})
+    </h3>
+    <button mat-stroked-button color="primary" type="button" (click)="addCharacter()">
+      <mat-icon>add</mat-icon>
+      Adicionar personagem
+    </button>
+  </div>
+
+  @if (characters.length === 0) {
+    <p class="editor__empty">Nenhum personagem ainda. Adicione o jogador e NPCs.</p>
+  }
+
+  @for (char of characters; track $index; let i = $index) {
+    <mat-divider></mat-divider>
+    <div class="char-row">
+      <div class="char-row__header">
+        <mat-slide-toggle color="primary" [(ngModel)]="char.isPlayer" (ngModelChange)="onPlayerChange(char, $event)">
+          {{ char.isPlayer ? 'Jogador' : 'NPC' }}
+        </mat-slide-toggle>
+        <button mat-icon-button color="warn" type="button" (click)="removeCharacter(i)" aria-label="Remover personagem">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </div>
+
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Nome</mat-label>
+        <input matInput [(ngModel)]="char.name" placeholder="Ex: Aria, o Ladina" />
+      </mat-form-field>
+
+      <div class="field-with-enrich">
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>Descrição</mat-label>
+          <textarea matInput [(ngModel)]="char.description" rows="3"
+            placeholder="Aparência, origem, visual…"></textarea>
+        </mat-form-field>
+        <ng-enrich-button
+          [field]="'Descrição de ' + (char.name || 'personagem')"
+          [value]="char.description"
+          [getContext]="getContext"
+          (enriched)="char.description = $event">
+        </ng-enrich-button>
+      </div>
+
+      <div class="field-with-enrich">
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>Personalidade</mat-label>
+          <textarea matInput [(ngModel)]="char.personality" rows="2"
+            placeholder="Como ele age e reage…"></textarea>
+        </mat-form-field>
+        <ng-enrich-button
+          [field]="'Personalidade de ' + (char.name || 'personagem')"
+          [value]="char.personality"
+          [getContext]="getContext"
+          (enriched)="char.personality = $event">
+        </ng-enrich-button>
+      </div>
+
+      @if (!char.isPlayer) {
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>Objetivo de longo prazo</mat-label>
+          <input matInput [(ngModel)]="char.longTermObjective"
+            placeholder="O que este personagem busca?" />
+        </mat-form-field>
+      }
+
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Local inicial</mat-label>
+        <input matInput [attr.list]="'loc-list-' + i" [(ngModel)]="char.initialLocation"
+          placeholder="Escolha ou digite um local" />
+        <datalist [id]="'loc-list-' + i">
+          @for (loc of locations; track loc.id) {
+            <option [value]="loc.name"></option>
+          }
+        </datalist>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Inventário inicial</mat-label>
+        <mat-chip-grid #inventoryGrid>
+          @for (item of char.inventory; track item; let ci = $index) {
+            <mat-chip-row (removed)="removeInventoryItem(char, ci)">{{ item }}
+              <mat-icon matChipRemove>close</mat-icon>
+            </mat-chip-row>
+          }
+        </mat-chip-grid>
+        <input placeholder="Digite um item e Enter"
+          [matChipInputFor]="inventoryGrid"
+          [matChipInputSeparatorKeyCodes]="separatorKeys"
+          (matChipInputTokenEnd)="addInventoryItem(char, $event)" />
+      </mat-form-field>
+    </div>
+  }
+</div>

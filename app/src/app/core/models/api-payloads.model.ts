@@ -2,6 +2,7 @@ import type { GameState } from './game-state.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 import type { GameSettings } from './game-settings.model';
 import type { SessionBundle, SavedGameSummary } from './session-save.model';
+import type { WorldTemplate } from './world-template.model';
 
 export type ActionType = 'observe' | 'speak' | 'attack' | 'sneak' | 'use_item' | 'interact' | 'flee' | 'free';
 export type ActionIntent = 'curious' | 'aggressive' | 'cautious' | 'friendly' | 'intimidating' | 'desperate' | 'neutral';
@@ -22,8 +23,19 @@ export interface CreateGameTemplatePayload {
 
 export interface CreateGameCustomPayload {
   mode: 'custom';
-  customPrompt: string;
+  customPrompt?: string;        // mantido p/ compatibilidade (prompt legado)
+  world?: WorldTemplate;        // novo: cenário estruturado
   settings?: Partial<GameSettings>;
+}
+
+export interface EnrichPayload {
+  field: string;
+  value: string;
+  context?: WorldTemplate;
+}
+
+export interface EnrichResponse {
+  enriched: string;
 }
 
 export type CreateGamePayload = CreateGameTemplatePayload | CreateGameCustomPayload;

@@ -46,8 +46,17 @@ export class CustomScenarioPageComponent {
   onCreateCustom(data: CustomScenarioData): void {
     this.log.info('Criando jogo a partir de cenário customizado', { narrativeStyle: data.narrativeStyle, writingStyle: data.writingStyle });
     this.isCreating.set(true);
-    const customPrompt = `Gênero: ${data.narrativeStyle || 'Personalizado'}\nEstilo: ${data.writingStyle || 'Livre'}\nContexto: ${data.worldContext}`;
-    this.api.createGame({ mode: 'custom', customPrompt }).subscribe({
+    const world: WorldTemplate = {
+      name: data.narrativeStyle || 'Cenário Customizado',
+      description: data.worldContext.slice(0, 120),
+      narrativeStyle: data.narrativeStyle,
+      writingStyle: data.writingStyle,
+      worldContext: data.worldContext,
+      characters: data.characters,
+      locations: data.locations,
+      concepts: data.concepts,
+    };
+    this.api.createGame({ mode: 'custom', world }).subscribe({
       next: (res) => {
         this.log.info('Jogo customizado criado com sucesso', { sessionId: res.sessionId });
         this.router.navigate(['/game', res.sessionId]);

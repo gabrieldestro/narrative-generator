@@ -1,0 +1,13 @@
+<button
+  mat-icon-button
+  matTooltip="Enriquecer com IA"
+  class="enrich-btn"
+  (click)="onEnrich()"
+  [disabled]="loading()"
+  [attr.aria-label]="'Enriquecer campo ' + field">
+  @if (loading()) {
+    <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
+  } @else {
+    <mat-icon>auto_awesome</mat-icon>
+  }
+</button>
