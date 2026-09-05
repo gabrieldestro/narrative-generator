@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import type { GameSettings } from '../models/game-settings.model';
 import { DEFAULT_GAME_SETTINGS } from '../models/game-settings.model';
 
@@ -8,6 +8,7 @@ export class SettingsService {
   private readonly settingsSignal = signal<GameSettings>({ ...DEFAULT_GAME_SETTINGS });
 
   readonly settings = this.settingsSignal.asReadonly();
+  readonly isAdminActive = computed(() => this.settingsSignal().godMode || this.settingsSignal().debug);
 
   constructor() {
     this.loadFromStorage();

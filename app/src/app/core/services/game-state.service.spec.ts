@@ -48,6 +48,30 @@ describe('GameStateService.restore', () => {
     expect(service.error()).toBeNull();
   });
 
+  it('deve aplicar resultado de comando administrativo (applyAdminResult)', () => {
+    const initialState = makeState();
+    service.setGameState('s-1', initialState);
+    service.isLoading.set(true);
+
+    const updatedState: GameState = {
+      ...initialState,
+      characters: [
+        ...initialState.characters,
+        { id: '2', name: 'Lobo', description: 'Animal', personality: 'Feroz', isPlayer: false },
+      ]
+    };
+
+    service.applyAdminResult({
+      sessionId: 's-1',
+      message: 'Personagem Lobo adicionado',
+      updatedState,
+    });
+
+    expect(service.isLoading()).toBe(false);
+    expect(service.gameState()?.characters.length).toBe(2);
+    expect(service.error()).toBeNull();
+  });
+
   it('deve restaurar zerando painéis de debug (npcDecisions/diceRolls/arbiterResolution)', () => {
     service.npcDecisions.set([{ characterName: 'X', action: 'a', reasoning: 'r', success: true }]);
     service.diceRolls.set([{ characterName: 'X', roll: 12 }]);

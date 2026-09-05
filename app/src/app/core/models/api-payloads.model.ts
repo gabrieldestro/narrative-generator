@@ -74,3 +74,24 @@ export interface GameStateResponse {
 export type ListSavesResponse = SavedGameSummary[];
 
 export type LoadSaveResponse = SessionBundle;
+
+export interface ExtractedCharacterSheet {
+  name: string;
+  description: string;
+  personality: string;
+  currentLocation: string;
+}
+
+export interface AdminCommandPayload {
+  command: string;
+  args?: string[];
+  fields?: Record<string, unknown>;
+  settings?: Partial<GameSettings>;
+}
+
+export interface AdminCommandResponse {
+  sessionId: string;
+  message: string;
+  updatedState: GameState;
+  payload?: { sheet?: ExtractedCharacterSheet } | any;
+}

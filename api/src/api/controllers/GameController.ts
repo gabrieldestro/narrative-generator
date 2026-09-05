@@ -12,6 +12,7 @@ import type { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
 import type { ILogger } from '../../domain/ports.js';
 import type { WorldTemplate } from '../../domain/types.js';
 import { ActionBuilderService } from '../../application/ActionBuilderService.js';
+import { AdminCommandService } from '../../application/AdminCommandService.js';
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -33,6 +34,7 @@ export interface CreateGameRequestBody {
 
 export class GameController {
   private readonly logger: ILogger;
+  private readonly adminCommandService: AdminCommandService;
 
   constructor(
     private readonly worldRepo: WorldTemplateRepository,
@@ -43,8 +45,10 @@ export class GameController {
     private readonly sessionRepo: SessionRepository,
     private readonly saveStore: FileSaveStore,
     logger?: ILogger,
+    adminCommandService?: AdminCommandService,
   ) {
     this.logger = logger ?? new NullLogger();
+    this.adminCommandService = adminCommandService ?? new AdminCommandService(this.gameManagementService, this.llmService, this.logger);
   }
 
   // Monta/atualiza o bundle de save e grava no disco (auto-save).
@@ -375,6 +379,55 @@ export class GameController {
       sessionId,
       narration,
       updatedState: state
+    });
+  }
+
+  public async executeCommand(
+    req: FastifyRequest<{
+      Params: { sessionId: string };
+      Body: {
+        command: string;
+        args?: string[];
+        fields?: Record<string, unknown>;
+        settings?: Partial<GameSettings>;
+      };
+    }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId } = req.params;
+    const payload = req.body;
+    const state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      this.logger.warn('Sessão não encontrada para executeCommand', { sessionId });
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+
+    if (!payload || !payload.command) {
+      return reply.status(400).send({ error: "O campo 'command' é obrigatório no corpo da requisição." });
+    }
+
+    if (payload.settings) {
+      this.gameEngine.updateSettings(payload.settings);
+    }
+
+    const reqLog = this.logger.child({ sessionId, command: payload.command });
+    reqLog.info('executeCommand chamado');
+
+    const result = await this.adminCommandService.execute(state, {
+      command: payload.command,
+      args: payload.args,
+      fields: payload.fields
+    });
+
+    this.sessionRepo.saveSession(sessionId, result.state);
+    await this.persistBundle(sessionId, result.state);
+
+    return reply.status(200).send({
+      sessionId,
+      message: result.message,
+      updatedState: result.state,
+      payload: result.payload
     });
   }
 

@@ -11,6 +11,7 @@ import { CpuReflectionService } from '../application/npcAgent/CpuReflectionServi
 import { GameManagementService } from '../application/GameManagementService.js';
 import { SessionRepository } from '../infrastructure/SessionRepository.js';
 import { FileSaveStore } from '../infrastructure/FileSaveStore.js';
+import { AdminCommandService } from '../application/AdminCommandService.js';
 import { GameController } from './controllers/GameController.js';
 import { EnrichController } from './controllers/EnrichController.js';
 import { registerGameRoutes } from './routes/gameRoutes.js';
@@ -77,6 +78,7 @@ export async function buildApp(options: AppOptions = {}) {
   }
 
   const gameManagementService = new GameManagementService(llmService, logger);
+  const adminCommandService = new AdminCommandService(gameManagementService, llmService, logger);
   const cpuReflectionService = new CpuReflectionService(llmService, {}, logger);
   const sessionFactory = new SessionFactory(undefined, undefined, undefined, llmService, worldRepo);
   const gameEngine = new GameEngine(
@@ -88,7 +90,8 @@ export async function buildApp(options: AppOptions = {}) {
     sessionFactory,
     { godMode: false },
     gameManagementService,
-    logger
+    logger,
+    adminCommandService
   );
 
   const gameController = new GameController(
@@ -99,7 +102,8 @@ export async function buildApp(options: AppOptions = {}) {
     gameManagementService,
     sessionRepo,
     saveStore,
-    logger
+    logger,
+    adminCommandService
   );
 
   const enrichController = new EnrichController(llmService, logger);

@@ -84,6 +84,12 @@ export class GameStateService {
     this.error.set(null);
   }
 
+  applyAdminResult(result: import('../models/api-payloads.model').AdminCommandResponse): void {
+    this.isLoading.set(false);
+    this.gameState.set(result.updatedState);
+    this.error.set(null);
+  }
+
   setTurnResult(result: TurnResponse): void {
     const turnBeforeUpdate = this.gameState()?.turnNumber ?? 1;
     this.isLoading.set(false);

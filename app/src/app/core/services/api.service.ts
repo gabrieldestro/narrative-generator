@@ -5,7 +5,7 @@ import { LoggingService } from './logging.service';
 import { SettingsService } from './settings.service';
 import type { GameSettings } from '../models/game-settings.model';
 import type { WorldTemplate } from '../models/world-template.model';
-import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse, NarrateResponse, EnrichPayload, EnrichResponse } from '../models/api-payloads.model';
+import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse, NarrateResponse, EnrichPayload, EnrichResponse, AdminCommandPayload, AdminCommandResponse } from '../models/api-payloads.model';
 import type { SavedGameSummary, SessionBundle } from '../models/session-save.model';
 
 @Injectable({ providedIn: 'root' })
@@ -71,6 +71,16 @@ export class ApiService {
       tap({
         next: (res) => this.log.info('ApiService.narrateTurn', { sessionId, turnNumber: res.updatedState?.turnNumber }),
         error: (err) => this.log.error('ApiService.narrateTurn falhou', err, { sessionId }),
+      }),
+    );
+  }
+
+  executeCommand(sessionId: string, payload: AdminCommandPayload): Observable<AdminCommandResponse> {
+    const body = { ...payload, settings: this.buildEngineSettings() };
+    return this.http.post<AdminCommandResponse>(`${this.baseUrl}/games/${sessionId}/command`, body).pipe(
+      tap({
+        next: (res) => this.log.info('ApiService.executeCommand', { sessionId, command: payload.command }),
+        error: (err) => this.log.error('ApiService.executeCommand falhou', err, { sessionId, command: payload.command }),
       }),
     );
   }

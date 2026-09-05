@@ -6,6 +6,7 @@ import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
 import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
 import { GameManagementService } from "./GameManagementService.js";
+import { AdminCommandService } from "./AdminCommandService.js";
 
 class DummyInput implements IUserInput {
   async question(_prompt: string): Promise<string> {
@@ -36,6 +37,7 @@ export class GameEngine {
   private readonly input: IUserInput;
   private readonly output: IOutputWriter;
   private readonly logger: ILogger;
+  private readonly adminCommandService: AdminCommandService;
 
   constructor(
     input?: IUserInput,
@@ -46,13 +48,15 @@ export class GameEngine {
     private readonly sessionFactory?: SessionFactory,
     settings: Partial<GameSettings> = {},
     gameManagementService?: GameManagementService,
-    logger?: ILogger
+    logger?: ILogger,
+    adminCommandService?: AdminCommandService
   ) {
     this.input = input ?? new DummyInput();
     this.output = output ?? new DummyOutput();
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.gameManagementService = gameManagementService ?? new GameManagementService(this.llmService!);
     this.logger = logger ?? new NullLogger();
+    this.adminCommandService = adminCommandService ?? new AdminCommandService(this.gameManagementService, this.llmService, this.logger);
   }
 
   public updateSettings(partial: Partial<GameSettings>): void {
@@ -401,293 +405,50 @@ export class GameEngine {
     const command = parts[0]!.toLowerCase();
     const args = parts.slice(1);
 
-    switch (command) {
-      case "/help":
-        this.output.writeLine("\n--- Comandos Administrativos Disponíveis ---");
-        this.output.writeLine("/help - Mostra este menu de ajuda.");
-        this.output.writeLine("/observe <detalhe da cena> - Detalha/observa um aspecto da cena sem avançar o turno.");
-        this.output.writeLine("/narrate <narração declarada> - Força o narrador a narrar o que você declarou e resolve o estado do mundo, sem avançar o turno.");
-        this.output.writeLine("/status ou /chars - Mostra os personagens, locais, inventários e status.");
-        this.output.writeLine("/map - Mostra o mapa de localizações conhecidas.");
-        this.output.writeLine("/concepts - Mostra a lista de conceitos abstratos conhecidos do mundo.");
-        this.output.writeLine("/add-item <personagem> <item> - Adiciona um item ao inventário.");
-        this.output.writeLine("/remove-item <personagem> <item> - Remove um item do inventário.");
-        this.output.writeLine("/add-char - Cria interativamente um novo personagem.");
-        this.output.writeLine("/remove-char <personagem> - Marca o personagem como perdido ('lost').");
-        this.output.writeLine("/add-location - Adiciona manualmente uma localização ao mapa.");
-        this.output.writeLine("/remove-location <id> - Remove uma localização do mapa pelo ID.");
-        this.output.writeLine("/add-concept - Adiciona manualmente um conceito abstrato do mundo.");
-        this.output.writeLine("/remove-concept <id> - Remove um conceito abstrato pelo ID.");
-        this.output.writeLine("/extract - Extrai mudanças de estado da última narrativa automaticamente.");
-        this.output.writeLine("/extract-char - Gera ficha de um personagem a partir do histórico via LLM.");
-        break;
-
-      case "/observe": {
-        const observeText = args.join(" ").trim();
-        if (!observeText) {
-          this.output.writeLine("Uso: /observe <o que você deseja observar ou detalhar da cena>");
-          break;
-        }
-        const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
-        const charName = playerChar?.name ?? 'Jogador';
-
-        this.output.writeLine(`\n[Observação] ${charName} examina a cena...`);
-        const observation = await this.recordObservation(state, observeText, charName);
-        this.output.writeLine("--------------------------------------------------");
-        this.output.writeLine(observation);
-        this.output.writeLine("--------------------------------------------------");
-        break;
+    if (command === "/observe") {
+      const observeText = args.join(" ").trim();
+      if (!observeText) {
+        this.output.writeLine("Uso: /observe <o que você deseja observar ou detalhar da cena>");
+        return;
       }
+      const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+      const charName = playerChar?.name ?? 'Jogador';
 
-      case "/narrate": {
-        const narrateText = args.join(" ").trim();
-        if (!narrateText) {
-          this.output.writeLine("Uso: /narrate <o que você declara que acontece na cena>");
-          break;
-        }
-        const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
-        const charName = playerChar?.name ?? 'Jogador';
+      this.output.writeLine(`\n[Observação] ${charName} examina a cena...`);
+      const observation = await this.recordObservation(state, observeText, charName);
+      this.output.writeLine("--------------------------------------------------");
+      this.output.writeLine(observation);
+      this.output.writeLine("--------------------------------------------------");
+      return;
+    }
 
-        this.output.writeLine(`\n[Narração Declarada] ${charName} declara a cena...`);
-        const narration = await this.recordPlayerNarration(state, narrateText, charName);
-        this.output.writeLine("--------------------------------------------------");
-        this.output.writeLine(narration);
-        this.output.writeLine("--------------------------------------------------");
-        break;
+    if (command === "/narrate") {
+      const narrateText = args.join(" ").trim();
+      if (!narrateText) {
+        this.output.writeLine("Uso: /narrate <o que você declara que acontece na cena>");
+        return;
       }
+      const playerChar = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
+      const charName = playerChar?.name ?? 'Jogador';
 
-      case "/status":
-      case "/chars":
-        this.output.writeLine("\n--- Status dos Personagens ---");
-        for (const char of state.characters) {
-          this.output.writeLine(`- ${char.name} [Status: ${char.status || 'active'}]`);
-          this.output.writeLine(`  Local: ${char.currentLocation || 'Desconhecido'}`);
-          this.output.writeLine(`  Inventário: [${char.inventory ? char.inventory.join(', ') : ''}]`);
-          this.output.writeLine(`  Descrição: ${char.description}`);
-        }
-        break;
+      this.output.writeLine(`\n[Narração Declarada] ${charName} declara a cena...`);
+      const narration = await this.recordPlayerNarration(state, narrateText, charName);
+      this.output.writeLine("--------------------------------------------------");
+      this.output.writeLine(narration);
+      this.output.writeLine("--------------------------------------------------");
+      return;
+    }
 
-      case "/map":
-        this.output.writeLine("\n--- Mapa de Localizações ---");
-        if (!state.locations || state.locations.length === 0) {
-          this.output.writeLine("(Sem localizações cadastradas)");
-        } else {
-          for (const loc of state.locations) {
-            this.output.writeLine(`- ${loc.name} (ID: ${loc.id})`);
-            this.output.writeLine(`  Descrição: ${loc.description}`);
-            this.output.writeLine(`  Conexões: [${loc.connectedTo.join(', ')}]`);
-          }
-        }
-        break;
+    if (command === "/extract-char") {
+      this.output.writeLine("\n[LLM] Extração interativa de ficha de personagem a partir do histórico.");
+      const result = await this.adminCommandService.execute(state, {
+        command,
+        collectFields: async (_field, prompt) => this.input.question(prompt)
+      });
 
-      case "/concepts":
-        this.output.writeLine("\n--- Conceitos Abstratos do Mundo ---");
-        if (!state.concepts || state.concepts.length === 0) {
-          this.output.writeLine("(Sem conceitos abstratos cadastrados)");
-        } else {
-          const typeLabels: Record<string, string> = {
-            item: 'Item',
-            faction: 'Facção',
-            state: 'Estado/Nação',
-            region: 'Região',
-            place: 'Lugar',
-            custom: 'Conceito'
-          };
-          for (const c of state.concepts) {
-            const label = typeLabels[c.type] || 'Conceito';
-            this.output.writeLine(`- [${label}] ${c.name} (ID: ${c.id})`);
-            this.output.writeLine(`  Descrição: ${c.description}`);
-          }
-        }
-        break;
-
-      case "/add-item": {
-        if (args.length < 2) {
-          this.output.writeLine("Uso: /add-item <personagem> <nome do item>");
-          break;
-        }
-        const charName = args[0]!;
-        const item = args.slice(1).join(" ");
-        const updated = this.gameManagementService.addItemToCharacter(state, charName, item);
-        state.characters = updated.characters;
-        this.output.writeLine(`Item "${item}" adicionado ao inventário de ${charName}.`);
-        break;
-      }
-
-      case "/remove-item": {
-        if (args.length < 2) {
-          this.output.writeLine("Uso: /remove-item <personagem> <nome do item>");
-          break;
-        }
-        const charName = args[0]!;
-        const item = args.slice(1).join(" ");
-        const updated = this.gameManagementService.removeItemFromCharacter(state, charName, item);
-        state.characters = updated.characters;
-        this.output.writeLine(`Item "${item}" removido do inventário de ${charName}.`);
-        break;
-      }
-
-      case "/add-char": {
-        const name = await this.input.question("Nome do novo personagem: ");
-        const description = await this.input.question("Descrição: ");
-        const personality = await this.input.question("Personalidade: ");
-        const location = await this.input.question("Localização inicial: ");
-        const updated = this.gameManagementService.addCharacter(state, {
-          name,
-          description,
-          personality,
-          currentLocation: location,
-          isPlayer: false,
-          inventory: [],
-          status: 'active'
-        });
-        state.characters = updated.characters;
-        this.output.writeLine(`Personagem "${name}" adicionado com sucesso!`);
-        break;
-      }
-
-      case "/remove-char": {
-        if (args.length < 1) {
-          this.output.writeLine("Uso: /remove-char <personagem>");
-          break;
-        }
-        const charName = args.join(" ");
-        const updated = this.gameManagementService.setCharacterStatus(state, charName, "lost");
-        state.characters = updated.characters;
-        this.output.writeLine(`Personagem "${charName}" marcado como perdido (lost).`);
-        break;
-      }
-
-      case "/extract": {
-        this.output.writeLine("[LLM] Executando extração automática baseada nas últimas narrativas...");
-        const lastNarrative = this.getLastNarrative(state.history);
-        const updated = await this.gameManagementService.applyAutomaticStateUpdates(state, lastNarrative);
-        state.characters = updated.characters;
-        if (updated.locations) {
-          state.locations = updated.locations;
-        }
-        this.output.writeLine("Extração concluída e estado atualizado!");
-        break;
-      }
-
-      case "/add-location": {
-        const locId = await this.input.question("ID único do local (ex: biblioteca, poco_fundo): ");
-        if (!locId.trim()) {
-          this.output.writeLine("ID inválido. Operação cancelada.");
-          break;
-        }
-        const locName = await this.input.question("Nome do local: ");
-        const locDesc = await this.input.question("Descrição breve: ");
-        const locConnRaw = await this.input.question("IDs dos locais conectados (separados por vírgula, ou vazio): ");
-        const connectedTo = locConnRaw
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-        const updatedState = this.gameManagementService.addLocation(state, {
-          id: locId.trim(),
-          name: locName,
-          description: locDesc,
-          connectedTo,
-        });
-        state.locations = updatedState.locations ?? [];
-        this.output.writeLine(`Local "${locName}" (ID: ${locId.trim()}) adicionado ao mapa com sucesso!`);
-        if (connectedTo.length > 0) {
-          this.output.writeLine(`  Conexões bidirecionais criadas com: [${connectedTo.join(", ")}]`);
-        }
-        break;
-      }
-
-      case "/remove-location": {
-        if (args.length < 1) {
-          this.output.writeLine("Uso: /remove-location <id_do_local>");
-          this.output.writeLine("Dica: use /map para ver os IDs disponíveis.");
-          break;
-        }
-        const locationId = args[0]!;
-        const existingLoc = (state.locations ?? []).find((l) => l.id === locationId);
-        if (!existingLoc) {
-          this.output.writeLine(`Local com ID "${locationId}" não encontrado. Use /map para ver os IDs disponíveis.`);
-          break;
-        }
-        const updatedState = this.gameManagementService.removeLocation(state, locationId);
-        state.locations = updatedState.locations ?? [];
-        this.output.writeLine(`Local "${existingLoc.name}" (ID: ${locationId}) removido do mapa.`);
-        this.output.writeLine("  Referências nos demais locais foram limpas automaticamente.");
-        break;
-      }
-
-      case "/add-concept": {
-        const conceptId = await this.input.question("ID único do conceito (ex: olhar_de_merlim, arasaka): ");
-        if (!conceptId.trim()) {
-          this.output.writeLine("ID inválido. Operação cancelada.");
-          break;
-        }
-        const conceptTypeRaw = await this.input.question("Tipo (item, faction, state, region, place, custom): ");
-        const type = conceptTypeRaw.trim().toLowerCase();
-        const validTypes = ['item', 'faction', 'state', 'region', 'place', 'custom'];
-        if (!validTypes.includes(type)) {
-          this.output.writeLine(`Tipo inválido "${type}". Deve ser um de: ${validTypes.join(', ')}. Operação cancelada.`);
-          break;
-        }
-        const conceptName = await this.input.question("Nome do conceito: ");
-        const conceptDesc = await this.input.question("Descrição breve: ");
-        const updatedState = this.gameManagementService.addConcept(state, {
-          id: conceptId.trim(),
-          type: type as any,
-          name: conceptName,
-          description: conceptDesc,
-        });
-        state.concepts = updatedState.concepts ?? [];
-        this.output.writeLine(`Conceito "${conceptName}" (ID: ${conceptId.trim()}) adicionado com sucesso!`);
-        break;
-      }
-
-      case "/remove-concept": {
-        if (args.length < 1) {
-          this.output.writeLine("Uso: /remove-concept <id_do_conceito>");
-          this.output.writeLine("Dica: use /concepts para ver os IDs disponíveis.");
-          break;
-        }
-        const conceptId = args[0]!;
-        const existingConcept = (state.concepts ?? []).find((c) => c.id === conceptId);
-        if (!existingConcept) {
-          this.output.writeLine(`Conceito com ID "${conceptId}" não encontrado. Use /concepts para ver os IDs disponíveis.`);
-          break;
-        }
-        const updatedState = this.gameManagementService.removeConcept(state, conceptId);
-        state.concepts = updatedState.concepts ?? [];
-        this.output.writeLine(`Conceito "${existingConcept.name}" (ID: ${conceptId}) removido.`);
-        break;
-      }
-
-      case "/extract-char": {
-        this.output.writeLine("\n[LLM] Extração interativa de ficha de personagem a partir do histórico.");
-        const charName = await this.input.question("Nome do personagem a extrair: ");
-        if (!charName.trim()) {
-          this.output.writeLine("Nome inválido. Operação cancelada.");
-          break;
-        }
-        this.output.writeLine(`Histórico disponível: ${state.history.length} entrada(s).`);
-        const turnsRaw = await this.input.question(
-          `Quantos turnos do histórico analisar? (1-${state.history.length}, padrão = todos): `
-        );
-        const turnsCount = parseInt(turnsRaw, 10);
-        const excerpt = isNaN(turnsCount) || turnsCount <= 0
-          ? state.history.join("\n\n")
-          : state.history.slice(-turnsCount).join("\n\n");
-
-        this.output.writeLine(`[LLM] Gerando ficha de "${charName}" a partir do histórico...`);
-        const sheet = await this.llmService!.extractCharacterFromHistory(
-          charName,
-          excerpt,
-          state.narrativeStyle,
-        );
-
-        if (!sheet) {
-          this.output.writeLine(`[Erro] Não foi possível gerar a ficha de "${charName}". Tente o comando /add-char para adicioná-lo manualmente.`);
-          break;
-        }
-
+      const payload = result.payload as { sheet?: any } | undefined;
+      if (payload?.sheet) {
+        const sheet = payload.sheet;
         this.output.writeLine(`\n--- Ficha gerada pelo LLM ---`);
         this.output.writeLine(`  Nome: ${sheet.name}`);
         this.output.writeLine(`  Descrição: ${sheet.description}`);
@@ -696,26 +457,41 @@ export class GameEngine {
 
         const confirm = await this.input.question("\nAdicionar este personagem ao estado? (s/n): ");
         if (confirm.toLowerCase() === "s") {
-          const updatedState = this.gameManagementService.addCharacter(state, {
-            name: sheet.name,
-            description: sheet.description,
-            personality: sheet.personality,
-            currentLocation: sheet.currentLocation,
-            isPlayer: false,
-            inventory: [],
-            status: "active",
+          const addResult = await this.adminCommandService.execute(state, {
+            command: "/add-char",
+            fields: {
+              name: sheet.name,
+              description: sheet.description,
+              personality: sheet.personality,
+              location: sheet.currentLocation
+            }
           });
-          state.characters = updatedState.characters;
-          this.output.writeLine(`Personagem "${sheet.name}" adicionado com sucesso!`);
+          state.characters = addResult.state.characters;
+          this.output.writeLine(addResult.message);
         } else {
           this.output.writeLine("Operação cancelada.");
         }
-        break;
+      } else {
+        this.output.writeLine(result.message);
       }
-
-      default:
-        this.output.writeLine(`Comando desconhecido: ${command}. Digite /help para ajuda.`);
+      return;
     }
+
+    const result = await this.adminCommandService.execute(state, {
+      command,
+      args,
+      collectFields: async (_field, prompt) => this.input.question(prompt)
+    });
+
+    state.characters = result.state.characters;
+    if (result.state.locations) {
+      state.locations = result.state.locations;
+    }
+    if (result.state.concepts) {
+      state.concepts = result.state.concepts;
+    }
+
+    this.output.writeLine(result.message);
   }
 
   private getLastNarrative(history: string[]): string {

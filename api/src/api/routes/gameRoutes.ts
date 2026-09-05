@@ -176,6 +176,29 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
     },
   }, (req: any, reply) => controller.narrate(req, reply));
 
+  // Executa um comando administrativo (itens, personagens, locais, conceitos, extrações)
+  fastify.post('/api/games/:sessionId/command', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: { type: 'string' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['command'],
+        properties: {
+          command: { type: 'string' },
+          args: { type: 'array', items: { type: 'string' } },
+          fields: { type: 'object', additionalProperties: true },
+          settings: { type: 'object', additionalProperties: true },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.executeCommand(req, reply));
+
   // Consulta o estado do jogo
   fastify.get('/api/games/:sessionId/state', {
     schema: {

@@ -6,6 +6,13 @@
   <span class="game-header__world-name">{{ gameState.narrativeStyle() || 'Jogo' }}</span>
   <span class="spacer"></span>
   <span class="game-header__turn">Turno #{{ gameState.turnNumber() }}</span>
+
+  @if (settingsService.isAdminActive()) {
+    <button mat-icon-button (click)="openAdminDialog()" aria-label="Abrir comandos administrativos" class="game-header__admin-btn">
+      <mat-icon>admin_panel_settings</mat-icon>
+    </button>
+  }
+
   <button mat-icon-button (click)="toggleLeft()" aria-label="Alternar painel de estado">
     <mat-icon>assignment</mat-icon>
   </button>

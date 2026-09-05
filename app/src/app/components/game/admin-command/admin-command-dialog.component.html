@@ -1,0 +1,253 @@
+﻿<div class="admin-dialog">
+  <div class="admin-dialog__header">
+    <div class="admin-dialog__title">
+      <mat-icon class="admin-dialog__title-icon">admin_panel_settings</mat-icon>
+      <h2>Painel de Administração</h2>
+    </div>
+    <button mat-icon-button (click)="close()" aria-label="Fechar painel de administração">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-dialog-content class="admin-dialog__content">
+    <mat-tab-group animationDuration="200ms" class="admin-tabs">
+      <!-- ABA 1: ITENS -->
+      <mat-tab label="Itens">
+        <form [formGroup]="itemForm" (ngSubmit)="submitItem()" class="admin-form">
+          <div class="admin-form__row">
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Ação</mat-label>
+              <mat-select formControlName="action">
+                <mat-option value="add">Adicionar Item</mat-option>
+                <mat-option value="remove">Remover Item</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Personagem</mat-label>
+              <mat-select formControlName="characterName">
+                @for (c of activeCharacters(); track c.id) {
+                  <mat-option [value]="c.name">{{ c.name }} {{ c.isPlayer ? '(Jogador)' : '' }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <mat-form-field appearance="outline" class="admin-form__field">
+            <mat-label>Nome do Item</mat-label>
+            <input matInput formControlName="itemName" placeholder="Ex: Chave de Prata, Poção"/>
+          </mat-form-field>
+
+          <button mat-flat-button class="admin-btn admin-btn--primary" [disabled]="itemForm.invalid || isSubmitting()" type="submit">
+            @if (isSubmitting()) { <mat-spinner diameter="18"/> }
+            <span>{{ itemForm.value.action === 'add' ? 'Adicionar ao Inventário' : 'Remover do Inventário' }}</span>
+          </button>
+        </form>
+      </mat-tab>
+
+      <!-- ABA 2: PERSONAGENS -->
+      <mat-tab label="Personagens">
+        <form [formGroup]="charForm" (ngSubmit)="submitChar()" class="admin-form">
+          <mat-form-field appearance="outline" class="admin-form__field">
+            <mat-label>Ação</mat-label>
+            <mat-select formControlName="action">
+              <mat-option value="add">Criar Personagem</mat-option>
+              <mat-option value="remove">Marcar como Perdido (Lost)</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          @if (charForm.value.action === 'add') {
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Nome</mat-label>
+              <input matInput formControlName="name" placeholder="Ex: Lobo Cinzento, Ferreiro Boris"/>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Descrição</mat-label>
+              <textarea matInput formControlName="description" rows="2" placeholder="Aparência e características"></textarea>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Personalidade</mat-label>
+              <input matInput formControlName="personality" placeholder="Ex: Protetor, desconfiado"/>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Localização Inicial</mat-label>
+              <input matInput formControlName="location" placeholder="ID ou nome da localização"/>
+            </mat-form-field>
+          } @else {
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Selecionar Personagem</mat-label>
+              <mat-select formControlName="characterName">
+                @for (c of activeCharacters(); track c.id) {
+                  <mat-option [value]="c.name">{{ c.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+
+          <button mat-flat-button class="admin-btn admin-btn--primary" [disabled]="isSubmitting()" type="submit">
+            @if (isSubmitting()) { <mat-spinner diameter="18"/> }
+            <span>{{ charForm.value.action === 'add' ? 'Criar Personagem' : 'Remover Personagem' }}</span>
+          </button>
+        </form>
+      </mat-tab>
+
+      <!-- ABA 3: LOCAIS -->
+      <mat-tab label="Locais">
+        <form [formGroup]="locationForm" (ngSubmit)="submitLocation()" class="admin-form">
+          <mat-form-field appearance="outline" class="admin-form__field">
+            <mat-label>Ação</mat-label>
+            <mat-select formControlName="action">
+              <mat-option value="add">Adicionar Local</mat-option>
+              <mat-option value="remove">Remover Local</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          @if (locationForm.value.action === 'add') {
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>ID do Local</mat-label>
+              <input matInput formControlName="id" placeholder="Ex: biblioteca_antiga, pantano"/>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Nome do Local</mat-label>
+              <input matInput formControlName="name" placeholder="Ex: Biblioteca Antiga"/>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Descrição</mat-label>
+              <textarea matInput formControlName="description" rows="2" placeholder="Descrição do local"></textarea>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Conexões (IDs separados por vírgula)</mat-label>
+              <input matInput formControlName="connectedTo" placeholder="Ex: torre, praca_central"/>
+            </mat-form-field>
+          } @else {
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Selecionar Local</mat-label>
+              <mat-select formControlName="locationId">
+                @for (loc of activeLocations(); track loc.id) {
+                  <mat-option [value]="loc.id">{{ loc.name }} ({{ loc.id }})</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+
+          <button mat-flat-button class="admin-btn admin-btn--primary" [disabled]="isSubmitting()" type="submit">
+            @if (isSubmitting()) { <mat-spinner diameter="18"/> }
+            <span>{{ locationForm.value.action === 'add' ? 'Adicionar Local' : 'Remover Local' }}</span>
+          </button>
+        </form>
+      </mat-tab>
+
+      <!-- ABA 4: CONCEITOS -->
+      <mat-tab label="Conceitos">
+        <form [formGroup]="conceptForm" (ngSubmit)="submitConcept()" class="admin-form">
+          <mat-form-field appearance="outline" class="admin-form__field">
+            <mat-label>Ação</mat-label>
+            <mat-select formControlName="action">
+              <mat-option value="add">Adicionar Conceito</mat-option>
+              <mat-option value="remove">Remover Conceito</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          @if (conceptForm.value.action === 'add') {
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>ID do Conceito</mat-label>
+              <input matInput formControlName="id" placeholder="Ex: olhar_de_merlim, arasaka"/>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Tipo</mat-label>
+              <mat-select formControlName="type">
+                <mat-option value="item">Item</mat-option>
+                <mat-option value="faction">Facção</mat-option>
+                <mat-option value="state">Estado/Nação</mat-option>
+                <mat-option value="region">Região</mat-option>
+                <mat-option value="place">Lugar</mat-option>
+                <mat-option value="custom">Conceito Customizado</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Nome</mat-label>
+              <input matInput formControlName="name" placeholder="Ex: Corporação Arasaka"/>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Descrição</mat-label>
+              <textarea matInput formControlName="description" rows="2" placeholder="Descrição do conceito"></textarea>
+            </mat-form-field>
+          } @else {
+            <mat-form-field appearance="outline" class="admin-form__field">
+              <mat-label>Selecionar Conceito</mat-label>
+              <mat-select formControlName="conceptId">
+                @for (c of activeConcepts(); track c.id) {
+                  <mat-option [value]="c.id">{{ c.name }} ({{ c.id }})</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+
+          <button mat-flat-button class="admin-btn admin-btn--primary" [disabled]="isSubmitting()" type="submit">
+            @if (isSubmitting()) { <mat-spinner diameter="18"/> }
+            <span>{{ conceptForm.value.action === 'add' ? 'Adicionar Conceito' : 'Remover Conceito' }}</span>
+          </button>
+        </form>
+      </mat-tab>
+
+      <!-- ABA 5: EXTRAÇÃO LLM -->
+      <mat-tab label="Extração LLM">
+        <div class="admin-extract">
+          <div class="admin-extract__card">
+            <h4>Re-extrair Estado da Narrativa</h4>
+            <p>Executa a extração automática com base na última narrativa gerada.</p>
+            <button mat-stroked-button class="admin-btn admin-btn--secondary" (click)="triggerExtract()" [disabled]="isSubmitting()">
+              @if (isSubmitting()) { <mat-spinner diameter="18"/> }
+              <mat-icon>sync</mat-icon>
+              <span>Re-extrair Estado</span>
+            </button>
+          </div>
+
+          <div class="admin-extract__card">
+            <h4>Extrair Ficha de Personagem via LLM</h4>
+            <form [formGroup]="extractCharForm" (ngSubmit)="extractCharacterSheet()" class="admin-form">
+              <mat-form-field appearance="outline" class="admin-form__field">
+                <mat-label>Nome do Personagem</mat-label>
+                <input matInput formControlName="charName" placeholder="Ex: Ferreiro, Capitão"/>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="admin-form__field">
+                <mat-label>Turnos a analisar (0 = todos)</mat-label>
+                <input matInput type="number" formControlName="turnsCount" min="0"/>
+              </mat-form-field>
+
+              <button mat-flat-button class="admin-btn admin-btn--primary" [disabled]="extractCharForm.invalid || isSubmitting()" type="submit">
+                @if (isSubmitting()) { <mat-spinner diameter="18"/> }
+                <mat-icon>psychology</mat-icon>
+                <span>Gerar Ficha com IA</span>
+              </button>
+            </form>
+
+            @if (extractedSheet()) {
+              <div class="extracted-sheet fade-in">
+                <h5>Ficha Gerada:</h5>
+                <p><strong>Nome:</strong> {{ extractedSheet()?.name }}</p>
+                <p><strong>Descrição:</strong> {{ extractedSheet()?.description }}</p>
+                <p><strong>Personalidade:</strong> {{ extractedSheet()?.personality }}</p>
+                <p><strong>Localização:</strong> {{ extractedSheet()?.currentLocation }}</p>
+                <button mat-flat-button class="admin-btn admin-btn--primary" (click)="confirmAddExtractedChar()" [disabled]="isSubmitting()">
+                  <mat-icon>person_add</mat-icon>
+                  <span>Confirmar e Adicionar Personagem</span>
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </mat-dialog-content>
+</div>
