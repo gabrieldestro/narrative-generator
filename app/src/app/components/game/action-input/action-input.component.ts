@@ -1,4 +1,5 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -25,6 +26,7 @@ import type { ActionType, ActionIntent, PlayerActionPayload } from '../../../cor
 export class ActionInputComponent {
   readonly gameState = inject(GameStateService);
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
   private readonly log = inject(LoggingService);
 
@@ -55,6 +57,9 @@ export class ActionInputComponent {
       next: (res) => {
         this.gameState.setTurnResult(res);
         this.playerText.set('');
+        if (res.sessionId && res.sessionId !== sessionId) {
+          this.router.navigate(['/game', res.sessionId], { replaceUrl: true });
+        }
       },
       error: (err) => {
         this.gameState.isLoading.set(false);
@@ -85,6 +90,9 @@ export class ActionInputComponent {
       next: (res) => {
         this.gameState.setObservation(res);
         this.playerText.set('');
+        if (res.sessionId && res.sessionId !== sessionId) {
+          this.router.navigate(['/game', res.sessionId], { replaceUrl: true });
+        }
       },
       error: (err) => {
         this.gameState.isLoading.set(false);
@@ -115,6 +123,9 @@ export class ActionInputComponent {
       next: (res) => {
         this.gameState.setNarration(res);
         this.playerText.set('');
+        if (res.sessionId && res.sessionId !== sessionId) {
+          this.router.navigate(['/game', res.sessionId], { replaceUrl: true });
+        }
       },
       error: (err) => {
         this.gameState.isLoading.set(false);

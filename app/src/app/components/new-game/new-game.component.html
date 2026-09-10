@@ -36,20 +36,36 @@
                 </mat-card-header>
                 <mat-card-content>
                   <div class="saved-game-card__meta">
-                    <span>Turno {{ save.turnNumber }}</span>
-                    <span>{{ formatDate(save.updatedAt) }}</span>
+                    <div class="saved-game-card__tags">
+                      <span class="turn-tag">Turno {{ save.turnNumber }}</span>
+                      <span class="branch-tag" [ngStyle]="getBranchBadgeStyle(save.branchId)">
+                        <mat-icon class="branch-icon">call_split</mat-icon>
+                        Branch #{{ save.branchId }}
+                      </span>
+                    </div>
+                    <span class="saved-game-card__date">{{ formatDate(save.updatedAt) }}</span>
                   </div>
                   <p class="saved-game-card__preview" [matTooltip]="save.lastNarrative">{{ save.lastNarrative }}</p>
                 </mat-card-content>
                 <mat-card-actions>
-                  <button mat-raised-button class="btn-continue"
-                          (click)="onContinueSave(save); $event.stopPropagation()"
-                          [disabled]="operatingId() !== null"
-                          aria-label="Continuar {{ save.title }}">
-                    Continuar
-                  </button>
+                  <div class="saved-game-card__main-actions">
+                    <button mat-raised-button class="btn-continue"
+                            (click)="onContinueSave(save); $event.stopPropagation()"
+                            [disabled]="operatingId() !== null"
+                            aria-label="Continuar {{ save.title }}">
+                      Continuar
+                    </button>
+                    <button mat-stroked-button class="btn-history"
+                            (click)="onOpenHistory(save, $event)"
+                            [disabled]="operatingId() !== null"
+                            matTooltip="Ver ramificações e checkpoints desta aventura"
+                            aria-label="Ver histórico de checkpoints">
+                      <mat-icon>history</mat-icon>
+                      Histórico
+                    </button>
+                  </div>
                   <button mat-icon-button class="btn-delete"
-                          (click)="requestDeleteSave(save); $event.stopPropagation()"
+                          (click)="requestDeleteSave(save, $event)"
                           [disabled]="operatingId() !== null"
                           [attr.aria-label]="'Excluir ' + save.title">
                     <mat-icon>delete</mat-icon>

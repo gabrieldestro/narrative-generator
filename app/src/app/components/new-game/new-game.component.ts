@@ -1,16 +1,19 @@
 import { Component, inject, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ApiService } from '../../core/services/api.service';
 import { GameStateService } from '../../core/services/game-state.service';
 import { LoggingService } from '../../core/services/logging.service';
 import { WorldListComponent } from './world-list/world-list.component';
 import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
+import { CheckpointHistoryDialogComponent } from '../history/checkpoint-history-dialog/checkpoint-history-dialog.component';
 import type { WorldTemplate } from '../../core/models/world-template.model';
 import type { SavedGameSummary } from '../../core/models/session-save.model';
 
@@ -18,8 +21,9 @@ import type { SavedGameSummary } from '../../core/models/session-save.model';
   selector: 'ng-new-game',
   standalone: true,
   imports: [
+    CommonModule,
     RouterLink,
-    MatToolbarModule, MatButtonModule, MatIconModule, MatCardModule, MatTooltipModule,
+    MatToolbarModule, MatButtonModule, MatIconModule, MatCardModule, MatTooltipModule, MatDialogModule,
     WorldListComponent, LoadingOverlayComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,6 +37,7 @@ export class NewGameComponent implements OnInit {
   private readonly snackBar = inject(MatSnackBar);
   private readonly log = inject(LoggingService);
   private readonly gameState = inject(GameStateService);
+  private readonly dialog = inject(MatDialog);
 
   readonly isCreating = signal(false);
   readonly saves = signal<SavedGameSummary[]>([]);
@@ -59,6 +64,37 @@ export class NewGameComponent implements OnInit {
     });
   }
 
+  onOpenHistory(save: SavedGameSummary, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    const dialogRef = this.dialog.open(CheckpointHistoryDialogComponent, {
+      data: {
+        rootId: save.rootId || save.id,
+        title: save.title,
+      },
+      width: '920px',
+      maxWidth: '95vw',
+      panelClass: 'checkpoint-history-dialog-panel',
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.loadSaves();
+      }
+    });
+  }
+
+  getBranchBadgeStyle(branchId: number): { [key: string]: string } {
+    const hues = [220, 160, 280, 35, 340, 190, 80];
+    const hue = hues[branchId % hues.length];
+    return {
+      '--branch-color': `hsl(${hue}, 80%, 65%)`,
+      '--branch-bg': `hsla(${hue}, 80%, 50%, 0.15)`,
+      '--branch-border': `hsla(${hue}, 80%, 65%, 0.35)`,
+    };
+  }
+
   onContinueSave(save: SavedGameSummary): void {
     if (this.operatingId()) return;
     this.operatingId.set(save.id);
@@ -77,7 +113,10 @@ export class NewGameComponent implements OnInit {
     });
   }
 
-  requestDeleteSave(save: SavedGameSummary): void {
+  requestDeleteSave(save: SavedGameSummary, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
     if (this.operatingId()) return;
     const snack = this.snackBar.open(`Excluir a partida "${save.title}"?`, 'Excluir', { duration: 5000 });
     snack.onAction().subscribe(() => this.confirmDeleteSave(save));

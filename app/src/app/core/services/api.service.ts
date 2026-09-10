@@ -6,7 +6,7 @@ import { SettingsService } from './settings.service';
 import type { GameSettings } from '../models/game-settings.model';
 import type { WorldTemplate } from '../models/world-template.model';
 import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, GameStateResponse, ObserveResponse, NarrateResponse, EnrichPayload, EnrichResponse, AdminCommandPayload, AdminCommandResponse } from '../models/api-payloads.model';
-import type { SavedGameSummary, SessionBundle } from '../models/session-save.model';
+import type { SavedGameSummary, SessionBundle, PruneResponse } from '../models/session-save.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -49,7 +49,7 @@ export class ApiService {
     const body = { ...payload, settings: this.buildEngineSettings() };
     return this.http.post<TurnResponse>(`${this.baseUrl}/games/${sessionId}/turn`, body).pipe(
       tap({
-        next: (res) => this.log.info('ApiService.processTurn', { sessionId, turnNumber: res.updatedState?.turnNumber }),
+        next: (res) => this.log.info('ApiService.processTurn', { sessionId, newSessionId: res.sessionId, turnNumber: res.updatedState?.turnNumber }),
         error: (err) => this.log.error('ApiService.processTurn falhou', err, { sessionId }),
       }),
     );
@@ -59,7 +59,7 @@ export class ApiService {
     const body = { ...payload, settings: this.buildEngineSettings() };
     return this.http.post<ObserveResponse>(`${this.baseUrl}/games/${sessionId}/observe`, body).pipe(
       tap({
-        next: (res) => this.log.info('ApiService.observeTurn', { sessionId, turnNumber: res.updatedState?.turnNumber }),
+        next: (res) => this.log.info('ApiService.observeTurn', { sessionId, newSessionId: res.sessionId, turnNumber: res.updatedState?.turnNumber }),
         error: (err) => this.log.error('ApiService.observeTurn falhou', err, { sessionId }),
       }),
     );
@@ -69,7 +69,7 @@ export class ApiService {
     const body = { ...payload, settings: this.buildEngineSettings() };
     return this.http.post<NarrateResponse>(`${this.baseUrl}/games/${sessionId}/narrate`, body).pipe(
       tap({
-        next: (res) => this.log.info('ApiService.narrateTurn', { sessionId, turnNumber: res.updatedState?.turnNumber }),
+        next: (res) => this.log.info('ApiService.narrateTurn', { sessionId, newSessionId: res.sessionId, turnNumber: res.updatedState?.turnNumber }),
         error: (err) => this.log.error('ApiService.narrateTurn falhou', err, { sessionId }),
       }),
     );
@@ -79,7 +79,7 @@ export class ApiService {
     const body = { ...payload, settings: this.buildEngineSettings() };
     return this.http.post<AdminCommandResponse>(`${this.baseUrl}/games/${sessionId}/command`, body).pipe(
       tap({
-        next: (res) => this.log.info('ApiService.executeCommand', { sessionId, command: payload.command }),
+        next: (res) => this.log.info('ApiService.executeCommand', { sessionId, newSessionId: res.sessionId, command: payload.command }),
         error: (err) => this.log.error('ApiService.executeCommand falhou', err, { sessionId, command: payload.command }),
       }),
     );
@@ -95,11 +95,21 @@ export class ApiService {
   }
 
   listSaves(): Observable<SavedGameSummary[]> {
-    return this.http.get<SessionBundle[]>(`${this.baseUrl}/saves`).pipe(
-      map(bundles => bundles.map(({ state: _state, schemaVersion: _v, ...meta }) => meta)),
+    return this.http.get<SavedGameSummary[]>(`${this.baseUrl}/saves`).pipe(
+      map(saves => [...saves].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())),
       tap({
         next: (saves) => this.log.info('ApiService.listSaves', { count: saves.length }),
         error: (err) => this.log.error('ApiService.listSaves falhou', err),
+      }),
+    );
+  }
+
+  listHistory(rootId: string): Observable<SavedGameSummary[]> {
+    return this.http.get<SavedGameSummary[]>(`${this.baseUrl}/saves/${rootId}/history`).pipe(
+      map(history => [...history].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())),
+      tap({
+        next: (history) => this.log.info('ApiService.listHistory', { rootId, count: history.length }),
+        error: (err) => this.log.error('ApiService.listHistory falhou', err, { rootId }),
       }),
     );
   }
@@ -118,6 +128,15 @@ export class ApiService {
       tap({
         next: () => this.log.info('ApiService.deleteSave', { sessionId }),
         error: (err) => this.log.error('ApiService.deleteSave falhou', err, { sessionId }),
+      }),
+    );
+  }
+
+  pruneSaves(options?: { keepLatest?: boolean; rootId?: string }): Observable<PruneResponse> {
+    return this.http.post<PruneResponse>(`${this.baseUrl}/saves/prune`, options ?? {}).pipe(
+      tap({
+        next: (res) => this.log.info('ApiService.pruneSaves', { deleted: res.deleted, kept: res.kept }),
+        error: (err) => this.log.error('ApiService.pruneSaves falhou', err, options),
       }),
     );
   }

@@ -6,8 +6,34 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
   // Lista templates de mundos
   fastify.get('/api/worlds', (req, reply) => controller.listWorlds(req, reply));
 
-  // Lista partidas salvas (tela "Continuar")
-  fastify.get('/api/saves', (req, reply) => controller.listSaves(req, reply));
+  // Lista partidas salvas (tela "Continuar" - latest por campanha por padrão; ?all=true para todos)
+  fastify.get('/api/saves', (req: any, reply) => controller.listSaves(req, reply));
+
+  // Histórico completo de checkpoints de uma campanha
+  fastify.get('/api/saves/:rootId/history', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['rootId'],
+        properties: {
+          rootId: { type: 'string' },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.listHistory(req, reply));
+
+  // Podar checkpoints antigos (mantém só o mais recente)
+  fastify.post('/api/saves/prune', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          keepLatest: { type: 'boolean' },
+          rootId: { type: 'string' },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.pruneSaves(req, reply));
 
   // Bundle completo de uma partida salva (restauração)
   fastify.get('/api/saves/:sessionId', {

@@ -360,19 +360,21 @@ describe('Fastify Game API', () => {
     const listRes = await app.inject({ method: 'GET', url: '/api/saves' });
     expect(listRes.statusCode).toBe(200);
 
-    const bundles = JSON.parse(listRes.payload);
-    const bundle = bundles.find((b: { id: string }) => b.id === sessionId);
-    expect(bundle).toBeDefined();
-    expect(bundle.mode).toBe('template');
-    expect(bundle.title).toBeDefined();
-    expect(bundle.turnNumber).toBe(1);
-    expect(bundle.createdAt).toBeDefined();
-    expect(bundle.updatedAt).toBeDefined();
-    expect(bundle.lastNarrative).toBeDefined();
-    expect(bundle.state.history.length).toBeGreaterThanOrEqual(1);
+    const summaries = JSON.parse(listRes.payload);
+    const summary = summaries.find((b: { id: string }) => b.id === sessionId);
+    expect(summary).toBeDefined();
+    expect(summary.mode).toBe('template');
+    expect(summary.title).toBeDefined();
+    expect(summary.turnNumber).toBe(1);
+    expect(summary.rootId).toBe(sessionId);
+    expect(summary.parentId).toBeNull();
+    expect(summary.branchId).toBe(0);
+    expect(summary.createdAt).toBeDefined();
+    expect(summary.updatedAt).toBeDefined();
+    expect(summary.lastNarrative).toBeDefined();
   });
 
-  it('POST turn -> GET /api/saves/:id reflete novo turnNumber e updatedAt', async () => {
+  it('POST turn gera novo checkpoint imutável e preserva checkpoint pai', async () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/games/new',
@@ -381,23 +383,128 @@ describe('Fastify Game API', () => {
         templateName: 'fantasia_masmorra.json',
       },
     });
-    const { sessionId } = JSON.parse(createRes.payload);
-
-    const beforeRes = await app.inject({ method: 'GET', url: `/api/saves/${sessionId}` });
-    const beforeBundle = JSON.parse(beforeRes.payload);
+    const { sessionId: parentId } = JSON.parse(createRes.payload);
 
     const turnRes = await app.inject({
       method: 'POST',
-      url: `/api/games/${sessionId}/turn`,
+      url: `/api/games/${parentId}/turn`,
       payload: { playerText: 'Avanço pela masmorra com cuidado.' },
     });
     expect(turnRes.statusCode).toBe(200);
+    const { sessionId: newCheckpointId } = JSON.parse(turnRes.payload);
 
-    const afterRes = await app.inject({ method: 'GET', url: `/api/saves/${sessionId}` });
+    expect(newCheckpointId).not.toBe(parentId);
+
+    // Pai permanece intacto em disco
+    const parentSaveRes = await app.inject({ method: 'GET', url: `/api/saves/${parentId}` });
+    const parentBundle = JSON.parse(parentSaveRes.payload);
+    expect(parentBundle.turnNumber).toBe(1);
+
+    // Novo checkpoint possui novo turnNumber e parentId correto
+    const afterRes = await app.inject({ method: 'GET', url: `/api/saves/${newCheckpointId}` });
     const afterBundle = JSON.parse(afterRes.payload);
-    expect(afterBundle.turnNumber).toBeGreaterThan(beforeBundle.turnNumber);
-    expect(afterBundle.updatedAt >= beforeBundle.updatedAt).toBe(true);
-    expect(afterBundle.state.history.length).toBeGreaterThan(beforeBundle.state.history.length);
+    expect(afterBundle.turnNumber).toBe(2);
+    expect(afterBundle.parentId).toBe(parentId);
+    expect(afterBundle.rootId).toBe(parentId);
+    expect(afterBundle.branchId).toBe(0);
+
+    // GET /api/saves (tela inicial) retorna apenas 1 item (o mais recente da campanha)
+    const listRes = await app.inject({ method: 'GET', url: '/api/saves' });
+    const summaries = JSON.parse(listRes.payload);
+    expect(summaries.length).toBe(1);
+    expect(summaries[0].id).toBe(newCheckpointId);
+    expect(summaries[0].turnNumber).toBe(2);
+
+    // GET /api/saves/:rootId/history retorna o histórico completo (2 checkpoints)
+    const historyRes = await app.inject({ method: 'GET', url: `/api/saves/${parentId}/history` });
+    const history = JSON.parse(historyRes.payload);
+    expect(history.length).toBe(2);
+    expect(history[0].id).toBe(newCheckpointId);
+    expect(history[1].id).toBe(parentId);
+  });
+
+  it('bifurcação de turnos a partir do mesmo checkpoint incrementa branchId', async () => {
+    const fakeLlm = new FakeListChatModel({
+      responses: [
+        'Narrativa inicial de teste.',
+        '{}',
+        'Narrativa do turno 1a.',
+        '{}',
+        'Narrativa do turno 1b.',
+        '{}',
+      ],
+    });
+    sessionRepo = new SessionRepository();
+    app = await buildApp({
+      llmModel: fakeLlm,
+      sessionRepo,
+      worldRepo: new WorldTemplateRepository(),
+      saveStore: new FileSaveStore(saveDir),
+    });
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: { mode: 'template', templateName: 'fantasia_masmorra.json' },
+    });
+    const { sessionId: rootId } = JSON.parse(createRes.payload);
+
+    // Fork 1 a partir da raiz
+    const fork1Res = await app.inject({
+      method: 'POST',
+      url: `/api/games/${rootId}/turn`,
+      payload: { playerText: 'Vou para a esquerda.' },
+    });
+    const { sessionId: fork1Id } = JSON.parse(fork1Res.payload);
+
+    // Fork 2 a partir da mesma raiz
+    const fork2Res = await app.inject({
+      method: 'POST',
+      url: `/api/games/${rootId}/turn`,
+      payload: { playerText: 'Vou para a direita.' },
+    });
+    const { sessionId: fork2Id } = JSON.parse(fork2Res.payload);
+
+    const f1Save = JSON.parse((await app.inject({ method: 'GET', url: `/api/saves/${fork1Id}` })).payload);
+    const f2Save = JSON.parse((await app.inject({ method: 'GET', url: `/api/saves/${fork2Id}` })).payload);
+
+    expect(f1Save.branchId).toBe(0);
+    expect(f2Save.branchId).toBe(1);
+
+    const historyRes = await app.inject({ method: 'GET', url: `/api/saves/${rootId}/history` });
+    const history = JSON.parse(historyRes.payload);
+    expect(history.length).toBe(3);
+  });
+
+  it('POST /api/saves/prune remove checkpoints antigos e mantém apenas o mais recente', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: { mode: 'template', templateName: 'fantasia_masmorra.json' },
+    });
+    const { sessionId: rootId } = JSON.parse(createRes.payload);
+
+    const turnRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${rootId}/turn`,
+      payload: { playerText: 'Avanço.' },
+    });
+    const { sessionId: t2Id } = JSON.parse(turnRes.payload);
+
+    const pruneRes = await app.inject({
+      method: 'POST',
+      url: '/api/saves/prune',
+      payload: { rootId },
+    });
+    expect(pruneRes.statusCode).toBe(200);
+    const pruneBody = JSON.parse(pruneRes.payload);
+    expect(pruneBody.deleted).toBe(1);
+    expect(pruneBody.kept).toBe(t2Id);
+
+    const historyRes = await app.inject({ method: 'GET', url: `/api/saves/${rootId}/history` });
+    const history = JSON.parse(historyRes.payload);
+    expect(history.length).toBe(1);
+    expect(history[0].id).toBe(t2Id);
   });
 
   it('restart simulado: novo buildApp com o mesmo diretório de saves mantém a sessão', async () => {

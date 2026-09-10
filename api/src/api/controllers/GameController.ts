@@ -8,7 +8,7 @@ import type { GameEngine } from '../../application/GameEngine.js';
 import type { LlmService } from '../../application/LlmService.js';
 import type { GameManagementService } from '../../application/GameManagementService.js';
 import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
-import type { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
+import { FileSaveStore, calculateNextBranchId } from '../../infrastructure/FileSaveStore.js';
 import type { ILogger } from '../../domain/ports.js';
 import type { WorldTemplate } from '../../domain/types.js';
 import { ActionBuilderService } from '../../application/ActionBuilderService.js';
@@ -51,21 +51,59 @@ export class GameController {
     this.adminCommandService = adminCommandService ?? new AdminCommandService(this.gameManagementService, this.llmService, this.logger);
   }
 
-  // Monta/atualiza o bundle de save e grava no disco (auto-save).
-  private async persistBundle(
-    sessionId: string,
+  // Cria e persiste um novo checkpoint de save no disco.
+  private async persistCheckpoint(
+    parentId: string | null,
+    checkpointId: string,
     state: GameState,
-    meta: { mode?: 'template' | 'custom'; title?: string } = {},
-  ): Promise<void> {
-    const existing = await this.saveStore.get(sessionId);
+    meta: {
+      mode?: 'template' | 'custom';
+      title?: string;
+      rootId?: string;
+      branchId?: number;
+      depth?: number;
+      branchLabel?: string;
+    } = {},
+  ): Promise<SessionBundle> {
     const now = new Date().toISOString();
     const playerChar = state.characters.find((c) => c.isPlayer && (!c.status || c.status === 'active'));
+    let rootId = meta.rootId;
+    let branchId = meta.branchId;
+    let depth = meta.depth;
+    let mode = meta.mode;
+    let title = meta.title;
+
+    if (parentId) {
+      const parent = await this.saveStore.get(parentId);
+      if (parent) {
+        rootId = rootId ?? parent.rootId ?? parent.id;
+        mode = mode ?? parent.mode;
+        title = title ?? parent.title;
+        depth = depth ?? ((parent.depth ?? parent.turnNumber ?? 1) + 1);
+        if (branchId === undefined) {
+          const allBundles = await this.saveStore.list();
+          branchId = calculateNextBranchId(parent, allBundles);
+        }
+      }
+    }
+
+    rootId = rootId ?? checkpointId;
+    branchId = branchId ?? 0;
+    depth = depth ?? state.turnNumber ?? 1;
+    mode = mode ?? 'custom';
+    title = title ?? state.narrativeStyle ?? 'Aventura';
+
     const bundle: SessionBundle = {
       schemaVersion: SAVE_SCHEMA_VERSION,
-      id: sessionId,
-      mode: meta.mode ?? existing?.mode ?? 'custom',
-      title: meta.title ?? existing?.title ?? state.narrativeStyle,
-      createdAt: existing?.createdAt ?? now,
+      id: checkpointId,
+      rootId,
+      parentId,
+      branchId,
+      depth,
+      branchLabel: meta.branchLabel,
+      mode,
+      title,
+      createdAt: now,
       updatedAt: now,
       narrativeStyle: state.narrativeStyle,
       writingStyle: state.writingStyle,
@@ -74,13 +112,44 @@ export class GameController {
       lastNarrative: state.history.length > 0 ? state.history[state.history.length - 1]! : '',
       state,
     };
+
     await this.saveStore.save(bundle);
+    return bundle;
   }
 
-  public async listSaves(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const bundles = await this.saveStore.list();
-    this.logger.debug('Listando partidas salvas', { count: bundles.length });
-    return reply.status(200).send(bundles);
+  public async listSaves(
+    req: FastifyRequest<{ Querystring: { all?: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const showAll = req.query?.all === 'true' || req.query?.all === '1';
+    if (showAll) {
+      const bundles = await this.saveStore.list();
+      this.logger.debug('Listando todos os checkpoints salvos', { count: bundles.length });
+      return reply.status(200).send(bundles);
+    }
+    const summaries = await this.saveStore.listLatestPerRoot();
+    this.logger.debug('Listando partidas salvas (latest por campanha)', { count: summaries.length });
+    return reply.status(200).send(summaries);
+  }
+
+  public async listHistory(
+    req: FastifyRequest<{ Params: { rootId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { rootId } = req.params;
+    const history = await this.saveStore.listByRootId(rootId);
+    this.logger.debug('Listando histórico de checkpoints da campanha', { rootId, count: history.length });
+    return reply.status(200).send(history);
+  }
+
+  public async pruneSaves(
+    req: FastifyRequest<{ Body?: { keepLatest?: boolean; rootId?: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const options = req.body ?? {};
+    const result = await this.saveStore.prune(options);
+    this.logger.info('Checkpoints podados', { deleted: result.deleted, kept: result.kept });
+    return reply.status(200).send(result);
   }
 
   public async getSave(
@@ -169,7 +238,7 @@ export class GameController {
 
     const sessionId = randomUUID();
     this.sessionRepo.saveSession(sessionId, state);
-    await this.persistBundle(sessionId, state, { mode: req.body.mode, title });
+    await this.persistCheckpoint(null, sessionId, state, { mode: req.body.mode, title, rootId: sessionId, branchId: 0, depth: 1 });
 
     return reply.status(201).send({
       sessionId,
@@ -183,7 +252,15 @@ export class GameController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    const state = this.sessionRepo.getSession(sessionId);
+    let state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      const parentBundle = await this.saveStore.get(sessionId);
+      if (parentBundle) {
+        state = parentBundle.state;
+        this.sessionRepo.saveSession(sessionId, state);
+      }
+    }
 
     if (!state) {
       this.logger.warn('Sessão não encontrada', { sessionId });
@@ -217,12 +294,13 @@ export class GameController {
     const turnResult = await this.gameEngine.processTurn(state, playerActionsMap);
     reqLog.info('processTurn concluído', { durationMs: Date.now() - turnStart });
 
-    // Atualiza o repositório de sessões
-    this.sessionRepo.saveSession(sessionId, turnResult.state);
-    await this.persistBundle(sessionId, turnResult.state);
+    // Gera novo checkpoint imutável
+    const newCheckpointId = randomUUID();
+    this.sessionRepo.saveSession(newCheckpointId, turnResult.state);
+    await this.persistCheckpoint(sessionId, newCheckpointId, turnResult.state);
 
     return reply.status(200).send({
-      sessionId,
+      sessionId: newCheckpointId,
       narrative: turnResult.narrative,
       logicalResolution: turnResult.logicalResolution,
       npcDecisions: turnResult.npcDecisions,
@@ -236,7 +314,15 @@ export class GameController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    const state = this.sessionRepo.getSession(sessionId);
+    let state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      const parentBundle = await this.saveStore.get(sessionId);
+      if (parentBundle) {
+        state = parentBundle.state;
+        this.sessionRepo.saveSession(sessionId, state);
+      }
+    }
 
     if (!state) {
       this.logger.warn('Sessão não encontrada', { sessionId });
@@ -282,11 +368,12 @@ export class GameController {
     });
     reqLog.info('processTurnStream concluído', { durationMs: Date.now() - turnStart });
 
-    this.sessionRepo.saveSession(sessionId, turnResult.state);
-    await this.persistBundle(sessionId, turnResult.state);
+    const newCheckpointId = randomUUID();
+    this.sessionRepo.saveSession(newCheckpointId, turnResult.state);
+    await this.persistCheckpoint(sessionId, newCheckpointId, turnResult.state);
 
     sendSseEvent('done', {
-      sessionId,
+      sessionId: newCheckpointId,
       narrative: turnResult.narrative,
       logicalResolution: turnResult.logicalResolution,
       updatedState: turnResult.state
@@ -300,7 +387,15 @@ export class GameController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    const state = this.sessionRepo.getSession(sessionId);
+    let state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      const parentBundle = await this.saveStore.get(sessionId);
+      if (parentBundle) {
+        state = parentBundle.state;
+        this.sessionRepo.saveSession(sessionId, state);
+      }
+    }
 
     if (!state) {
       this.logger.warn('Sessão não encontrada', { sessionId });
@@ -328,11 +423,12 @@ export class GameController {
     const observation = await this.gameEngine.recordObservation(state, payload.playerText, charName);
     reqLog.info('observe concluído', { durationMs: Date.now() - observeStart });
 
-    this.sessionRepo.saveSession(sessionId, state);
-    await this.persistBundle(sessionId, state);
+    const newCheckpointId = randomUUID();
+    this.sessionRepo.saveSession(newCheckpointId, state);
+    await this.persistCheckpoint(sessionId, newCheckpointId, state);
 
     return reply.status(200).send({
-      sessionId,
+      sessionId: newCheckpointId,
       observation,
       updatedState: state
     });
@@ -343,7 +439,15 @@ export class GameController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    const state = this.sessionRepo.getSession(sessionId);
+    let state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      const parentBundle = await this.saveStore.get(sessionId);
+      if (parentBundle) {
+        state = parentBundle.state;
+        this.sessionRepo.saveSession(sessionId, state);
+      }
+    }
 
     if (!state) {
       this.logger.warn('Sessão não encontrada', { sessionId });
@@ -372,11 +476,12 @@ export class GameController {
     const narration = await this.gameEngine.recordPlayerNarration(state, payload.playerText, charName);
     reqLog.info('narrate concluído', { durationMs: Date.now() - narrateStart });
 
-    this.sessionRepo.saveSession(sessionId, state);
-    await this.persistBundle(sessionId, state);
+    const newCheckpointId = randomUUID();
+    this.sessionRepo.saveSession(newCheckpointId, state);
+    await this.persistCheckpoint(sessionId, newCheckpointId, state);
 
     return reply.status(200).send({
-      sessionId,
+      sessionId: newCheckpointId,
       narration,
       updatedState: state
     });
@@ -396,7 +501,15 @@ export class GameController {
   ): Promise<void> {
     const { sessionId } = req.params;
     const payload = req.body;
-    const state = this.sessionRepo.getSession(sessionId);
+    let state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      const parentBundle = await this.saveStore.get(sessionId);
+      if (parentBundle) {
+        state = parentBundle.state;
+        this.sessionRepo.saveSession(sessionId, state);
+      }
+    }
 
     if (!state) {
       this.logger.warn('Sessão não encontrada para executeCommand', { sessionId });
@@ -420,11 +533,12 @@ export class GameController {
       fields: payload.fields
     });
 
-    this.sessionRepo.saveSession(sessionId, result.state);
-    await this.persistBundle(sessionId, result.state);
+    const newCheckpointId = randomUUID();
+    this.sessionRepo.saveSession(newCheckpointId, result.state);
+    await this.persistCheckpoint(sessionId, newCheckpointId, result.state);
 
     return reply.status(200).send({
-      sessionId,
+      sessionId: newCheckpointId,
       message: result.message,
       updatedState: result.state,
       payload: result.payload
@@ -436,7 +550,15 @@ export class GameController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    const state = this.sessionRepo.getSession(sessionId);
+    let state = this.sessionRepo.getSession(sessionId);
+
+    if (!state) {
+      const bundle = await this.saveStore.get(sessionId);
+      if (bundle) {
+        state = bundle.state;
+        this.sessionRepo.saveSession(sessionId, state);
+      }
+    }
 
     if (!state) {
       this.logger.warn('Sessão não encontrada para getGameState', { sessionId });

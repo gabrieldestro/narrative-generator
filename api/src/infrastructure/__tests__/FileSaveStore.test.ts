@@ -10,6 +10,10 @@ function makeBundle(id: string, overrides: Partial<SessionBundle> = {}): Session
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     id,
+    rootId: overrides.rootId ?? id,
+    parentId: overrides.parentId ?? null,
+    branchId: overrides.branchId ?? 0,
+    depth: overrides.depth ?? 1,
     mode: 'template',
     title: 'Masmorra Sombria',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -77,7 +81,8 @@ describe('FileSaveStore', () => {
 
     const list = await store.list();
     const ids = list.map(b => b.id);
-    expect(ids).toEqual(['ok-1', 'ok-2']);
+    expect(ids).toContain('ok-1');
+    expect(ids).toContain('ok-2');
     expect(await store.get('corrompido')).toBeNull();
   });
 
@@ -90,23 +95,88 @@ describe('FileSaveStore', () => {
     expect(files.some(f => f.endsWith('.tmp.json'))).toBe(false);
   });
 
-  it('deve salvar múltiplas partidas independentes', async () => {
-    await store.save(makeBundle('a'));
-    await store.save(makeBundle('b', { title: 'Outra Aventura', mode: 'custom' }));
+  it('deve salvar múltiplas partidas independentes e listar ordenado por updatedAt DESC', async () => {
+    await store.save(makeBundle('a', { updatedAt: '2026-01-01T10:00:00.000Z' }));
+    await store.save(makeBundle('b', { title: 'Outra Aventura', mode: 'custom', updatedAt: '2026-01-02T10:00:00.000Z' }));
 
     const list = await store.list();
     expect(list).toHaveLength(2);
-    expect(list.find(b => b.id === 'b')!.mode).toBe('custom');
+    expect(list[0]!.id).toBe('b');
+    expect(list[1]!.id).toBe('a');
   });
 
-  it('migrate deve tratar bundle sem schemaVersion como v1', () => {
-    const legacy = JSON.parse(JSON.stringify(makeBundle('legacy'))) as { schemaVersion?: number };
+  it('listLatestPerRoot deve agrupar por rootId e retornar somente o mais recente de cada campanha', async () => {
+    // Campanha 1 (root: camp-1) com 3 turnos
+    await store.save(makeBundle('c1-t1', { rootId: 'camp-1', parentId: null, turnNumber: 1, updatedAt: '2026-01-01T10:00:00.000Z' }));
+    await store.save(makeBundle('c1-t2', { rootId: 'camp-1', parentId: 'c1-t1', turnNumber: 2, updatedAt: '2026-01-01T11:00:00.000Z' }));
+    await store.save(makeBundle('c1-t3', { rootId: 'camp-1', parentId: 'c1-t2', turnNumber: 3, updatedAt: '2026-01-01T12:00:00.000Z' }));
+
+    // Campanha 2 (root: camp-2) com 1 turno
+    await store.save(makeBundle('c2-t1', { rootId: 'camp-2', parentId: null, turnNumber: 1, updatedAt: '2026-01-02T08:00:00.000Z' }));
+
+    const latest = await store.listLatestPerRoot();
+    expect(latest).toHaveLength(2);
+    expect(latest[0]!.id).toBe('c2-t1'); // Mais recente globalmente
+    expect(latest[1]!.id).toBe('c1-t3'); // Mais recente da camp-1
+    expect((latest[0] as any).state).toBeUndefined(); // Projeção sem state
+  });
+
+  it('listByRootId deve retornar todos os checkpoints de uma campanha específica ordenados DESC', async () => {
+    await store.save(makeBundle('c1-t1', { rootId: 'camp-1', parentId: null, turnNumber: 1, updatedAt: '2026-01-01T10:00:00.000Z' }));
+    await store.save(makeBundle('c1-t2', { rootId: 'camp-1', parentId: 'c1-t1', turnNumber: 2, updatedAt: '2026-01-01T11:00:00.000Z' }));
+    await store.save(makeBundle('c2-t1', { rootId: 'camp-2', parentId: null, turnNumber: 1, updatedAt: '2026-01-02T08:00:00.000Z' }));
+
+    const history = await store.listByRootId('camp-1');
+    expect(history).toHaveLength(2);
+    expect(history[0]!.id).toBe('c1-t2');
+    expect(history[1]!.id).toBe('c1-t1');
+  });
+
+  it('prune por rootId deve manter apenas o checkpoint mais recente da campanha', async () => {
+    await store.save(makeBundle('c1-t1', { rootId: 'camp-1', updatedAt: '2026-01-01T10:00:00.000Z' }));
+    await store.save(makeBundle('c1-t2', { rootId: 'camp-1', updatedAt: '2026-01-01T11:00:00.000Z' }));
+    await store.save(makeBundle('c1-t3', { rootId: 'camp-1', updatedAt: '2026-01-01T12:00:00.000Z' }));
+    await store.save(makeBundle('c2-t1', { rootId: 'camp-2', updatedAt: '2026-01-02T08:00:00.000Z' }));
+
+    const result = await store.prune({ rootId: 'camp-1' });
+    expect(result.deleted).toBe(2);
+    expect(result.kept).toBe('c1-t3');
+
+    const history = await store.listByRootId('camp-1');
+    expect(history).toHaveLength(1);
+    expect(history[0]!.id).toBe('c1-t3');
+
+    // camp-2 não foi afetada
+    expect(await store.get('c2-t1')).not.toBeNull();
+  });
+
+  it('prune global deve manter apenas o mais recente global', async () => {
+    await store.save(makeBundle('c1-t1', { rootId: 'camp-1', updatedAt: '2026-01-01T10:00:00.000Z' }));
+    await store.save(makeBundle('c2-t1', { rootId: 'camp-2', updatedAt: '2026-01-02T08:00:00.000Z' }));
+
+    const result = await store.prune({ keepLatest: true });
+    expect(result.deleted).toBe(1);
+    expect(result.kept).toBe('c2-t1');
+
+    const list = await store.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]!.id).toBe('c2-t1');
+  });
+
+  it('migrate deve preencher rootId, parentId, branchId, depth para saves legados', () => {
+    const legacy = JSON.parse(JSON.stringify(makeBundle('legacy'))) as any;
     delete legacy.schemaVersion;
+    delete legacy.rootId;
+    delete legacy.parentId;
+    delete legacy.branchId;
+    delete legacy.depth;
 
     const migrated = store.migrate(legacy as unknown as SessionBundle);
     expect(migrated.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-    expect(migrated.id).toBe('legacy');
-    expect(migrated.state.turnNumber).toBe(1);
+    expect(migrated.rootId).toBe('legacy');
+    expect(migrated.parentId).toBeNull();
+    expect(migrated.branchId).toBe(0);
+    expect(migrated.depth).toBe(1);
   });
 
   it('migrate deve preencher state.concepts: [] em bundles v1', () => {

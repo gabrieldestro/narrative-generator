@@ -155,23 +155,32 @@ export interface GameState extends WorldConfig {
   concepts?: WorldConcept[]; // Lista de conceitos abstratos do mundo atual
 }
 
-// Versão do schema de save. Incremente quando `GameState` mudar de forma incompatível
+// Versão do schema de save. Incremente quando `GameState` ou a estrutura do save mudar de forma incompatível
 // e adicione um passo de migração em `FileSaveStore.migrate`.
-export const SAVE_SCHEMA_VERSION = 2 as const;
+export const SAVE_SCHEMA_VERSION = 3 as const;
 
-// Pacote de save: agrupa estado + metadados necessários para reconstruir/restaurar um jogo.
-// Settings são GLOBAIS (localStorage) e NÃO entram aqui.
-export interface SessionBundle {
-  schemaVersion: typeof SAVE_SCHEMA_VERSION;
-  id: string; // mesmo sessionId UUID
+// Metadados de um checkpoint de save (sem o estado completo).
+export interface SavedGameSummary {
+  id: string;              // checkpointId (UUID) — imutável
+  rootId: string;          // id da campanha raiz (primeiro checkpoint da árvore)
+  parentId: string | null; // de qual checkpoint este foi gerado; null = raiz
+  branchId: number;        // 0 = tronco principal; incrementa a cada fork
+  branchLabel?: string;    // opcional: "Linha 1", "Linha 2 (fork de T3)"
+  depth: number;           // distância da raiz (ou turnNumber no momento)
   mode: 'template' | 'custom';
-  title: string; // nome legível (nome do mundo ou estilo narrativo)
-  createdAt: string; // ISO
-  updatedAt: string; // ISO de última gravação (progresso)
+  title: string;           // nome legível (nome do mundo ou estilo narrativo)
+  createdAt: string;       // ISO
+  updatedAt: string;       // ISO de gravação
   narrativeStyle: string;
   writingStyle: string;
   turnNumber: number;
   playerCharacterName: string;
-  lastNarrative: string; // preview (última prosa de history)
+  lastNarrative: string;   // preview (última prosa de history)
+}
+
+// Pacote de save: agrupa estado + metadados necessários para reconstruir/restaurar um jogo.
+// Settings são GLOBAIS (localStorage) e NÃO entram aqui.
+export interface SessionBundle extends SavedGameSummary {
+  schemaVersion: typeof SAVE_SCHEMA_VERSION;
   state: GameState; // estado completo do jogo
 }

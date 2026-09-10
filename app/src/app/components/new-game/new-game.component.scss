@@ -165,6 +165,52 @@ mat-toolbar {
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin-bottom: 8px;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.saved-game-card__tags {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.turn-tag {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  border: 1px solid rgba(255, 213, 79, 0.2);
+}
+
+.branch-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--branch-color, var(--accent));
+  background: var(--branch-bg, rgba(255, 213, 79, 0.1));
+  border: 1px solid var(--branch-border, rgba(255, 213, 79, 0.25));
+
+  .branch-icon {
+    font-size: 0.8rem;
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+}
+
+.saved-game-card__date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .saved-game-card__preview {
@@ -187,20 +233,51 @@ mat-toolbar {
   padding: 10px 18px 14px;
 }
 
+.saved-game-card__main-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .btn-continue {
   background: linear-gradient(135deg, var(--accent) 0%, #ffb74d 100%) !important;
   color: var(--text-inverse) !important;
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   letter-spacing: 0.04em;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   font-size: 0.8rem;
+  padding: 0 12px !important;
   box-shadow: 0 4px 10px rgba(255, 213, 79, 0.25) !important;
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 6px 14px rgba(255, 213, 79, 0.4) !important;
+  }
+}
+
+.btn-history {
+  border-color: var(--border-light) !important;
+  color: var(--text-secondary) !important;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  border-radius: 10px !important;
+  font-size: 0.78rem;
+  padding: 0 10px !important;
+  transition: all 0.2s ease;
+
+  mat-icon {
+    font-size: 1rem;
+    width: 1rem;
+    height: 1rem;
+    margin-right: 4px;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: var(--info) !important;
+    color: var(--info) !important;
+    background: rgba(137, 180, 250, 0.08) !important;
   }
 }
 

@@ -1,0 +1,82 @@
+<div class="history-dialog">
+  <header class="history-dialog__header">
+    <div class="history-dialog__title-group">
+      <mat-icon class="history-dialog__icon">history</mat-icon>
+      <div>
+        <h2 class="history-dialog__title">{{ data.title }}</h2>
+        <p class="history-dialog__subtitle">Histórico de Checkpoints e Ramificações</p>
+      </div>
+    </div>
+    <div class="history-dialog__header-actions">
+      @if (checkpoints().length > 1) {
+        <button mat-stroked-button color="warn" class="btn-prune" (click)="requestPrune()" [disabled]="loading() || isPruning() || operatingId() !== null" matTooltip="Apaga checkpoints antigos e mantém apenas o mais recente desta campanha">
+          <mat-icon>cleaning_services</mat-icon>
+          Limpar Histórico
+        </button>
+      }
+      <button mat-icon-button class="btn-close" (click)="onClose()" aria-label="Fechar diálogo">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <mat-dialog-content class="history-dialog__content">
+    @if (loading()) {
+      <div class="history-dialog__loading" aria-label="Carregando histórico">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>Buscando checkpoints da campanha...</p>
+      </div>
+    } @else if (checkpoints().length === 0) {
+      <div class="history-dialog__empty">
+        <mat-icon>folder_open</mat-icon>
+        <p>Nenhum checkpoint encontrado para esta aventura.</p>
+      </div>
+    } @else {
+      <div class="history-timeline" role="list" aria-label="Linha do tempo de checkpoints">
+        @for (cp of checkpoints(); track cp.id; let i = $index) {
+          <div class="timeline-item" role="listitem" [class.timeline-item--latest]="i === 0">
+            <div class="timeline-item__indicator" [ngStyle]="getBranchBadgeStyle(cp.branchId)">
+              <span class="timeline-item__dot"></span>
+              <span class="timeline-item__line"></span>
+            </div>
+
+            <div class="timeline-item__card">
+              <div class="timeline-item__header">
+                <div class="timeline-item__badges">
+                  <span class="turn-badge">Turno {{ cp.turnNumber }}</span>
+                  <span class="branch-badge" [ngStyle]="getBranchBadgeStyle(cp.branchId)">
+                    <mat-icon class="branch-icon">call_split</mat-icon>
+                    Branch #{{ cp.branchId }}
+                  </span>
+                  @if (i === 0) {
+                    <span class="latest-badge">Mais Recente</span>
+                  }
+                </div>
+                <span class="timeline-item__date">{{ formatDate(cp.updatedAt) }}</span>
+              </div>
+
+              <p class="timeline-item__preview">{{ cp.lastNarrative || 'Sem narrativa gravada.' }}</p>
+
+              <div class="timeline-item__actions">
+                <button mat-raised-button class="btn-continue"
+                        (click)="onContinue(cp)"
+                        [disabled]="operatingId() !== null || isPruning()"
+                        aria-label="Continuar deste checkpoint">
+                  <mat-icon>play_arrow</mat-icon>
+                  Continuar deste ponto
+                </button>
+                <button mat-icon-button class="btn-delete"
+                        (click)="requestDelete(cp)"
+                        [disabled]="operatingId() !== null || isPruning()"
+                        matTooltip="Excluir este checkpoint"
+                        aria-label="Excluir checkpoint">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </mat-dialog-content>
+</div>

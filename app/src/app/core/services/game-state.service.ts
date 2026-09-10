@@ -73,18 +73,27 @@ export class GameStateService {
   }
 
   setObservation(result: ObserveResponse): void {
+    if (result.sessionId) {
+      this.sessionId.set(result.sessionId);
+    }
     this.isLoading.set(false);
     this.gameState.set(result.updatedState);
     this.error.set(null);
   }
 
   setNarration(result: NarrateResponse): void {
+    if (result.sessionId) {
+      this.sessionId.set(result.sessionId);
+    }
     this.isLoading.set(false);
     this.gameState.set(result.updatedState);
     this.error.set(null);
   }
 
   applyAdminResult(result: import('../models/api-payloads.model').AdminCommandResponse): void {
+    if (result.sessionId) {
+      this.sessionId.set(result.sessionId);
+    }
     this.isLoading.set(false);
     this.gameState.set(result.updatedState);
     this.error.set(null);
@@ -92,6 +101,9 @@ export class GameStateService {
 
   setTurnResult(result: TurnResponse): void {
     const turnBeforeUpdate = this.gameState()?.turnNumber ?? 1;
+    if (result.sessionId) {
+      this.sessionId.set(result.sessionId);
+    }
     this.isLoading.set(false);
     this.currentTurnResult.set(result);
     this.gameState.set(result.updatedState);
