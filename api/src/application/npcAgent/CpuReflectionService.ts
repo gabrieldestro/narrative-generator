@@ -30,9 +30,21 @@ export class CpuReflectionService {
     this.logger = logger ?? new NullLogger();
   }
 
-  async reflectAndAct(state: GameState, char: Character, output?: IOutputWriter, priorNpcActions?: string[]): Promise<CpuAgentDecision> {
+  async reflectAndAct(
+    state: GameState,
+    char: Character,
+    output?: IOutputWriter,
+    priorNpcActions?: string[],
+    reactionContext?: { actionLine: string; channel: 'saw' | 'heard' | 'stake' },
+  ): Promise<CpuAgentDecision> {
     const systemPrompt = cpuReflectionSystemPrompt(state, char);
-    const humanPrompt = cpuReflectionHumanPrompt(state, priorNpcActions);
+    // Doc 27, Fase 3 (§6.4): reação carrega o canal do gate + instrução de
+    // escopo. Defesa em profundidade: o permitido ainda pode retornar
+    // `action="ignorar"` (o gate é generoso por desenho).
+    const baseHumanPrompt = cpuReflectionHumanPrompt(state, priorNpcActions);
+    const humanPrompt = reactionContext
+      ? `${baseHumanPrompt}\n\nContexto de reação: você ${{ saw: 'VIU a ação acontecer', heard: 'OUVIU (sem ver) o que aconteceu', stake: 'é AFETADO pelo efeito, ainda que distante' }[reactionContext.channel]} — ${reactionContext.actionLine}. Aja só sobre o que você percebeu por este canal; se não percebeu e não é o alvo, retorne action="ignorar".`
+      : baseHumanPrompt;
 
     let lastError: Error | undefined;
 
@@ -74,7 +86,7 @@ export class CpuReflectionService {
     );
   }
 
-  recordArbiterResult(char: Character, turn: number, logicalResolution: string): void {
+  recordArbiterResult(char: Character, turn: number, logicalResolution: string, action?: string): void {
     if (char.isPlayer) return;
 
     const objective = char.currentObjective ?? '(sem objetivo definido)';
@@ -95,7 +107,9 @@ export class CpuReflectionService {
     const entry: ScratchpadEntry = {
       turn,
       objective,
-      action: char.scratchpad?.[char.scratchpad.length - 1]?.action ?? '(ação desconhecida)',
+      // Doc 27, Fase 1: ação passada pelo chamador quando disponível
+      // (antes gravava '(ação desconhecida)' por não receber a ação).
+      action: action ?? char.scratchpad?.[char.scratchpad.length - 1]?.action ?? '(ação desconhecida)',
       result,
       reasoning: '',
     };

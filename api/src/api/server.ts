@@ -9,6 +9,19 @@ import { SessionFactory } from '../application/SessionFactory.js';
 import { GameEngine } from '../application/GameEngine.js';
 import { CpuReflectionService } from '../application/npcAgent/CpuReflectionService.js';
 import { GameManagementService } from '../application/GameManagementService.js';
+import { MicroTurnOrchestrator } from '../application/MicroTurnOrchestrator.js';
+import { LlmClient } from '../application/llm/LlmClient.js';
+import { PromptJsonResolver } from '../application/llm/StructuredResolver.js';
+import { SelfHealingService } from '../application/selfHealing/SelfHealingService.js';
+import { ArbiterAgent } from '../application/llm/arbiter/ArbiterAgent.js';
+import { ReactionGateAgent } from '../application/llm/gate/ReactionGateAgent.js';
+import { NarratorAgent } from '../application/llm/narrator/NarratorAgent.js';
+import { InventoryExtractorAgent } from '../application/llm/extractors/inventory/InventoryExtractorAgent.js';
+import { MovementExtractorAgent } from '../application/llm/extractors/movement/MovementExtractorAgent.js';
+import { ConditionsExtractorAgent } from '../application/llm/extractors/conditions/ConditionsExtractorAgent.js';
+import { SceneExtractorAgent } from '../application/llm/extractors/scene/SceneExtractorAgent.js';
+import { MemoryAgent } from '../application/llm/memory/MemoryAgent.js';
+import { DEFAULT_SETTINGS } from '../domain/types.js';
 import { SessionRepository } from '../infrastructure/SessionRepository.js';
 import { FileSaveStore } from '../infrastructure/FileSaveStore.js';
 import { AdminCommandService } from '../application/AdminCommandService.js';
@@ -29,6 +42,50 @@ export interface AppOptions {
   sessionRepo?: SessionRepository;
   saveStore?: FileSaveStore;
   logger?: ILogger;
+}
+
+/**
+ * Doc 27, Fase 3 (§7.2): monta o orquestrador com 1 `LlmClient` compartilhado,
+ * 1 `IStructuredResolver` (`PromptJsonResolver` default) e 1 agente por papel,
+ * cada um com sua `temperature`. `ToolCallResolver` futuro = trocar 1 binding.
+ */
+export function buildMicroOrchestrator(
+  llmModel: BaseChatModel,
+  gameManagementService: GameManagementService,
+  cpuReflectionService: CpuReflectionService,
+  llmService: LlmService,
+  logger: ILogger,
+  llmCallLogger?: LlmCallLogger,
+  llmContentLogger?: LlmContentLogger,
+): MicroTurnOrchestrator {
+  const settings = { ...DEFAULT_SETTINGS };
+  const client = new LlmClient(llmModel, llmCallLogger, logger, llmContentLogger);
+  const resolver = new PromptJsonResolver(llmModel, llmCallLogger, logger, settings, llmContentLogger);
+  const selfHealing = new SelfHealingService(llmModel, llmCallLogger, logger, settings);
+  const arbiter = new ArbiterAgent(client, resolver, selfHealing);
+  const gate = new ReactionGateAgent(client, resolver);
+  const narrator = new NarratorAgent(
+    client, selfHealing, settings, llmCallLogger, logger, llmContentLogger,
+    llmService.summarizeMemory.bind(llmService),
+  );
+  // Doc 27, Fase 4: cena + memória no fim do turno do orquestrador.
+  const scene = {
+    extractor: new SceneExtractorAgent(client, resolver),
+    memory: new MemoryAgent(client, resolver, logger),
+  };
+  return new MicroTurnOrchestrator(
+    arbiter,
+    gate,
+    narrator,
+    new InventoryExtractorAgent(client, resolver),
+    new MovementExtractorAgent(client, resolver),
+    new ConditionsExtractorAgent(client, resolver),
+    gameManagementService,
+    cpuReflectionService,
+    settings,
+    logger,
+    scene,
+  );
 }
 
 export async function buildApp(options: AppOptions = {}) {
@@ -63,10 +120,12 @@ export async function buildApp(options: AppOptions = {}) {
   const llmContentLogger = new LlmContentLogger('logs/llm_content.jsonl');
 
   let llmService: LlmService;
+  let llmModel: BaseChatModel;
   if (options.llmModel) {
-    llmService = new LlmService(options.llmModel, {}, llmCallLogger, logger, llmContentLogger);
+    llmModel = options.llmModel;
+    llmService = new LlmService(llmModel, {}, llmCallLogger, logger, llmContentLogger);
   } else {
-    const defaultLlm = new ChatOpenAI({
+    llmModel = new ChatOpenAI({
       temperature: 0.7,
       model: "gemma-4b",
       apiKey: process.env.OPENAI_API_KEY || "lm-studio",
@@ -74,13 +133,17 @@ export async function buildApp(options: AppOptions = {}) {
         baseURL: process.env.OPENAI_API_BASE || "http://localhost:1234/v1",
       },
     });
-    llmService = new LlmService(defaultLlm, {}, llmCallLogger, logger, llmContentLogger);
+    llmService = new LlmService(llmModel, {}, llmCallLogger, logger, llmContentLogger);
   }
 
   const gameManagementService = new GameManagementService(llmService, logger);
   const adminCommandService = new AdminCommandService(gameManagementService, llmService, logger);
   const cpuReflectionService = new CpuReflectionService(llmService, {}, logger);
   const sessionFactory = new SessionFactory(undefined, undefined, undefined, llmService, worldRepo);
+  // Doc 27, Fase 3 (§7.2): 1 `LlmClient` compartilhado + 1 `IStructuredResolver`
+  // + N agentes com `temperature` própria. O orquestrador recebe os agentes
+  // por DI (nunca `LlmService`). Inativo por default (`microTurno=false`).
+  const microOrchestrator = buildMicroOrchestrator(llmModel, gameManagementService, cpuReflectionService, llmService, logger, llmCallLogger, llmContentLogger);
   const gameEngine = new GameEngine(
     undefined,
     undefined,
@@ -91,7 +154,8 @@ export async function buildApp(options: AppOptions = {}) {
     { godMode: false },
     gameManagementService,
     logger,
-    adminCommandService
+    adminCommandService,
+    microOrchestrator,
   );
 
   const gameController = new GameController(

@@ -305,6 +305,9 @@ export class GameController {
       logicalResolution: turnResult.logicalResolution,
       npcDecisions: turnResult.npcDecisions,
       diceRolls: turnResult.diceRolls,
+      // Doc 27, Fase 3 (§7.3): fila + trace do turno (aditivo; ausentes no legado).
+      ...(turnResult.npcOrder !== undefined ? { npcOrder: turnResult.npcOrder } : {}),
+      ...(turnResult.microTrace !== undefined ? { microTrace: turnResult.microTrace } : {}),
       updatedState: turnResult.state
     });
   }

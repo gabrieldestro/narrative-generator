@@ -183,7 +183,7 @@ export class FileSaveStore implements ISaveStore {
     }
   }
 
-  // Migração de versão: bundles antigos (sem schemaVersion ou v1/v2) são migrados para v3.
+  // Migração de versão: bundles antigos (sem schemaVersion ou v1/v2) são migrados para v5.
   // Nunca destrói dados — preserva campos desconhecidos ao re-gravar.
   public migrate(bundle: SessionBundle): SessionBundle {
     const raw = bundle as any;
@@ -197,13 +197,57 @@ export class FileSaveStore implements ISaveStore {
       schemaVersion = 2;
     }
 
+    if (schemaVersion === 2) {
+      // v2 -> v3: metadados de branching (sem mudança no GameState).
+      schemaVersion = 3;
+    }
+
+    if (schemaVersion === 3) {
+      // v3 -> v4 (doc 27, Fase 0): campos opcionais do micro-turno.
+      // Nunca destrói: só preenche defaults quando ausentes.
+      if (!Array.isArray(state.events)) {
+        state.events = [];
+      }
+      if (typeof state.nextSeq !== 'number') {
+        const maxSeq = state.events.reduce(
+          (m: number, e: any) => Math.max(m, typeof e?.seq === 'number' ? e.seq : 0),
+          0,
+        );
+        state.nextSeq = maxSeq + 1;
+      }
+      if (Array.isArray(state.characters)) {
+        state.characters = state.characters.map((c: any) => ({
+          vitality: 'ileso',
+          conditions: [],
+          ...c,
+        }));
+      }
+      schemaVersion = 4;
+    }
+
+    if (schemaVersion === 4) {
+      // v4 -> v5 (doc 27, Fase 4): memória factual da cena.
+      // Nunca destrói: só preenche defaults quando ausentes.
+      if (state.factSheet === undefined || state.factSheet === null || typeof state.factSheet !== 'object') {
+        state.factSheet = { facts: [], threads: [] };
+      } else {
+        if (!Array.isArray((state.factSheet as any).facts)) {
+          (state.factSheet as any).facts = [];
+        }
+        if (!Array.isArray((state.factSheet as any).threads)) {
+          (state.factSheet as any).threads = [];
+        }
+      }
+      schemaVersion = 5;
+    }
+
     const rootId = raw.rootId ?? raw.id;
     const parentId = raw.parentId !== undefined ? raw.parentId : null;
     const branchId = typeof raw.branchId === 'number' ? raw.branchId : 0;
     const depth = typeof raw.depth === 'number' ? raw.depth : (raw.turnNumber ?? state.turnNumber ?? 1);
 
-    if (schemaVersion !== SAVE_SCHEMA_VERSION && schemaVersion !== 2) {
-      this.logger.warn('schemaVersion desconhecido, tratando como v3', { id: bundle.id, schemaVersion });
+    if (schemaVersion !== SAVE_SCHEMA_VERSION) {
+      this.logger.warn('schemaVersion desconhecido, tratando como v5', { id: bundle.id, schemaVersion });
     }
 
     return {

@@ -8,16 +8,10 @@ import type {
 
 const CONCEPT_TYPES: ConceptType[] = ['item', 'faction', 'state', 'region', 'place', 'custom'];
 
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') || 'id'
-  );
-}
+import { slugify } from './utils/slugify.js';
+
+// Re-export para compatibilidade (dono único em `utils/slugify.ts` — doc 27, Fase 0).
+export { slugify };
 
 function ensureId(existing: string | undefined, fallback: string, index: number): string {
   if (existing && existing.trim()) return existing;

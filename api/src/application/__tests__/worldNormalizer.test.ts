@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeWorldTemplate } from '../worldNormalizer.js';
+import { normalizeWorldTemplate, slugify } from '../worldNormalizer.js';
 import type { WorldTemplate } from '../../domain/types.js';
 
 describe('normalizeWorldTemplate', () => {
@@ -70,5 +70,11 @@ describe('normalizeWorldTemplate', () => {
 
     const result = normalizeWorldTemplate(input);
     expect(result.characters[0]!.inventory).toEqual(['Espada']);
+  });
+
+  // Doc 27, Fase 0 — slugify compartilhado (re-export), bug de diacríticos corrigido.
+  it('slugify remove diacríticos (Sótão -> sotao)', () => {
+    expect(slugify('Sótão')).toBe('sotao');
+    expect(slugify('Taverna do Dragão')).toBe('taverna-do-dragao');
   });
 });

@@ -432,7 +432,85 @@ describe('GameEngine', () => {
     randomSpy.mockRestore();
   });
 
+  it('microTurno=true: pula os legados extractStateChanges + extractCharacterLocations (doc 27, Fase 2)', async () => {
+    const microEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { microTurno: true, arbiterHistoryTurns: 0 });
+    const state = JSON.parse(JSON.stringify(existingState));
+
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Aric tentou -> Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
+    const extractSpy = vi.spyOn(mockLlmService, 'extractStateChanges');
+    const locationsSpy = vi.spyOn(mockLlmService, 'extractCharacterLocations');
+
+    const result = await microEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+
+    expect(extractSpy).not.toHaveBeenCalled();
+    expect(locationsSpy).not.toHaveBeenCalled();
+    expect(result.state.turnNumber).toBe(4);
+  });
+
+  it('microTurno=false (default): legados continuam rodando', async () => {
+    const state = JSON.parse(JSON.stringify(existingState));
+
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Aric tentou -> Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
+    vi.spyOn(mockLlmService, 'extractStateChanges').mockResolvedValue({});
+    const locationsSpy = vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({});
+
+    await engine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+
+    expect(locationsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('microTurno=true + orquestrador: delega e retorna npcOrder/microTrace (doc 27, Fase 3)', async () => {
+    const runTurn = vi.fn(async () => ({
+      narrative: 'Micro-narração.',
+      logicalResolution: 'Darian tentou X -> Sucesso porque ...',
+      npcDecisions: [],
+      diceRolls: [{ characterName: 'Aric', roll: 11, isGodMode: false }],
+      npcOrder: ['Aric', 'Elara'],
+      microTrace: [{ micro: 1, actor: 'Aric', actorWhere: 'Floresta', queue: [], spotlight: 'Aric', gate: { allowed: [], denied: [] } }],
+      pendingMoves: [],
+    }));
+    const microOrchestrator = { runTurn, updateSettings: vi.fn() };
+    const microEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { microTurno: true, arbiterHistoryTurns: 0 }, undefined, undefined, undefined, microOrchestrator as any);
+    const state = JSON.parse(JSON.stringify(existingState));
+
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
+    const extractSpy = vi.spyOn(mockLlmService, 'extractStateChanges');
+    const locationsSpy = vi.spyOn(mockLlmService, 'extractCharacterLocations');
+
+    const result = await microEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+
+    expect(runTurn).toHaveBeenCalledTimes(1);
+    expect(result.npcOrder).toEqual(['Aric', 'Elara']);
+    expect(result.microTrace).toHaveLength(1);
+    expect(extractSpy).not.toHaveBeenCalled();
+    expect(locationsSpy).not.toHaveBeenCalled();
+    // turnNumber++ 1x por turno + 1 entrada de history (não 1 por micro).
+    expect(result.state.turnNumber).toBe(4);
+    expect(result.state.history.filter((h) => h.startsWith('Turno 3:'))).toHaveLength(1);
+  });
+
+  it('microTurno=true sem orquestrador: fail-safe volta ao legado', async () => {
+    const fallbackEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { microTurno: true, arbiterHistoryTurns: 0 });
+    const state = JSON.parse(JSON.stringify(existingState));
+
+    vi.spyOn(mockLlmService, 'arbitrateLogic').mockResolvedValue('Sucesso.');
+    vi.spyOn(mockLlmService, 'narrateFiction').mockResolvedValue('Cena narrada.');
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Ctx.');
+    vi.spyOn(mockLlmService, 'extractCharacterLocations').mockResolvedValue({});
+
+    const result = await fallbackEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+
+    expect(result.npcOrder).toBeUndefined();
+    expect(result.microTrace).toBeUndefined();
+    expect(result.state.turnNumber).toBe(4);
+  });
+
   it('deve criar novo jogo quando não há save', async () => {
+
     vi.mocked(mockRepo.load).mockResolvedValue(null);
     vi.mocked(mockInput.question)
       .mockResolvedValueOnce('1')       // gênero

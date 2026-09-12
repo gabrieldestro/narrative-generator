@@ -1,5 +1,11 @@
 import type { GameState } from '../domain/types.js';
 
+/**
+ * @deprecated em favor de `api/src/application/llm/<agente>/prompts.ts`
+ * (doc 27, Fase 1 — prompt colocalizado por agente, §7.2). Mantido até a
+ * migração (Fase 4) para os fluxos legados que ainda importam daqui.
+ */
+
 export function formatWorldConcepts(state: GameState): string {
   if (!state.concepts || state.concepts.length === 0) return '';
   const typeLabels: Record<string, string> = {

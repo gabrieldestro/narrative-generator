@@ -197,7 +197,10 @@ async function simulateTurn(
 
   // Update NPC scratchpads
   for (const char of npcChars) {
-    cpuService.recordArbiterResult(char, state.turnNumber, logicalResolution);
+    // Doc 27, Fase 1: passa a ação decidida para o scratchpad.
+    const settled = npcSettled.find(r => r.status === 'fulfilled' && r.value.char.name === char.name);
+    const action = settled?.status === 'fulfilled' ? settled.value.action : undefined;
+    cpuService.recordArbiterResult(char, state.turnNumber, logicalResolution, action);
   }
 
   // ── Narrator ─────────────────────────────────────────────────────────────

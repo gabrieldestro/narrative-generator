@@ -180,6 +180,13 @@ describe('CpuReflectionService', () => {
       service.recordArbiterResult(char, 1, resolution);
       expect(char.scratchpad).toHaveLength(1);
     });
+
+    it('usa a ação passada (doc 27, Fase 1) em vez de "(ação desconhecida)"', () => {
+      const char = makeChar({ currentObjective: 'Abrir a porta' });
+      const resolution = 'Elara tentou abrir a porta -> Sucesso porque a porta estava destrancada.';
+      service.recordArbiterResult(char, 3, resolution, 'abrir a porta com a chave');
+      expect(char.scratchpad![0]!.action).toBe('abrir a porta com a chave');
+    });
   });
 });
 

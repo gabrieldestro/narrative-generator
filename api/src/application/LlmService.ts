@@ -1,15 +1,11 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { SystemMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { GameState, Character, GameSettings } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IOutputWriter, ILogger } from "../domain/ports.js";
 import type { LlmCallLogger } from "../infrastructure/LlmCallLogger.js";
 import type { LlmContentLogger } from "../infrastructure/LlmContentLogger.js";
 import {
-  arbiterSystemPrompt,
-  arbiterHumanPrompt,
-  narratorSystemPrompt,
-  narratorHumanPrompt,
   initialContextSystemPrompt,
   initialContextHumanPrompt,
   playerCharacterSystemPrompt,
@@ -24,10 +20,6 @@ import {
   observeHumanPrompt,
   narrateSystemPrompt,
   narrateHumanPrompt,
-  summarizeSystemPrompt,
-  summarizeHumanPrompt,
-  updateWorldContextSystemPrompt,
-  updateWorldContextHumanPrompt,
   extractLocationSystemPrompt,
   extractLocationHumanPrompt,
   extractStateChangesSystemPrompt,
@@ -39,13 +31,17 @@ import {
   LOCATION_MAP_FORMAT_SPEC,
 } from "./prompts.js";
 import { SelfHealingService } from "./selfHealing/SelfHealingService.js";
+import { PromptJsonResolver } from "./llm/StructuredResolver.js";
+import { LlmClient } from "./llm/LlmClient.js";
+import { ArbiterAgent } from "./llm/arbiter/ArbiterAgent.js";
+import { NarratorAgent } from "./llm/narrator/NarratorAgent.js";
+import { MemoryAgent } from "./llm/memory/MemoryAgent.js";
 import {
   validateStateChanges,
   validateCharacterSheet,
   validateLocationMap,
   normalizeStateChanges,
 } from "./selfHealing/JsonValidators.js";
-import { classifyLlmError } from "./selfHealing/LlmErrorClassifier.js";
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -57,10 +53,26 @@ class NullLogger implements ILogger {
   child(_bindings: Record<string, unknown>): ILogger { return this; }
 }
 
+/**
+ * @deprecated em favor dos agentes de `api/src/application/llm/` (doc 27,
+ * Fase 4 — §7.2). Virou fachada fina: mantém as assinaturas para o
+ * `GameEngine` legado/CLI/benchmark, mas delega aos agentes donos.
+ * `extractStateChanges` é o último legado sem dono (substituído pelos
+ * micro-extratores no loop; removido quando a flag ligar por default).
+ */
 export class LlmService {
   private readonly settings: GameSettings;
   private readonly appLogger: ILogger;
   private readonly selfHealing: SelfHealingService;
+  /** Doc 27, Fase 0: prova do padrão — extratores resolvem via `resolveJson`. */
+  private readonly structuredResolver: PromptJsonResolver;
+  /** Doc 27, Fase 1: árbitro/narrador vivem em classes próprias (§7.2);
+   * estes métodos delegam (adaptador legado, zero mudança de fluxo). */
+  private readonly llmClient: LlmClient;
+  private readonly arbiterAgent: ArbiterAgent;
+  private readonly narratorAgent: NarratorAgent;
+  /** Doc 27, Fase 4: memória factual junta (`MemoryAgent`). */
+  private readonly memoryAgent: MemoryAgent;
 
   constructor(
     private readonly llm: BaseChatModel,
@@ -72,6 +84,19 @@ export class LlmService {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.appLogger = appLogger ?? new NullLogger();
     this.selfHealing = new SelfHealingService(llm, logger, this.appLogger, this.settings);
+    this.structuredResolver = new PromptJsonResolver(llm, logger, this.appLogger, this.settings, this.contentLogger);
+    this.llmClient = new LlmClient(llm, logger, this.appLogger, this.contentLogger);
+    this.arbiterAgent = new ArbiterAgent(this.llmClient, this.structuredResolver, this.selfHealing);
+    this.narratorAgent = new NarratorAgent(
+      this.llmClient,
+      this.selfHealing,
+      this.settings,
+      this.logger,
+      this.appLogger,
+      this.contentLogger,
+      this.summarizeMemory.bind(this),
+    );
+    this.memoryAgent = new MemoryAgent(this.llmClient, this.structuredResolver, this.appLogger);
   }
 
   async generateInitialContext(style: string, writingStyle: string, baseContext?: string): Promise<string> {
@@ -138,11 +163,12 @@ export class LlmService {
     );
 
     try {
-      const raw = await this.invokePrompts(system, human, 'Extrator:Localização', state.turnNumber);
-      const healed = await this.selfHealing.parseWithRepair({
+      // Fase 0 (doc 27): mesmo prompt/validador/fallback, via `resolveJson`.
+      const healed = await this.structuredResolver.resolveJson({
         agent: 'Extrator:Localização',
         turn: state.turnNumber,
-        raw,
+        system,
+        human,
         schemaSpec: LOCATION_MAP_FORMAT_SPEC,
         validate: validateLocationMap,
         compact: true,
@@ -165,11 +191,12 @@ export class LlmService {
     const human = extractStateChangesHumanPrompt(state, narration);
 
     try {
-      const raw = await this.invokePrompts(system, human, 'Extrator:Estado', state.turnNumber);
-      const healed = await this.selfHealing.parseWithRepair({
+      // Fase 0 (doc 27): mesmo prompt/validador/fallback, via `resolveJson`.
+      const healed = await this.structuredResolver.resolveJson({
         agent: 'Extrator:Estado',
         turn: state.turnNumber,
-        raw,
+        system,
+        human,
         schemaSpec: STATE_CHANGES_FORMAT_SPEC,
         validate: validateStateChanges,
         compact: true,
@@ -186,21 +213,9 @@ export class LlmService {
   }
 
   async arbitrateLogic(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): Promise<string> {
-    const turnsToUse = recentHistory?.length ?? 0;
-    return this.selfHealing.invokeWithRetry({
-      agent: 'Árbitro',
-      turn: state.turnNumber,
-      maxBudget: turnsToUse,
-      minBudget: 0,
-      budgetStep: 1,
-      build: (budget) => {
-        const history = budget > 0 && recentHistory ? recentHistory.slice(-budget) : undefined;
-        return [
-          new SystemMessage(arbiterSystemPrompt),
-          new HumanMessage(arbiterHumanPrompt(state, actions, history, longTermSummary)),
-        ];
-      },
-    });
+    // Fase 1 (doc 27): delega ao `ArbiterAgent.arbitrateLegacy` — mesmos
+    // prompts de `prompts.ts`, mesmo `invokeWithRetry`, zero mudança de fluxo.
+    return this.arbiterAgent.arbitrateLegacy(state, actions, recentHistory, longTermSummary);
   }
 
   async generateInitialNarrative(state: GameState): Promise<string> {
@@ -273,144 +288,26 @@ export class LlmService {
     unexpectedEventTriggered?: boolean,
     sceneDescription?: string
   ): Promise<string> {
-    const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
-
-    const buildMessages = async (budget: number): Promise<BaseMessage[]> => {
-      const dropped = state.history.length - budget;
-      const summary = await this.healSummaryForDroppedTurns(state, dropped);
-      const reducedState: GameState = {
-        ...state,
-        history: state.history.slice(-budget),
-        ...(summary !== undefined ? { longTermSummary: summary } : {}),
-      };
-      return [
-        new SystemMessage(narratorSystemPrompt(reducedState, sizePrompt, unexpectedEventTriggered)),
-        new HumanMessage(narratorHumanPrompt(reducedState, actions, logicalResolution)),
-      ];
-    };
-
-    let fullResponse = "";
-    if (sceneDescription) {
-      if (output) output.write(sceneDescription + "\n\n");
-      fullResponse = sceneDescription + "\n\n";
-    }
-
-    const start = Date.now();
-    const initialMessages = await buildMessages(state.history.length);
-    const fullPrompt = initialMessages.map(m => String(m.content)).join('\n');
-    let stream: Awaited<ReturnType<typeof this.llm.stream>>;
-
-    try {
-      stream = await this.llm.stream(initialMessages);
-    } catch (err) {
-      if (classifyLlmError(err) !== 'context_overflow') {
-        throw err;
-      }
-      this.logger?.record({
-        timestamp: new Date().toISOString(),
-        agent: 'Narrador',
-        turnNumber: state.turnNumber,
-        durationMs: Date.now() - start,
-        attempt: 1,
-        status: 'error',
-        errorMessage: err instanceof Error ? err.message : String(err),
-      });
-      const healed = await this.selfHealing.invokeWithRetry({
-        agent: 'Narrador',
-        turn: state.turnNumber,
-        maxBudget: state.history.length,
-        minBudget: 0,
-        budgetStep: 1,
-        startAttempt: 2,
-        initialBudget: Math.max(0, state.history.length - 1),
-        build: buildMessages,
-      });
-      if (output) output.write(healed);
-      const recovered = fullResponse + healed;
-      this.contentLogger?.record({
-        timestamp: new Date().toISOString(),
-        turnNumber: state.turnNumber,
-        agent: 'Narrador',
-        fullPrompt,
-        fullResponse: recovered,
-        status: 'retry',
-        durationMs: Date.now() - start,
-      } as any);
-      return recovered;
-    }
-
-    for await (const chunk of stream) {
-      const text = chunk.content as string;
-      if (output) output.write(text);
-      fullResponse += text;
-    }
-
-    this.logger?.record({
-      timestamp: new Date().toISOString(),
-      agent: 'Narrador',
-      turnNumber: state.turnNumber,
-      durationMs: Date.now() - start,
-      attempt: 1,
-      status: 'success',
-    });
-
-    this.contentLogger?.record({
-      timestamp: new Date().toISOString(),
-      turnNumber: state.turnNumber,
-      agent: 'Narrador',
-      fullPrompt,
-      fullResponse,
-      status: 'success',
-      durationMs: Date.now() - start,
-    } as any);
-
-    return fullResponse;
-  }
-
-  private async healSummaryForDroppedTurns(state: GameState, dropped: number): Promise<string | undefined> {
-    if (dropped <= 0 || !this.settings.healSummaryOnOverflow) {
-      return state.longTermSummary;
-    }
-    try {
-      const oldestTurns = state.history.slice(0, dropped);
-      return await this.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
-    } catch (err) {
-      this.appLogger.warn('[SelfHealing] falha ao sumarizar turnos cortados', {
-        turnNumber: state.turnNumber,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return state.longTermSummary;
-    }
+    // Fase 1 (doc 27): delega ao `NarratorAgent.narrateLegacy` — stream +
+    // fallback de overflow idênticos ao corpo movido, zero mudança de fluxo.
+    return this.narratorAgent.narrateLegacy(
+      state,
+      actions,
+      logicalResolution,
+      output,
+      unexpectedEventTriggered,
+      sceneDescription,
+    );
   }
 
   async summarizeMemory(longTermSummary: string | undefined, oldestTurns: string[], turn = 0): Promise<string> {
-    const messages = [
-      new SystemMessage(summarizeSystemPrompt()),
-      new HumanMessage(summarizeHumanPrompt(longTermSummary, oldestTurns)),
-    ];
-
-    if (this.logger) {
-      const response = await this.logger.measure('Sumarizador', turn, () => this.llm.invoke(messages));
-      return response.content as string;
-    }
-
-    const response = await this.llm.invoke(messages);
-    return response.content as string;
+    // Fase 4 (doc 27): delega ao `MemoryAgent` (mesmos prompts, zero mudança).
+    return this.memoryAgent.summarizeMemory(longTermSummary, oldestTurns, turn);
   }
 
   async updateWorldContext(currentContext: string, lastNarration: string, turn = 0): Promise<string> {
-    const messages = [
-      new SystemMessage(updateWorldContextSystemPrompt()),
-      new HumanMessage(updateWorldContextHumanPrompt(currentContext, lastNarration)),
-    ];
-
-    if (this.logger) {
-      const response = await this.logger.measure('Atualizador:Contexto', turn, () => this.llm.invoke(messages));
-      return response.content as string;
-    }
-
-    const response = await this.llm.invoke(messages);
-    return response.content as string;
+    // Fase 4 (doc 27): delega ao `MemoryAgent` (mesmos prompts, zero mudança).
+    return this.memoryAgent.updateWorldContext(currentContext, lastNarration, turn);
   }
 
   async extractCharacterFromHistory(
