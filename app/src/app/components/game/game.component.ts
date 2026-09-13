@@ -7,6 +7,8 @@ import { NarrativePanelComponent } from './narrative-panel/narrative-panel.compo
 import { ActionInputComponent } from './action-input/action-input.component';
 import { CharacterPanelComponent } from './character-panel/character-panel.component';
 import { DebugPanelComponent } from './debug-panel/debug-panel.component';
+import { TurnQueueComponent } from './turn-queue/turn-queue.component';
+import { EventsLedgerComponent } from './events-ledger/events-ledger.component';
 
 @Component({
   selector: 'ng-game',
@@ -19,6 +21,8 @@ import { DebugPanelComponent } from './debug-panel/debug-panel.component';
     ActionInputComponent,
     CharacterPanelComponent,
     DebugPanelComponent,
+    TurnQueueComponent,
+    EventsLedgerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './game.component.html',

@@ -1,5 +1,8 @@
 export type CharacterStatus = 'active' | 'dead' | 'lost';
 
+// Doc 27, Fase 5 — vitalidade mínima narrativa (sem RPG).
+export type Vitality = 'ileso' | 'ferido' | 'grave' | 'caído';
+
 export interface ScratchpadEntry {
   turn: number;
   objective: string;
@@ -20,4 +23,6 @@ export interface Character {
   currentLocation?: string;
   inventory?: string[];
   status?: CharacterStatus;
+  vitality?: Vitality;
+  conditions?: string[];
 }

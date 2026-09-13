@@ -1,0 +1,54 @@
+<div class="turn-queue" [class.turn-queue--list]="layout === 'list'" role="list" aria-label="Fila de turno">
+  @if (gameState.isLoading()) {
+    <div class="turn-queue__skeleton" aria-label="Processando turno">
+      <span class="turn-queue__skeleton-chip"></span>
+      <span class="turn-queue__skeleton-chip"></span>
+      <span class="turn-queue__skeleton-chip"></span>
+    </div>
+  } @else if (gameState.hasTrace()) {
+    @if (layout === 'strip' && gameState.microTrace().length > 1) {
+      <div class="turn-queue__selector" role="group" aria-label="Seletor de micro">
+        @for (block of gameState.microTrace(); track block.micro; let i = $index) {
+          <button
+            type="button"
+            class="turn-queue__micro-btn"
+            [class.turn-queue__micro-btn--active]="i === gameState.selectedMicro()"
+            (click)="gameState.selectMicro(i)">
+            Micro {{ block.micro }}
+          </button>
+        }
+      </div>
+    }
+    <div class="turn-queue__chips">
+      @for (entry of gameState.turnQueue(); track entry.who; let i = $index) {
+        <span
+          role="listitem"
+          class="turn-queue__chip turn-queue__chip--{{ entry.status }}"
+          [class.turn-queue__chip--spotlight]="entry.who === gameState.selectedBlock()?.spotlight"
+          [title]="deniedWhy(entry.who) ?? statusLabel(entry)">
+          <span class="turn-queue__icon">{{ statusIcon(entry.status) }}</span>
+          <span class="turn-queue__name">{{ i + 1 }} {{ entry.who }}</span>
+          <span class="turn-queue__where">{{ entry.where }}</span>
+          <span class="turn-queue__state">{{ statusLabel(entry) }}</span>
+          @if (channelLabel(entry.who); as channel) {
+            <span class="turn-queue__channel">({{ channel }})</span>
+          }
+        </span>
+      }
+    </div>
+    @if (gameState.nextInOrder(); as next) {
+      <p class="turn-queue__next">Próximo na ordem: {{ next }}</p>
+    }
+  } @else {
+    <div class="turn-queue__chips">
+      @for (char of gameState.characters(); track char.name) {
+        <span role="listitem" class="turn-queue__chip turn-queue__chip--neutral">
+          <span class="turn-queue__name">{{ char.name }}</span>
+          <span class="turn-queue__where">{{ char.currentLocation || 'Desconhecido' }}</span>
+        </span>
+      } @empty {
+        <p class="turn-queue__empty">Nenhum turno processado ainda</p>
+      }
+    </div>
+  }
+</div>

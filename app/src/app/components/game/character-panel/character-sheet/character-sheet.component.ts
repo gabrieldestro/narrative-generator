@@ -18,4 +18,18 @@ export class CharacterSheetComponent {
     if (status === 'dead' || status === 'lost') return 'error';
     return 'success';
   }
+
+  // Doc 27, Fase 5: badge de vitalidade no status (sem ficha numérica).
+  get vitalityType(): BadgeType {
+    switch (this.character.vitality ?? 'ileso') {
+      case 'ileso': return 'success';
+      case 'ferido': return 'info';
+      case 'grave': return 'warning';
+      case 'caído': return 'error';
+    }
+  }
+
+  get vitalityLabel(): string {
+    return this.character.vitality ?? 'ileso';
+  }
 }

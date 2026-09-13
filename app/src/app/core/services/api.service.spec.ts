@@ -23,6 +23,10 @@ function makeBundle(id: string): SessionBundle {
   return {
     schemaVersion: 1,
     id,
+    rootId: id,
+    parentId: null,
+    branchId: 0,
+    depth: 1,
     mode: 'template',
     title: 'A Masmorra Esquecida',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -58,7 +62,13 @@ describe('ApiService (saves)', () => {
 
     const req = httpMock.expectOne('http://localhost:3000/api/saves');
     expect(req.request.method).toBe('GET');
-    req.flush([makeBundle('s-1'), makeBundle('s-2')]);
+    // O endpoint real retorna resumos (sem state/schemaVersion) — o serviço
+    // só ordena por updatedAt desc.
+    const summaries: SavedGameSummary[] = [makeBundle('s-1'), makeBundle('s-2')].map(
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      ({ state, schemaVersion, ...summary }) => summary,
+    );
+    req.flush(summaries);
 
     expect(result?.length).toBe(2);
     expect(result?.[0]?.id).toBe('s-1');

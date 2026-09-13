@@ -12,6 +12,16 @@
         <span>{{ character.currentLocation || 'Desconhecido' }}</span>
       </div>
       <div class="character-sheet__field">
+        <span class="character-sheet__label">Vitalidade:</span>
+        <span class="character-sheet__vitality character-sheet__vitality--{{ vitalityType }}">{{ vitalityLabel }}</span>
+      </div>
+      @if (character.conditions && character.conditions.length > 0) {
+        <div class="character-sheet__field">
+          <span class="character-sheet__label">Condições:</span>
+          <span>{{ character.conditions.join(', ') }}</span>
+        </div>
+      }
+      <div class="character-sheet__field">
         <span class="character-sheet__label">Descrição:</span>
         <span>{{ character.description }}</span>
       </div>

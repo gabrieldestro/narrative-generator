@@ -1,5 +1,6 @@
 import type { GameState } from './game-state.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
+import type { MicroBlock } from './micro-turn.model';
 import type { GameSettings } from './game-settings.model';
 import type { SessionBundle, SavedGameSummary } from './session-save.model';
 import type { WorldTemplate } from './world-template.model';
@@ -64,6 +65,9 @@ export interface TurnResponse {
   updatedState: GameState;
   npcDecisions?: NpcDecision[];
   diceRolls?: DiceRoll[];
+  // Doc 27, Fase 5 (§7.3): fila + trace do turno (ausentes no legado).
+  npcOrder?: string[];
+  microTrace?: MicroBlock[];
 }
 
 export interface GameStateResponse {

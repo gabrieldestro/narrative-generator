@@ -18,3 +18,8 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+.character-sheet__vitality { font-weight: 600; text-transform: capitalize; }
+.character-sheet__vitality--success { color: var(--success, #a6e3a1); }
+.character-sheet__vitality--info { color: var(--accent, #89b4fa); }
+.character-sheet__vitality--warning { color: var(--warning, #f9e2af); }
+.character-sheet__vitality--error { color: var(--error, #f38ba8); }

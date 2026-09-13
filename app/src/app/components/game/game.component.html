@@ -13,9 +13,16 @@
       <ng-collapsible-panel title="Estado" icon="assignment">
         <ng-character-panel/>
       </ng-collapsible-panel>
+      <ng-collapsible-panel title="Fila" icon="format_list_numbered">
+        <ng-turn-queue layout="list"/>
+      </ng-collapsible-panel>
+      <ng-collapsible-panel title="Ledger" icon="receipt_long">
+        <ng-events-ledger/>
+      </ng-collapsible-panel>
     </mat-sidenav>
 
     <mat-sidenav-content class="game-layout__center" role="main">
+      <ng-turn-queue layout="strip"/>
       <ng-narrative-panel/>
       <ng-action-input/>
     </mat-sidenav-content>

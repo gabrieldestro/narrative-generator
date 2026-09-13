@@ -5,6 +5,7 @@ import type { Location } from '../models/location.model';
 import type { WorldConcept } from '../models/world-concept.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 import type { TurnResponse, ObserveResponse, NarrateResponse } from '../models/api-payloads.model';
+import type { ActionEvent, MicroBlock } from '../models/micro-turn.model';
 
 export interface AppError {
   message: string;
@@ -48,6 +49,25 @@ export class GameStateService {
   readonly turnDebugHistory = signal<TurnDebugEntry[]>([]);
   readonly hasProcessedFirstTurn = signal<boolean>(false);
 
+  // Doc 27, Fase 5 (§7.3): fila de turno a partir do `microTrace` da resposta.
+  // Sem streaming: a fila renderiza após o turno concluir; durante o
+  // processamento, `isLoading` mostra esqueleto.
+  readonly microTrace = signal<MicroBlock[]>([]);
+  readonly selectedMicro = signal<number>(0);
+  readonly hasTrace = computed(() => this.microTrace().length > 0);
+  readonly selectedBlock = computed<MicroBlock | null>(() => {
+    const trace = this.microTrace();
+    if (trace.length === 0) return null;
+    return trace[Math.min(this.selectedMicro(), trace.length - 1)] ?? null;
+  });
+  readonly turnQueue = computed(() => this.selectedBlock()?.queue ?? []);
+  readonly nextInOrder = computed<string | null>(() => {
+    const queue = this.turnQueue();
+    // queue[0] = foco (ator); o próximo é o primeiro após o foco.
+    return queue.length > 1 ? queue[1]!.who : null;
+  });
+  readonly eventsLedger = computed<ActionEvent[]>(() => this.gameState()?.events ?? []);
+
   readonly leftPanelOpen = signal(true);
   readonly rightPanelOpen = signal(true);
 
@@ -57,6 +77,8 @@ export class GameStateService {
     this.error.set(null);
     this.turnDebugHistory.set([]);
     this.hasProcessedFirstTurn.set(false);
+    this.microTrace.set([]);
+    this.selectedMicro.set(0);
   }
 
   // Restaura uma partida salva: aplica o estado completo (incl. history) sem tocar nos settings.
@@ -70,6 +92,8 @@ export class GameStateService {
     this.arbiterResolution.set(null);
     this.turnDebugHistory.set([]);
     this.hasProcessedFirstTurn.set(false);
+    this.microTrace.set([]);
+    this.selectedMicro.set(0);
   }
 
   setObservation(result: ObserveResponse): void {
@@ -110,8 +134,18 @@ export class GameStateService {
     this.arbiterResolution.set(result.logicalResolution);
     this.npcDecisions.set(result.npcDecisions ?? []);
     this.diceRolls.set(result.diceRolls ?? []);
+    // Doc 27, Fase 5: armazena o trace junto (padrão atual, sem SseService);
+    // default = último micro.
+    this.microTrace.set(result.microTrace ?? []);
+    this.selectedMicro.set(Math.max(0, (result.microTrace ?? []).length - 1));
     this.error.set(null);
     this.saveCurrentTurnToHistory(turnBeforeUpdate);
+  }
+
+  selectMicro(index: number): void {
+    const trace = this.microTrace();
+    if (trace.length === 0) return;
+    this.selectedMicro.set(Math.min(Math.max(0, index), trace.length - 1));
   }
 
   saveCurrentTurnToHistory(turnNumber: number): void {

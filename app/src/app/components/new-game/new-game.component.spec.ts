@@ -26,6 +26,10 @@ function makeGameState(): GameState {
 function makeSummary(id: string): SavedGameSummary {
   return {
     id,
+    rootId: id,
+    parentId: null,
+    branchId: 0,
+    depth: 1,
     mode: 'template',
     title: `Aventura ${id}`,
     createdAt: '2026-01-01T00:00:00.000Z',

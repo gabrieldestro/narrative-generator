@@ -1,0 +1,17 @@
+<div class="events-ledger" aria-label="Ledger factual">
+  @if (gameState.eventsLedger().length === 0) {
+    <p class="events-ledger__empty">Sem fatos registrados ainda</p>
+  } @else {
+    <ol class="events-ledger__list">
+      @for (event of gameState.eventsLedger(); track event.seq) {
+        <li class="events-ledger__item">
+          <span class="events-ledger__seq">#{{ event.seq }}</span>
+          <span class="events-ledger__who">{{ event.who }}</span>
+          <span class="events-ledger__did">{{ event.did }}</span>
+          <span class="events-ledger__outcome events-ledger__outcome--{{ event.outcome }}">{{ event.outcome }}</span>
+          <span class="events-ledger__where">{{ event.where }}</span>
+        </li>
+      }
+    </ol>
+  }
+</div>
