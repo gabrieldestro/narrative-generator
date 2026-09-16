@@ -1,208 +1,30 @@
 import type { FastifyInstance } from 'fastify';
-import type { GameController } from '../controllers/GameController.js';
+import type { SetupController } from '../controllers/SetupController.js';
+import type { TurnController } from '../controllers/TurnController.js';
+import type { SavesController } from '../controllers/SavesController.js';
+import type { AdminController } from '../controllers/AdminController.js';
 import type { EnrichController } from '../controllers/EnrichController.js';
+import { registerSetupRoutes } from './setup.routes.js';
+import { registerTurnRoutes } from './turn.routes.js';
+import { registerSavesRoutes } from './saves.routes.js';
+import { registerAdminRoutes } from './admin.routes.js';
+import { registerEnrichRoutes } from './enrich.routes.js';
 
-export function registerGameRoutes(fastify: FastifyInstance, controller: GameController, enrichController?: EnrichController) {
-  // Lista templates de mundos
-  fastify.get('/api/worlds', (req, reply) => controller.listWorlds(req, reply));
+export interface ApiControllers {
+  setup: SetupController;
+  turn: TurnController;
+  saves: SavesController;
+  admin: AdminController;
+  enrich?: EnrichController;
+}
 
-  // Lista partidas salvas (tela "Continuar" - latest por campanha por padrão; ?all=true para todos)
-  fastify.get('/api/saves', (req: any, reply) => controller.listSaves(req, reply));
-
-  // Histórico completo de checkpoints de uma campanha
-  fastify.get('/api/saves/:rootId/history', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['rootId'],
-        properties: {
-          rootId: { type: 'string' },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.listHistory(req, reply));
-
-  // Podar checkpoints antigos (mantém só o mais recente)
-  fastify.post('/api/saves/prune', {
-    schema: {
-      body: {
-        type: 'object',
-        properties: {
-          keepLatest: { type: 'boolean' },
-          rootId: { type: 'string' },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.pruneSaves(req, reply));
-
-  // Bundle completo de uma partida salva (restauração)
-  fastify.get('/api/saves/:sessionId', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.getSave(req, reply));
-
-  // Apaga uma partida salva (disco + cache)
-  fastify.delete('/api/saves/:sessionId', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.deleteSave(req, reply));
-
-  // Cria um novo jogo
-  fastify.post('/api/games/new', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['mode'],
-        properties: {
-          mode: { type: 'string', enum: ['template', 'custom'] },
-          templateName: { type: 'string' },
-          customPrompt: { type: 'string' },
-          settings: { type: 'object', additionalProperties: true },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.createGame(req, reply));
-
-  // Enriquecer um campo do formulário de cenário customizado via LLM
-  if (enrichController) {
-    fastify.post('/api/games/enrich', {
-      schema: {
-        body: {
-          type: 'object',
-          required: ['field', 'value'],
-          properties: {
-            field: { type: 'string' },
-            value: { type: 'string' },
-            context: { type: 'object', additionalProperties: true },
-          },
-        },
-      },
-    }, (req: any, reply) => enrichController.enrich(req, reply));
+/** Compõe as rotas da API a partir dos controllers segregados por área (front: new-game, game, history, admin). */
+export function registerGameRoutes(fastify: FastifyInstance, controllers: ApiControllers) {
+  registerSetupRoutes(fastify, controllers.setup);
+  registerTurnRoutes(fastify, controllers.turn);
+  registerSavesRoutes(fastify, controllers.saves);
+  registerAdminRoutes(fastify, controllers.admin);
+  if (controllers.enrich) {
+    registerEnrichRoutes(fastify, controllers.enrich);
   }
-
-  // Processa 1 turno do jogo
-  fastify.post('/api/games/:sessionId/turn', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-      body: {
-        type: 'object',
-        required: ['playerText'],
-        properties: {
-          actionType: {
-            type: 'string',
-            enum: ['observe', 'speak', 'attack', 'sneak', 'use_item', 'interact', 'flee', 'free'],
-            default: 'free'
-          },
-          actionIntent: {
-            type: 'string',
-            enum: ['curious', 'aggressive', 'cautious', 'friendly', 'intimidating', 'desperate', 'neutral'],
-            default: 'neutral'
-          },
-          playerText: { type: 'string' },
-          characterName: { type: 'string' },
-          settings: { type: 'object', additionalProperties: true },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.processTurn(req, reply));
-
-  // Observa/detalha um aspecto da cena sem avançar o turno
-  fastify.post('/api/games/:sessionId/observe', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-      body: {
-        type: 'object',
-        required: ['playerText'],
-        properties: {
-          playerText: { type: 'string' },
-          characterName: { type: 'string' },
-          settings: { type: 'object', additionalProperties: true },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.observe(req, reply));
-
-  // Narra uma declaração do jogador respeitando o que foi dito e resolve o estado do mundo
-  fastify.post('/api/games/:sessionId/narrate', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-      body: {
-        type: 'object',
-        required: ['playerText'],
-        properties: {
-          playerText: { type: 'string' },
-          characterName: { type: 'string' },
-          settings: { type: 'object', additionalProperties: true },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.narrate(req, reply));
-
-  // Executa um comando administrativo (itens, personagens, locais, conceitos, extrações)
-  fastify.post('/api/games/:sessionId/command', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-      body: {
-        type: 'object',
-        required: ['command'],
-        properties: {
-          command: { type: 'string' },
-          args: { type: 'array', items: { type: 'string' } },
-          fields: { type: 'object', additionalProperties: true },
-          settings: { type: 'object', additionalProperties: true },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.executeCommand(req, reply));
-
-  // Consulta o estado do jogo
-  fastify.get('/api/games/:sessionId/state', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.getGameState(req, reply));
 }

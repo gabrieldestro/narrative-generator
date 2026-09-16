@@ -23,14 +23,14 @@ function makeState(): GameState {
 function makeTurnResult(sessionId: string): TurnResponse {
   return {
     sessionId,
-    narrative: 'Micro-narração.',
+    narrative: 'Narração do passo.',
     logicalResolution: 'Darian tentou X -> Sucesso porque ...',
     updatedState: makeState(),
     npcDecisions: [{ characterName: 'Elara', action: 'a', reasoning: 'r', success: true }],
     diceRolls: [{ characterName: 'Darian', roll: 11 }],
-    microTrace: [
+    stepTrace: [
       {
-        micro: 1,
+        step: 1,
         actor: 'Darian',
         actorWhere: 'Pátio',
         queue: [{ who: 'Darian', where: 'Pátio', status: 'done' }],
@@ -46,7 +46,7 @@ function routeWith(sessionId: string): ActivatedRouteSnapshot {
 }
 
 // Regressão: o navigate pós-turno (para o novo checkpoint) não pode
-// refetchar e zerar o contexto transitório (microTrace/debug) — só a
+// refetchar e zerar o contexto transitório (stepTrace/debug) — só a
 // narrativa central (history, persistido) sobreviveria.
 describe('SessionGuard', () => {
   let guard: SessionGuard;

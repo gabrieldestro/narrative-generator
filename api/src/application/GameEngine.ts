@@ -1,11 +1,11 @@
-import type { GameState, GameSettings, NpcDecision, DiceRoll, MicroBlock } from "../domain/types.js";
+import type { GameState, GameSettings, NpcDecision, DiceRoll, TurnStep } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IUserInput, IOutputWriter, ILogger } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
 import type { LlmService } from "./LlmService.js";
 import type { SessionFactory } from "./SessionFactory.js";
 import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
-import type { MicroTurnOrchestrator } from "./MicroTurnOrchestrator.js";
+import type { TurnOrchestrator } from "./TurnOrchestrator.js";
 import { GameManagementService } from "./GameManagementService.js";
 import { AdminCommandService } from "./AdminCommandService.js";
 
@@ -51,7 +51,7 @@ export class GameEngine {
     gameManagementService?: GameManagementService,
     logger?: ILogger,
     adminCommandService?: AdminCommandService,
-    private readonly microOrchestrator?: MicroTurnOrchestrator,
+    private readonly orchestrator?: TurnOrchestrator,
   ) {
     this.input = input ?? new DummyInput();
     this.output = output ?? new DummyOutput();
@@ -64,7 +64,7 @@ export class GameEngine {
   public updateSettings(partial: Partial<GameSettings>): void {
     this.settings = { ...this.settings, ...partial };
     // Doc 27, Fase 3: o orquestrador guarda cópia — encaminha para não divergir.
-    this.microOrchestrator?.updateSettings(this.settings);
+    this.orchestrator?.updateSettings(this.settings);
   }
 
   public getSettings(): Readonly<GameSettings> {
@@ -148,21 +148,21 @@ export class GameEngine {
   }
 
   /**
-   * O turno: sequência de micros do orquestrador (1 por personagem ativo).
-   * `turnNumber++` 1x por turno; `sceneDescription` embutida só no 1º micro;
-   * `unexpectedEvent` 1x por turno no narrador do 1º micro.
+   * O turno: sequência de steps do orquestrador (1 por personagem ativo).
+   * `turnNumber++` 1x por turno; `sceneDescription` embutida só no 1º step;
+   * `unexpectedEvent` 1x por turno no narrador do 1º step.
    */
   public async processTurn(
     state: GameState,
     playerActions: Map<string, string>,
-  ): Promise<{ narrative: string; logicalResolution: string; npcDecisions: NpcDecision[]; diceRolls: DiceRoll[]; state: GameState; npcOrder: string[]; microTrace: MicroBlock[] }> {
+  ): Promise<{ narrative: string; logicalResolution: string; npcDecisions: NpcDecision[]; diceRolls: DiceRoll[]; state: GameState; npcOrder: string[]; stepTrace: TurnStep[] }> {
     const turnLog = this.logger.child({ turnNumber: state.turnNumber });
     const totalStart = Date.now();
     turnLog.info('[processTurn iniciado]');
 
-    const orchestrator = this.microOrchestrator;
+    const orchestrator = this.orchestrator;
     if (!orchestrator) {
-      throw new Error('MicroTurnOrchestrator não injetado no GameEngine.');
+      throw new Error('TurnOrchestrator não injetado no GameEngine.');
     }
 
     // Chance de evento inesperado (1x por turno).
@@ -171,7 +171,7 @@ export class GameEngine {
       this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
     }
 
-    // Cenário novo uma vez por turno (prefixo do 1º micro).
+    // Cenário novo uma vez por turno (prefixo do 1º step).
     let sceneDescription: string | undefined;
     const scenePlayer = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
     const playerLocation = scenePlayer?.currentLocation;
@@ -184,15 +184,15 @@ export class GameEngine {
     this.output.writeLine("\n[Narrador] Escrevendo a cena...");
     this.output.writeLine("--------------------------------------------------");
 
-    const micro = await orchestrator.runTurn(state, playerActions, {
+    const turn = await orchestrator.runTurn(state, playerActions, {
       output: this.output,
       unexpectedEvent,
       sceneDescription,
     });
-    this.output.writeLine(micro.narrative);
+    this.output.writeLine(turn.narrative);
     this.output.writeLine("--------------------------------------------------");
 
-    state.history.push(`Turno ${state.turnNumber}: ${micro.narrative}`);
+    state.history.push(`Turno ${state.turnNumber}: ${turn.narrative}`);
 
     if (state.history.length > this.settings.memoryWindowSize) {
       this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
@@ -203,21 +203,21 @@ export class GameEngine {
     }
 
     this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
-    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, micro.narrative, state.turnNumber);
+    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, turn.narrative, state.turnNumber);
 
     state.turnNumber++;
 
     const totalDuration = Date.now() - totalStart;
-    turnLog.info('[processTurn concluído]', { durationMs: totalDuration, micros: micro.microTrace.length });
+    turnLog.info('[processTurn concluído]', { durationMs: totalDuration, steps: turn.stepTrace.length });
 
     return {
-      narrative: micro.narrative,
-      logicalResolution: micro.logicalResolution,
-      npcDecisions: micro.npcDecisions,
-      diceRolls: micro.diceRolls,
+      narrative: turn.narrative,
+      logicalResolution: turn.logicalResolution,
+      npcDecisions: turn.npcDecisions,
+      diceRolls: turn.diceRolls,
       state,
-      npcOrder: micro.npcOrder,
-      microTrace: micro.microTrace,
+      npcOrder: turn.npcOrder,
+      stepTrace: turn.stepTrace,
     };
   }
 

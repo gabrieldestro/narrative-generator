@@ -1,8 +1,8 @@
 /**
- * Grounding determinístico (doc 27, Fase 0 — §3 "Grounding obrigatório").
+ * Grounding determinístico ("Grounding obrigatório").
  *
- * Fase 0: util + `warn` no legado. Enforcement estrito (descarte) só na
- * Fase 2, nos micro-extratores — o teste legado
+ * Util + `warn` no caminho antigo. Enforcement estrito (descarte) só nos
+ * extratores por categoria — o teste
  * (`GameManagementService.test.ts`) prova que filtro full-string quebraria
  * o comportamento atual (`"Chave de Bronze"` vs narração `"uma chave"`).
  */

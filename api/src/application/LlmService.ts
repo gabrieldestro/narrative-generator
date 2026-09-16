@@ -55,7 +55,7 @@ class NullLogger implements ILogger {
 /**
  * Fachada fina sobre os agentes de `api/src/application/llm/`: mantém
  * comandos de sessão e extratores legados (observe/narrate/estado) até a
- * remoção do monolito; o turno roda no `MicroTurnOrchestrator`.
+ * remoção do monolito; o turno roda no `TurnOrchestrator`.
  */
 export class LlmService {
   private readonly settings: GameSettings;
@@ -200,9 +200,9 @@ export class LlmService {
   }
 
   async arbitrateLogic(state: GameState, actions: string[], recentHistory?: string[], longTermSummary?: string): Promise<string> {
-    // Fase 1 (doc 27): delega ao `ArbiterAgent.arbitrateLegacy` — mesmos
-    // prompts de `prompts.ts`, mesmo `invokeWithRetry`, zero mudança de fluxo.
-    return this.arbiterAgent.arbitrateLegacy(state, actions, recentHistory, longTermSummary);
+    // Delega ao `ArbiterAgent.arbitrateTurn` — mesmos prompts de
+    // `prompts.ts`, mesmo `invokeWithRetry`, zero mudança de fluxo.
+    return this.arbiterAgent.arbitrateTurn(state, actions, recentHistory, longTermSummary);
   }
 
   async generateInitialNarrative(state: GameState): Promise<string> {

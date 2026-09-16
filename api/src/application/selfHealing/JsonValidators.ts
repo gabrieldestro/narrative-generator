@@ -62,9 +62,9 @@ export function validateLocationMap(value: unknown): boolean {
   return entries.every(([, location]) => isNonEmptyString(location));
 }
 
-// Doc 27, Fase 1 — micro-árbitro por ação (§6.1). Validador puro, sem LLM:
+// Árbitro do step por ação. Validador puro, sem LLM:
 // checa forma; `hit` subset de personagens é filtrado na engine/agente.
-export function validateMicroArbiter(value: unknown): boolean {
+export function validateStepArbiter(value: unknown): boolean {
   if (!isRecord(value)) return false;
   if (value.outcome !== 'success' && value.outcome !== 'partial' && value.outcome !== 'failure') return false;
   if (typeof value.violent !== 'boolean') return false;
@@ -73,8 +73,8 @@ export function validateMicroArbiter(value: unknown): boolean {
   return value.hit.every((name) => typeof name === 'string');
 }
 
-// Doc 27, Fase 2 — micro-extratores por categoria (§6.2). Validadores puros:
-// checam forma no topo; a fusão (`applyMicroUpdates`) descarta a ENTRADA
+// Extratores por categoria. Validadores puros:
+// checam forma no topo; a fusão (`applyStepUpdates`) descarta a ENTRADA
 // inválida (nome desconhecido, sem grounding), não o objeto inteiro.
 
 function isWhoItemEntry(value: unknown, itemKey: 'item' | 'to' | 'add'): boolean {

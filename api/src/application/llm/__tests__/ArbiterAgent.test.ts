@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ArbiterAgent, renderLegacyResolution } from '../arbiter/ArbiterAgent.js';
-import type { GameState, MicroAction, MicroResolution } from '../../../domain/types.js';
+import { ArbiterAgent, renderResolution } from '../arbiter/ArbiterAgent.js';
+import type { GameState, StepAction, StepResolution } from '../../../domain/types.js';
 
 function makeState(): GameState {
   return {
@@ -19,20 +19,20 @@ function makeState(): GameState {
 function mockDeps(resolvedValue: unknown | null) {
   const client = { invoke: vi.fn(async () => 'irrelevante') };
   const resolver = { resolveJson: vi.fn(async () => (resolvedValue === null ? null : { value: resolvedValue, attempt: 1 })) };
-  const selfHealing = { invokeWithRetry: vi.fn(async () => 'legado') };
+  const selfHealing = { invokeWithRetry: vi.fn(async () => 'resolução do turno') };
   return { client, resolver, selfHealing };
 }
 
-const ACTION: MicroAction = { actor: 'Darian', text: 'escalar muro', roll: 7 };
+const ACTION: StepAction = { actor: 'Darian', text: 'escalar muro', roll: 7 };
 
-// Doc 27, Fase 1 — `ArbiterAgent.arbitrateMicro`.
-describe('ArbiterAgent.arbitrateMicro', () => {
+// `ArbiterAgent.arbitrateStep`.
+describe('ArbiterAgent.arbitrateStep', () => {
   it('retorna a resolução do resolver filtrando `hit` pela allowlist', async () => {
     const { client, resolver, selfHealing } = mockDeps({
       outcome: 'failure', violent: true, reason: 'muro liso, caiu de 2m', hit: ['Darian', 'Fantasma'],
     });
     const agent = new ArbiterAgent(client as any, resolver as any, selfHealing as any);
-    const res = await agent.arbitrateMicro(makeState(), ACTION, []);
+    const res = await agent.arbitrateStep(makeState(), ACTION, []);
     expect(res).toEqual({ outcome: 'failure', violent: true, reason: 'muro liso, caiu de 2m', hit: ['Darian'] });
     expect(resolver.resolveJson).toHaveBeenCalledTimes(1);
   });
@@ -40,7 +40,7 @@ describe('ArbiterAgent.arbitrateMicro', () => {
   it('fallback `partial/non-violent` quando o resolver retorna null', async () => {
     const { client, resolver, selfHealing } = mockDeps(null);
     const agent = new ArbiterAgent(client as any, resolver as any, selfHealing as any);
-    const res = await agent.arbitrateMicro(makeState(), ACTION, []);
+    const res = await agent.arbitrateStep(makeState(), ACTION, []);
     expect(res).toEqual({ outcome: 'partial', violent: false, reason: 'inconclusivo', hit: [] });
   });
 
@@ -49,7 +49,7 @@ describe('ArbiterAgent.arbitrateMicro', () => {
       outcome: 'success', violent: false, reason: 'ok', hit: ['darian'],
     });
     const agent = new ArbiterAgent(client as any, resolver as any, selfHealing as any);
-    const res = await agent.arbitrateMicro(makeState(), ACTION, []);
+    const res = await agent.arbitrateStep(makeState(), ACTION, []);
     expect(res.hit).toEqual(['Darian']);
   });
 });
@@ -58,7 +58,7 @@ describe('ArbiterAgent.applyDiceRule', () => {
   it('roll 20 eleva `partial` → `success`; roll 1 derruba → `failure`', () => {
     const { client, resolver, selfHealing } = mockDeps(null);
     const agent = new ArbiterAgent(client as any, resolver as any, selfHealing as any);
-    const base: MicroResolution = { outcome: 'partial', violent: false, reason: 'x', hit: [] };
+    const base: StepResolution = { outcome: 'partial', violent: false, reason: 'x', hit: [] };
     expect(agent.applyDiceRule({ ...base }, 20).outcome).toBe('success');
     expect(agent.applyDiceRule({ ...base }, 1).outcome).toBe('failure');
     expect(agent.applyDiceRule({ ...base }, 10).outcome).toBe('partial');
@@ -72,22 +72,22 @@ describe('ArbiterAgent.applyDiceRule', () => {
   });
 });
 
-describe('ArbiterAgent.arbitrateLegacy', () => {
-  it('delega ao `invokeWithRetry` com os prompts legados', async () => {
+describe('ArbiterAgent.arbitrateTurn', () => {
+  it('delega ao `invokeWithRetry` com os prompts do turno', async () => {
     const { client, resolver, selfHealing } = mockDeps(null);
     const agent = new ArbiterAgent(client as any, resolver as any, selfHealing as any);
     const state = makeState();
-    const out = await agent.arbitrateLegacy(state, ['Darian tenta: X']);
-    expect(out).toBe('legado');
+    const out = await agent.arbitrateTurn(state, ['Darian tenta: X']);
+    expect(out).toBe('resolução do turno');
     expect(selfHealing.invokeWithRetry).toHaveBeenCalledTimes(1);
     const opts = selfHealing.invokeWithRetry.mock.calls.at(0)?.at(0) as unknown as { agent: string };
     expect(opts.agent).toBe('Árbitro');
   });
 });
 
-describe('renderLegacyResolution', () => {
-  it('gera linhas compatíveis com o regex do `GameEngine`/`CpuReflectionService`', () => {
-    const text = renderLegacyResolution([
+describe('renderResolution', () => {
+  it('gera linhas `"Fulano tentou X -> Sucesso/Falha porque ..."`', () => {
+    const text = renderResolution([
       { actor: 'Darian', text: 'escalar muro', outcome: 'failure', reason: 'muro liso' },
       { actor: 'Elara', text: 'segurar a corda', outcome: 'success', reason: 'corda firme' },
     ]);

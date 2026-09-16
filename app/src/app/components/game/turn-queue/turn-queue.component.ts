@@ -1,6 +1,6 @@
 import { Component, Input, inject, ChangeDetectionStrategy } from '@angular/core';
 import { GameStateService } from '../../../core/services/game-state.service';
-import type { MicroQueueEntry, QueueStatus } from '../../../core/models/micro-turn.model';
+import type { StepQueueEntry, QueueStatus } from '../../../core/models/turn-step.model';
 
 export type TurnQueueLayout = 'strip' | 'list';
 
@@ -22,10 +22,9 @@ const CHANNEL_LABEL: Record<string, string> = {
   stake: 'stake',
 };
 
-// Doc 27, Fase 5 (§7.3): fila de turno na tela — ordem dos NPCs, quem
+// Fila de turno na tela — ordem dos personagens, quem
 // agiu/age e quem é o próximo. Só renderiza a ordem que o servidor enviou
-// (sem lógica de ordenação no front). Limite honesto do MVP: sem "agindo
-// AGORA" ao vivo (exige streaming, futuro).
+// (sem lógica de ordenação no front).
 @Component({
   selector: 'ng-turn-queue',
   standalone: true,
@@ -42,23 +41,23 @@ export class TurnQueueComponent {
     return STATUS_ICON[status];
   }
 
-  statusLabel(entry: MicroQueueEntry): string {
-    // [0] = foco (ator do micro).
-    const block = this.gameState.selectedBlock();
+  statusLabel(entry: StepQueueEntry): string {
+    // [0] = foco (ator do step).
+    const block = this.gameState.selectedStep();
     const isSpotlight = block !== null && entry.who === block.spotlight;
     if (isSpotlight) return 'foco';
     return STATUS_LABEL[entry.status];
   }
 
   channelLabel(who: string): string | null {
-    const block = this.gameState.selectedBlock();
+    const block = this.gameState.selectedStep();
     const allowed = block?.gate.allowed.find(a => a.who === who);
     if (!allowed) return null;
     return CHANNEL_LABEL[allowed.channel] ?? allowed.channel;
   }
 
   deniedWhy(who: string): string | null {
-    const block = this.gameState.selectedBlock();
+    const block = this.gameState.selectedStep();
     return block?.gate.denied.find(d => d.who === who)?.why ?? null;
   }
 }

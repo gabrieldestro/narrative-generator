@@ -21,15 +21,15 @@ function makeState(): GameState {
 function makeTurnResponse(): TurnResponse {
   return {
     sessionId: 's-1',
-    narrative: 'Micro-narração.',
+    narrative: 'Narração do passo.',
     logicalResolution: 'Darian tentou X -> Sucesso porque ...',
     updatedState: { ...makeState(), turnNumber: 3 },
     npcDecisions: [],
     diceRolls: [],
     npcOrder: ['Darian', 'Elara'],
-    microTrace: [
+    stepTrace: [
       {
-        micro: 1,
+        step: 1,
         actor: 'Darian',
         actorWhere: 'Pátio',
         queue: [
@@ -40,7 +40,7 @@ function makeTurnResponse(): TurnResponse {
         gate: { allowed: [{ who: 'Elara', channel: 'heard' }], denied: [] },
       },
       {
-        micro: 2,
+        step: 2,
         actor: 'Elara',
         actorWhere: 'Porão',
         queue: [
@@ -54,7 +54,7 @@ function makeTurnResponse(): TurnResponse {
   };
 }
 
-// Doc 27, Fase 5 (§7.3/§9) — fila de turno na tela.
+// Fila de turno na tela.
 describe('TurnQueueComponent', () => {
   let fixture: ComponentFixture<TurnQueueComponent>;
   let service: GameStateService;
@@ -84,14 +84,14 @@ describe('TurnQueueComponent', () => {
 
   it('mostra "Próximo na ordem: X" (primeiro após o foco)', () => {
     service.setTurnResult(makeTurnResponse());
-    service.selectMicro(0);
+    service.selectStep(0);
     fixture.detectChanges();
     expect(text()).toContain('Próximo na ordem: Elara');
   });
 
   it('negado aparece com o `why` (tooltip) e sem ação', () => {
     service.setTurnResult(makeTurnResponse());
-    service.selectMicro(1);
+    service.selectStep(1);
     fixture.detectChanges();
     const denied: HTMLElement = fixture.nativeElement.querySelector('.turn-queue__chip--denied');
     expect(denied).withContext('chip denied renderizado').not.toBeNull();
@@ -113,15 +113,15 @@ describe('TurnQueueComponent', () => {
     expect(body).not.toContain('Próximo na ordem');
   });
 
-  it('seletor de micro troca o bloco (strip com 2 micros)', () => {
+  it('seletor de passo troca o bloco (strip com 2 steps)', () => {
     service.setTurnResult(makeTurnResponse());
     fixture.detectChanges();
     const buttons: NodeListOf<HTMLButtonElement> =
-      fixture.nativeElement.querySelectorAll('.turn-queue__micro-btn');
+      fixture.nativeElement.querySelectorAll('.turn-queue__step-btn');
     expect(buttons.length).toBe(2);
     buttons[0]!.click();
     fixture.detectChanges();
-    expect(service.selectedMicro()).toBe(0);
+    expect(service.selectedStepIndex()).toBe(0);
     expect(text()).toContain('(ouviu)');
   });
 });

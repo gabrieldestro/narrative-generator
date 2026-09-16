@@ -17,14 +17,14 @@ import type { CpuReflectionService } from './npcAgent/CpuReflectionService.js';
 import type { GameManagementService } from './GameManagementService.js';
 import { LlmCallLogger } from '../infrastructure/LlmCallLogger.js';
 import { LlmContentLogger } from '../infrastructure/LlmContentLogger.js';
-import { MicroTurnOrchestrator } from './MicroTurnOrchestrator.js';
+import { TurnOrchestrator } from './TurnOrchestrator.js';
 
 /**
  * Monta o orquestrador do turno com 1 `LlmClient` compartilhado,
  * 1 `IStructuredResolver` (`PromptJsonResolver` default) e 1 agente por papel,
  * cada um com sua `temperature`. `ToolCallResolver` futuro = trocar 1 binding.
  */
-export function buildMicroOrchestrator(
+export function buildTurnOrchestrator(
   llmModel: BaseChatModel,
   gameManagementService: GameManagementService,
   cpuReflectionService: CpuReflectionService,
@@ -32,7 +32,7 @@ export function buildMicroOrchestrator(
   logger: ILogger,
   llmCallLogger?: LlmCallLogger,
   llmContentLogger?: LlmContentLogger,
-): MicroTurnOrchestrator {
+): TurnOrchestrator {
   const settings = { ...DEFAULT_SETTINGS };
   const client = new LlmClient(llmModel, llmCallLogger, logger, llmContentLogger);
   const resolver = new PromptJsonResolver(llmModel, llmCallLogger, logger, settings, llmContentLogger);
@@ -47,7 +47,7 @@ export function buildMicroOrchestrator(
     extractor: new SceneExtractorAgent(client, resolver),
     memory: new MemoryAgent(client, resolver, logger),
   };
-  return new MicroTurnOrchestrator(
+  return new TurnOrchestrator(
     arbiter,
     gate,
     narrator,

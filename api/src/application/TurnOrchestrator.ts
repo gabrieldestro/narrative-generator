@@ -10,10 +10,10 @@ import type {
   GateChannel,
   GateRuling,
   InventoryDelta,
-  MicroAction,
-  MicroBlock,
-  MicroDeltas,
-  MicroResolution,
+  StepAction,
+  TurnStep,
+  StepDeltas,
+  StepResolution,
   MovementDelta,
   NpcDecision,
 } from "../domain/types.js";
@@ -21,7 +21,7 @@ import type { NormalizedSceneDelta } from "./selfHealing/JsonValidators.js";
 import type { IOutputWriter, ILogger } from "../domain/ports.js";
 import type { GameManagementService } from "./GameManagementService.js";
 import type { CpuReflectionService } from "./npcAgent/CpuReflectionService.js";
-import { renderLegacyResolution } from "./llm/arbiter/ArbiterAgent.js";
+import { renderResolution } from "./llm/arbiter/ArbiterAgent.js";
 import { normalizeForGrounding } from "./utils/grounding.js";
 
 class NullLogger implements ILogger {
@@ -35,25 +35,25 @@ class NullLogger implements ILogger {
 }
 
 /** Dependências do orquestrador — interfaces finas, nunca `LlmService` (§7.2). */
-export interface IMicroArbiter {
-  arbitrateMicro(state: GameState, action: MicroAction, reactions?: MicroAction[]): Promise<MicroResolution>;
-  applyDiceRule(resolution: MicroResolution, roll: number | undefined): MicroResolution;
+export interface IStepArbiter {
+  arbitrateStep(state: GameState, action: StepAction, reactions?: StepAction[]): Promise<StepResolution>;
+  applyDiceRule(resolution: StepResolution, roll: number | undefined): StepResolution;
 }
 
 export interface IReactionGate {
-  gateReactions(action: MicroAction, actorWhere: string, candidates: GateCandidate[], turn: number): Promise<GateRuling[]>;
+  gateReactions(action: StepAction, actorWhere: string, candidates: GateCandidate[], turn: number): Promise<GateRuling[]>;
 }
 
-export interface IMicroNarrator {
-  narrateMicro(
+export interface IStepNarrator {
+  narrateStep(
     state: GameState,
     actionLine: string,
-    resolution: MicroResolution,
+    resolution: StepResolution,
     opts?: { unexpected?: boolean },
   ): Promise<string>;
 }
 
-export interface IMicroExtractor<T> {
+export interface IStepExtractor<T> {
   hasSignal(narration: string): boolean;
   extract(state: GameState, narration: string, opts?: { violent?: boolean }): Promise<T>;
 }
@@ -72,13 +72,13 @@ export interface ISceneMemory {
   ): Promise<FactSheet>;
 }
 
-export interface MicroTurnResult {
+export interface TurnResult {
   narrative: string;
   logicalResolution: string;
   npcDecisions: NpcDecision[];
   diceRolls: DiceRoll[];
   npcOrder: string[];
-  microTrace: MicroBlock[];
+  stepTrace: TurnStep[];
   pendingMoves: { who: string; to: string }[];
 }
 
@@ -96,22 +96,21 @@ function isAllowed(r: GateRuling): r is AllowedRuling {
 }
 
 /**
- * Orquestrador spotlight (doc 27, Fase 3 — §4).
- * 1 turno (`POST /turn`) = N micros, 1 por personagem ativo; `turnNumber++`
- * 1x por turno (fora, no `GameEngine`). Sem ordem fixa de iniciativa, sem
- * teto de reatores, sem gate por local em código.
+ * Orquestrador spotlight: 1 turno (`POST /turn`) = N steps, 1 por personagem
+ * ativo; `turnNumber++` 1x por turno (fora, no `GameEngine`). Sem ordem fixa
+ * de iniciativa, sem teto de reatores, sem gate por local em código.
  */
-export class MicroTurnOrchestrator {
+export class TurnOrchestrator {
   private settings: GameSettings;
   private readonly logger: ILogger;
 
   constructor(
-    private readonly arbiter: IMicroArbiter,
+    private readonly arbiter: IStepArbiter,
     private readonly gate: IReactionGate,
-    private readonly narrator: IMicroNarrator,
-    private readonly inventory: IMicroExtractor<InventoryDelta>,
-    private readonly movement: IMicroExtractor<MovementDelta>,
-    private readonly conditions: IMicroExtractor<ConditionsDelta>,
+    private readonly narrator: IStepNarrator,
+    private readonly inventory: IStepExtractor<InventoryDelta>,
+    private readonly movement: IStepExtractor<MovementDelta>,
+    private readonly conditions: IStepExtractor<ConditionsDelta>,
     private readonly management: GameManagementService,
     private readonly cpuReflection: CpuReflectionService,
     settings: GameSettings,
@@ -131,7 +130,7 @@ export class MicroTurnOrchestrator {
     state: GameState,
     playerActions: Map<string, string>,
     opts: RunTurnOptions = {},
-  ): Promise<MicroTurnResult> {
+  ): Promise<TurnResult> {
     const output = opts.output;
     const roster = state.characters.filter((c) => !c.status || c.status === 'active');
     const spotlight = this.spotlightOrder(roster);
@@ -139,25 +138,25 @@ export class MicroTurnOrchestrator {
 
     const npcDecisions: NpcDecision[] = [];
     const diceRolls: DiceRoll[] = [];
-    const microTrace: MicroBlock[] = [];
+    const stepTrace: TurnStep[] = [];
     let pendingMoves: { who: string; to: string }[] = [];
-    const microNarrations: string[] = [];
-    const legacyEntries: { actor: string; text: string; outcome: MicroResolution['outcome']; reason: string }[] = [];
+    const stepNarrations: string[] = [];
+    const resolutionEntries: { actor: string; text: string; outcome: StepResolution['outcome']; reason: string }[] = [];
     const violentHits: string[] = [];
     const priorLines: string[] = [];
 
-    let micro = 0;
+    let step = 0;
     for (const actor of spotlight) {
-      micro++;
+      step++;
       const actorWhere = actor.currentLocation ?? 'local desconhecido';
-      if (output) output.writeLine(`[Spotlight] ${actor.name} age (micro ${micro}/${spotlight.length})...`);
+      if (output) output.writeLine(`[Spotlight] ${actor.name} age (passo ${step}/${spotlight.length})...`);
 
       // ── Ação única ──
       const { text: actionText, reasoning } = await this.resolveActorAction(state, actor, playerActions, priorLines, output);
       const isGodModeRoll = this.settings.godMode && actor.isPlayer === true;
       const roll = isGodModeRoll ? 20 : Math.floor(Math.random() * 20) + 1;
       diceRolls.push({ characterName: actor.name, roll, isGodMode: isGodModeRoll });
-      const action: MicroAction = {
+      const action: StepAction = {
         actor: actor.name,
         text: actionText,
         target: this.inferTarget(actionText, actor.name, roster),
@@ -175,7 +174,7 @@ export class MicroTurnOrchestrator {
       // ── Reações (sequencial por stake, com priorActions) ──
       // Decisão armadilha (b): sequencial preserva a semântica anti-contradição
       // de `CpuAgentPrompts` (priorActions ordenados); paralelo quebraria a ordem.
-      const reactions: MicroAction[] = [];
+      const reactions: StepAction[] = [];
       const reacted = new Set<string>();
       const ignored = new Set<string>();
       for (const ruling of ordered) {
@@ -194,13 +193,13 @@ export class MicroTurnOrchestrator {
           reacted.add(char.name);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          this.logger.warn('[Micro] falha na reação, seguindo sem ela', { charName: char.name, error: msg });
+          this.logger.warn('[Step] falha na reação, seguindo sem ela', { charName: char.name, error: msg });
           ignored.add(char.name);
         }
       }
 
-      // ── Micro-árbitro + regra do dado ──
-      const rawResolution = await this.arbiter.arbitrateMicro(state, action, reactions);
+      // ── Árbitro do step + regra do dado ──
+      const rawResolution = await this.arbiter.arbitrateStep(state, action, reactions);
       const resolution = this.arbiter.applyDiceRule(rawResolution, roll);
       // Vitalidade derivada do `hit` (§5): success+violent ⇒ hit piora;
       // failure violenta ⇒ só auto-dano (ator no próprio `hit`); partial
@@ -216,25 +215,25 @@ export class MicroTurnOrchestrator {
         }
       }
 
-      // ── Micro-narração ──
+      // ── Narração do step ──
       const actionLine = `${actor.name} tenta: ${actionText} (d20: ${roll})`;
-      const microNarration = await this.narrator.narrateMicro(state, actionLine, resolution, {
-        unexpected: micro === 1 && opts.unexpectedEvent === true,
+      const stepNarration = await this.narrator.narrateStep(state, actionLine, resolution, {
+        unexpected: step === 1 && opts.unexpectedEvent === true,
       });
-      microNarrations.push(microNarration);
+      stepNarrations.push(stepNarration);
 
       // ── Commit: scratchpad + ledger + fusão ──
-      const legacyLine = renderLegacyResolution([{ actor: actor.name, text: actionText, outcome: resolution.outcome, reason: resolution.reason }]);
-      legacyEntries.push({ actor: actor.name, text: actionText, outcome: resolution.outcome, reason: resolution.reason });
+      const resolutionLine = renderResolution([{ actor: actor.name, text: actionText, outcome: resolution.outcome, reason: resolution.reason }]);
+      resolutionEntries.push({ actor: actor.name, text: actionText, outcome: resolution.outcome, reason: resolution.reason });
       if (!actor.isPlayer) {
-        this.cpuReflection.recordArbiterResult(actor, state.turnNumber, legacyLine, actionText);
+        this.cpuReflection.recordArbiterResult(actor, state.turnNumber, resolutionLine, actionText);
       }
       for (const reaction of reactions) {
         const reactor = roster.find((c) => c.name === reaction.actor)!;
         if (!reactor.isPlayer) {
           this.cpuReflection.recordArbiterResult(
             reactor, state.turnNumber,
-            renderLegacyResolution([{ actor: reaction.actor, text: reaction.text, outcome: resolution.outcome, reason: resolution.reason }]),
+            renderResolution([{ actor: reaction.actor, text: reaction.text, outcome: resolution.outcome, reason: resolution.reason }]),
             reaction.text,
           );
         }
@@ -242,22 +241,22 @@ export class MicroTurnOrchestrator {
       this.commitEvent(state, actor.name, actionText, resolution, actorWhere);
 
       const [inventoryDelta, movementDelta, conditionsDelta] = await Promise.all([
-        this.inventory.extract(state, microNarration),
-        this.movement.extract(state, microNarration),
-        this.conditions.extract(state, microNarration, { violent: resolution.violent }),
+        this.inventory.extract(state, stepNarration),
+        this.movement.extract(state, stepNarration),
+        this.conditions.extract(state, stepNarration, { violent: resolution.violent }),
       ]);
-      const deltas: MicroDeltas = { inventory: inventoryDelta, movement: movementDelta, conditions: conditionsDelta };
-      const merged = this.management.applyMicroUpdates(state, microNarration, deltas);
+      const deltas: StepDeltas = { inventory: inventoryDelta, movement: movementDelta, conditions: conditionsDelta };
+      const merged = this.management.applyStepUpdates(state, stepNarration, deltas);
       state.characters = merged.state.characters;
       if (merged.state.locations !== undefined) state.locations = merged.state.locations;
       if (merged.state.concepts !== undefined) state.concepts = merged.state.concepts;
       pendingMoves.push(...merged.pendingMoves);
       if (merged.pendingMoves.length > 0) {
-        this.logger.warn('[Micro] moves pendentes (cena-extrator na Fase 4)', { moves: merged.pendingMoves });
+        this.logger.warn('[Step] moves pendentes', { moves: merged.pendingMoves });
       }
 
-      // ── Trace do micro ──
-      const queue: MicroBlock['queue'] = [
+      // ── Trace do step ──
+      const queue: TurnStep['queue'] = [
         { who: actor.name, where: actorWhere, status: 'done' },
         ...ordered.map((r) => {
           const c = roster.find((x) => x.name === r.who)!;
@@ -270,8 +269,8 @@ export class MicroTurnOrchestrator {
           return { who: r.who, where: c?.currentLocation ?? 'local desconhecido', status: 'denied' as const };
         }),
       ];
-      microTrace.push({
-        micro,
+      stepTrace.push({
+        step,
         actor: actor.name,
         actorWhere,
         queue,
@@ -292,12 +291,12 @@ export class MicroTurnOrchestrator {
       }
     }
 
-    const body = microNarrations.join('\n\n');
+    const body = stepNarrations.join('\n\n');
     const narrative = opts.sceneDescription ? `${opts.sceneDescription}\n\n${body}` : body;
 
-    // ── Fechamento da cena (doc 27, Fase 4): 1x por turno ──
-    // Turno típico (2-6 micros) ≈ 1 cena; eventual contador de micros (3-5) é
-    // ajuste futuro. Sem `scene`: turno sem cena (comportamento Fase 3).
+    // ── Fechamento da cena: 1x por turno ──
+    // Turno típico (2-6 steps) ≈ 1 cena; eventual contador de steps (3-5) é
+    // ajuste futuro. Sem `scene`: turno sem cena.
     if (this.scene) {
       for (const name of new Set(violentHits.map((n) => n.toLowerCase()))) {
         const canonical = state.characters.find((c) => c.name.toLowerCase() === name)?.name ?? name;
@@ -319,19 +318,19 @@ export class MicroTurnOrchestrator {
       }
       const turnEvents = (state.events ?? []).filter((e) => e.turn === state.turnNumber);
       state.factSheet = await this.scene.memory.consolidateFacts(
-        state.factSheet, turnEvents, microNarrations, state.turnNumber,
+        state.factSheet, turnEvents, stepNarrations, state.turnNumber,
       );
     }
 
     return {
       narrative,
-      logicalResolution: legacyEntries.map((e) =>
-        renderLegacyResolution([{ actor: e.actor, text: e.text, outcome: e.outcome, reason: e.reason }]),
+      logicalResolution: resolutionEntries.map((e) =>
+        renderResolution([{ actor: e.actor, text: e.text, outcome: e.outcome, reason: e.reason }]),
       ).join('\n'),
       npcDecisions,
       diceRolls,
       npcOrder,
-      microTrace,
+      stepTrace,
       pendingMoves,
     };
   }
@@ -388,7 +387,7 @@ export class MicroTurnOrchestrator {
     return flags;
   }
 
-  /** Primeiro nome citado (ordem do roster) — `MicroAction.target`. */
+  /** Primeiro nome citado (ordem do roster) — `StepAction.target`. */
   inferTarget(actionText: string, actorName: string, roster: Character[]): string | undefined {
     const haystack = normalizeForGrounding(actionText);
     for (const c of roster) {
@@ -460,7 +459,7 @@ export class MicroTurnOrchestrator {
       return { text: decision.action, reasoning: decision.reasoning };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.warn('[Micro] falha na reflexão, usando fallback', { charName: actor.name, error: msg });
+      this.logger.warn('[Step] falha na reflexão, usando fallback', { charName: actor.name, error: msg });
       const fallback = `${actor.name} observa os arredores e reconsidera suas opções.`;
       if (output) output.writeLine(`[CPU - ${actor.name}] (fallback) ${fallback}`);
       return { text: fallback, reasoning: '' };
@@ -472,7 +471,7 @@ export class MicroTurnOrchestrator {
     state: GameState,
     who: string,
     actionText: string,
-    resolution: MicroResolution,
+    resolution: StepResolution,
     where: string,
   ): void {
     if (!Array.isArray(state.events)) state.events = [];

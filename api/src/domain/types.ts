@@ -150,34 +150,34 @@ export const DEFAULT_SETTINGS: GameSettings = {
   jsonRepairMaxInputChars: 4000,
 };
 
-// Doc 27, Fase 1 — micro-turno por ação (sem RPG).
-export interface MicroAction {
+// Ação de 1 step do turno (sem RPG).
+export interface StepAction {
   actor: string; // nome exato
   text: string; // ação normalizada (ActionBuilder p/ player, CpuDecision p/ NPC)
   target?: string | undefined;
   roll?: number | undefined; // d20 preservado (godMode=20 p/ player); árbitro pondera, não decide sozinho
 }
 
-export type MicroOutcome = 'success' | 'partial' | 'failure';
+export type StepOutcome = 'success' | 'partial' | 'failure';
 
-export interface MicroResolution {
-  outcome: MicroOutcome;
+export interface StepResolution {
+  outcome: StepOutcome;
   violent: boolean; // houve confronto físico?
   reason: string; // 1 frase física, sem literatura
   hit: string[]; // quem sofreu consequência física (nomes válidos)
 }
 
-// Doc 27, Fase 0 — ledger factual (engine escreve, sem LLM).
+// Ledger factual (engine escreve, sem LLM).
 export interface ActionEvent {
-  seq: number; // monotônico global (state.nextSeq++ por micro-commit)
-  turn: number; // turno do POST (turnNumber++ 1x por turno, não por micro)
+  seq: number; // monotônico global (state.nextSeq++ por step-commit)
+  turn: number; // turno do POST (turnNumber++ 1x por turno, não por step)
   who: string;
   did: string; // verbo curto
   outcome: 'success' | 'partial' | 'failure';
   where: string;
 }
 
-// Doc 27, Fase 2 — micro-extratores por categoria (§6.2). Formatos pequenos,
+// Extratores por categoria. Formatos pequenos,
 // 1 por categoria; `{}` = "nada mudou". Chaves EN, valores PT.
 export interface InventoryDelta {
   grab?: { who: string; item: string }[];
@@ -192,14 +192,14 @@ export interface ConditionsDelta {
   conditions?: { who: string; add: string }[];
 }
 
-/** Deltas de 1 micro-narração (categorias independentes — merge em paralelo). */
-export interface MicroDeltas {
+/** Deltas de 1 narração de step (categorias independentes — merge em paralelo). */
+export interface StepDeltas {
   inventory?: InventoryDelta;
   movement?: MovementDelta;
   conditions?: ConditionsDelta;
 }
 
-// Doc 27, Fase 4 — cena + memória factual (§6.3/§8.1).
+// Cena + memória factual.
 export interface SceneDelta {
   new_locations?: { name: string; desc: string }[];
   new_npcs?: { name: string; desc: string; where: string }[];
@@ -210,7 +210,7 @@ export interface SceneDelta {
   healed?: { who: string; what?: string }[];
 }
 
-// Doc 27, Fase 4 — memória factual de tamanho fixo (§8.1). Substituída a
+// Memória factual de tamanho fixo. Substituída a
 // cada cena, nunca acumulada.
 export interface FactThread {
   id: string;
@@ -223,7 +223,7 @@ export interface FactSheet {
   threads: FactThread[];
 }
 
-// Doc 27, Fase 3 — gate de percepção + trace (§4.3/§6.5/§7.3).
+// Gate de percepção + trace.
 export interface GateCandidate {
   name: string;
   where: string;
@@ -240,19 +240,19 @@ export interface GateRuling {
   why: string;
 }
 
-export interface MicroQueueEntry {
+export interface StepQueueEntry {
   who: string;
   where: string;
   status: 'done' | 'ignored' | 'denied';
 }
 
-/** Bloco de trace por micro (transitório — vai na resposta, NÃO persiste no save). */
-export interface MicroBlock {
-  micro: number;
+/** Bloco de trace por step (transitório — vai na resposta, NÃO persiste no save). */
+export interface TurnStep {
+  step: number;
   actor: string;
   actorWhere: string;
-  queue: MicroQueueEntry[]; // [0] = actor (foco); resto = candidatos em ordem de stake
-  spotlight: string; // = actor (vira evento próprio no SSE futuro)
+  queue: StepQueueEntry[]; // [0] = actor (foco); resto = candidatos em ordem de stake
+  spotlight: string; // = actor
   gate: {
     allowed: { who: string; channel: Exclude<GateChannel, 'none'> }[];
     denied: { who: string; why: string }[];

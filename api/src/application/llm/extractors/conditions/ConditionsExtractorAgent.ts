@@ -10,9 +10,9 @@ import {
 } from "./prompts.js";
 
 /**
- * Extrator de condições (doc 27, Fase 2 — §6.2/§7.2).
+ * Extrator de condições.
  * Roda o LLM só com sinal de dano na narração OU `violent == true` do
- * micro-árbitro (força o sinal — o orquestrador passa via `opts`).
+ * árbitro do step (força o sinal — o orquestrador passa via `opts`).
  */
 export class ConditionsExtractorAgent extends ExtractorBase<ConditionsDelta> {
   readonly formatSpec = CONDITIONS_FORMAT_SPEC;
@@ -35,15 +35,15 @@ export class ConditionsExtractorAgent extends ExtractorBase<ConditionsDelta> {
 
   async extract(
     state: GameState,
-    microNarration: string,
+    stepNarration: string,
     opts: { violent?: boolean } = {},
   ): Promise<ConditionsDelta> {
-    if (!opts.violent && !this.hasSignal(microNarration)) return {};
+    if (!opts.violent && !this.hasSignal(stepNarration)) return {};
     const healed = await this.resolver.resolveJson({
       agent: 'Extrator:Condições',
       turn: state.turnNumber,
       system: CONDITIONS_SYSTEM_PROMPT,
-      human: conditionsHumanPrompt(state, microNarration),
+      human: conditionsHumanPrompt(state, stepNarration),
       schemaSpec: this.formatSpec,
       validate: validateConditionsDelta,
       compact: true,

@@ -10,7 +10,7 @@ import { SessionFactory } from "./application/SessionFactory.js";
 import { GameEngine } from "./application/GameEngine.js";
 import { CpuReflectionService } from "./application/npcAgent/CpuReflectionService.js";
 import { GameManagementService } from "./application/GameManagementService.js";
-import { buildMicroOrchestrator } from "./application/buildMicroOrchestrator.js";
+import { buildTurnOrchestrator } from "./application/buildTurnOrchestrator.js";
 import { PinoLogger } from "./infrastructure/PinoLogger.js";
 import { LlmContentLogger } from "./infrastructure/LlmContentLogger.js";
 
@@ -39,7 +39,7 @@ async function main() {
     const gameManagementService = new GameManagementService(llmService, mainLogger);
     const cpuReflectionService = new CpuReflectionService(llmService, {}, mainLogger);
     const sessionFactory = new SessionFactory(input, output, repository, llmService, worldRepo);
-    const microOrchestrator = buildMicroOrchestrator(llm, gameManagementService, cpuReflectionService, llmService, mainLogger, llmCallLogger, llmContentLogger);
+    const orchestrator = buildTurnOrchestrator(llm, gameManagementService, cpuReflectionService, llmService, mainLogger, llmCallLogger, llmContentLogger);
     const engine = new GameEngine(
       input,
       output,
@@ -51,7 +51,7 @@ async function main() {
       gameManagementService,
       mainLogger,
       undefined,
-      microOrchestrator
+      orchestrator
     );
     await engine.start();
   } catch (error) {

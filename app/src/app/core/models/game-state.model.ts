@@ -1,7 +1,7 @@
 import type { Character } from './character.model';
 import type { Location } from './location.model';
 import type { WorldConcept } from './world-concept.model';
-import type { ActionEvent } from './micro-turn.model';
+import type { ActionEvent } from './turn-step.model';
 
 export interface GameState {
   narrativeStyle: string;

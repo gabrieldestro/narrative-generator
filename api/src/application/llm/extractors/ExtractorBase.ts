@@ -2,12 +2,13 @@ import type { GameState } from "../../../domain/types.js";
 import { isGroundedTerm } from "../../utils/grounding.js";
 
 /**
- * Base dos micro-extratores por categoria (doc 27, Fase 0 — §6.2/§7.2).
- * Fase 0: só o esqueleto compartilhado — `hasSignal()` (pré-filtro sem LLM,
+ * Base dos extratores por categoria (validação de forma + grounding
+ * determinística: termo precisa aparecer na narração do step).
+ * Esqueleto compartilhado — `hasSignal()` (pré-filtro sem LLM,
  * o extrator nem é chamado sem sinal) + `isGrounded()` (barreira
- * determinística: termo precisa aparecer na micro-narração).
- * Os agentes concretos (`Inventory/Movement/Conditions/Scene`) nascem na
- * Fase 2 com prompt + validador + `extract()` próprios.
+ * determinística).
+ * Os agentes concretos (`Inventory/Movement/Conditions/Scene`) têm
+ * prompt + validador + `extract()` próprios.
  */
 export abstract class ExtractorBase<TDelta> {
   /** Pré-filtro sem LLM: há sinal desta categoria na narração? */

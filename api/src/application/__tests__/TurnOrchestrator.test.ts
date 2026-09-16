@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MicroTurnOrchestrator, shortDid } from '../MicroTurnOrchestrator.js';
+import { TurnOrchestrator, shortDid } from '../TurnOrchestrator.js';
 import { GameManagementService } from '../GameManagementService.js';
-import type { GameState, MicroAction, MicroResolution } from '../../domain/types.js';
+import type { GameState, StepAction, StepResolution } from '../../domain/types.js';
 
 function makeState(names: { name: string; isPlayer?: boolean; where?: string; vitality?: 'caído'; status?: 'dead' }[]): GameState {
   return {
@@ -25,15 +25,15 @@ function makeState(names: { name: string; isPlayer?: boolean; where?: string; vi
   } as unknown as GameState;
 }
 
-const OK: MicroResolution = { outcome: 'success', violent: false, reason: 'ok', hit: [] };
+const OK: StepResolution = { outcome: 'success', violent: false, reason: 'ok', hit: [] };
 
 function makeStubs() {
   const arbiter = {
-    arbitrateMicro: vi.fn(async (..._args: any[]): Promise<any> => ({ ...OK })),
-    applyDiceRule: vi.fn((r: MicroResolution) => r),
+    arbitrateStep: vi.fn(async (..._args: any[]): Promise<any> => ({ ...OK })),
+    applyDiceRule: vi.fn((r: StepResolution) => r),
   };
   const gate = { gateReactions: vi.fn(async (..._args: any[]): Promise<any[]> => []) };
-  const narrator = { narrateMicro: vi.fn(async (..._args: any[]) => `Narrado: ${String(_args[1])}.`) };
+  const narrator = { narrateStep: vi.fn(async (..._args: any[]) => `Narrado: ${String(_args[1])}.`) };
   const extractor = (delta: unknown) => ({ hasSignal: () => true, extract: vi.fn(async (..._args: any[]) => delta) });
   const inventory = extractor({ grab: [], drop: [] });
   const movement = extractor({ move: [] });
@@ -49,7 +49,7 @@ function makeStubs() {
 }
 
 function makeOrchestrator(stubs: ReturnType<typeof makeStubs>, settings: Record<string, unknown> = {}) {
-  return new MicroTurnOrchestrator(
+  return new TurnOrchestrator(
     stubs.arbiter as any, stubs.gate as any, stubs.narrator as any,
     stubs.inventory as any, stubs.movement as any, stubs.conditions as any,
     stubs.management, stubs.cpuReflection as any,
@@ -58,8 +58,8 @@ function makeOrchestrator(stubs: ReturnType<typeof makeStubs>, settings: Record<
   );
 }
 
-// Doc 27, Fase 3 — orquestrador com agentes mockados por interface.
-describe('MicroTurnOrchestrator.runTurn', () => {
+// Orquestrador com agentes mockados por interface.
+describe('TurnOrchestrator.runTurn', () => {
   let stubs: ReturnType<typeof makeStubs>;
 
   beforeEach(() => {
@@ -67,7 +67,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5); // d20 = 11
   });
 
-  it('1 ação + 1 reação com stake gera 1 event + 1 micro-narração por micro', async () => {
+  it('1 ação + 1 reação com stake gera 1 event + 1 narração de step por step', async () => {
     stubs.gate.gateReactions.mockImplementation(async (_a: unknown, _w: unknown, candidates: { name: string }[]) =>
       candidates.map((c) => ({ who: c.name, allow: true, channel: 'saw' as const, why: 'viu' })),
     );
@@ -75,7 +75,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
     const result = await orch.runTurn(state, new Map([['Darian', 'Darian avança até a porta']]));
 
-    expect(result.microTrace).toHaveLength(2);
+    expect(result.stepTrace).toHaveLength(2);
     expect(result.npcOrder).toEqual(['Darian', 'Elara']);
     expect(state.events).toHaveLength(2);
     expect(state.events![0]).toMatchObject({ seq: 1, turn: 2, who: 'Darian', outcome: 'success', where: 'Pátio' });
@@ -96,7 +96,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     const result = await orch.runTurn(state, new Map([['Darian', 'olha ao redor']]));
 
     expect(result.npcOrder).toEqual(['Darian']);
-    expect(result.microTrace).toHaveLength(1);
+    expect(result.stepTrace).toHaveLength(1);
     const calledNames = stubs.cpuReflection.reflectAndAct.mock.calls.map((c) => (c[1] as { name: string }).name);
     expect(calledNames).not.toContain('Caido');
     expect(calledNames).not.toContain('Morto');
@@ -108,7 +108,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     }
   });
 
-  it('gate negando → NPC não é chamado para reagir (só age no próprio micro)', async () => {
+  it('gate negando → NPC não é chamado para reagir (só age no próprio step)', async () => {
     stubs.gate.gateReactions.mockResolvedValue([]);
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
@@ -132,7 +132,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     const reactionCalls = stubs.cpuReflection.reflectAndAct.mock.calls.filter((c) => c[4] !== undefined);
     expect(reactionCalls.length).toBeGreaterThan(0);
     expect(reactionCalls[0]![4]).toMatchObject({ channel: 'saw' });
-    const darianArbiter = stubs.arbiter.arbitrateMicro.mock.calls.find((c) => (c[1] as { actor: string }).actor === 'Darian');
+    const darianArbiter = stubs.arbiter.arbitrateStep.mock.calls.find((c) => (c[1] as { actor: string }).actor === 'Darian');
     expect((darianArbiter![2] as unknown[])).toHaveLength(1);
   });
 
@@ -151,7 +151,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
     await orch.runTurn(state, new Map([['Darian', 'Darian grita']]));
 
-    for (const call of stubs.arbiter.arbitrateMicro.mock.calls) {
+    for (const call of stubs.arbiter.arbitrateStep.mock.calls) {
       expect(call[2] as unknown[]).toEqual([]);
     }
   });
@@ -167,7 +167,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
     ]);
     await orch.runTurn(state, new Map([['Darian', 'Darian explode o barril']]));
 
-    const darianArbiter = stubs.arbiter.arbitrateMicro.mock.calls.find((c) => (c[1] as { actor: string }).actor === 'Darian');
+    const darianArbiter = stubs.arbiter.arbitrateStep.mock.calls.find((c) => (c[1] as { actor: string }).actor === 'Darian');
     expect((darianArbiter![2] as unknown[])).toHaveLength(5);
   });
 
@@ -196,7 +196,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
 
   it('pendingMoves atravessam o resultado sem aplicar local desconhecido', async () => {
     stubs.movement.extract.mockResolvedValue({ move: [{ who: 'Elara', to: 'Sótão' }] });
-    stubs.narrator.narrateMicro.mockResolvedValue('Elara sobe ao Sótão escuro.');
+    stubs.narrator.narrateStep.mockResolvedValue('Elara sobe ao Sótão escuro.');
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
     const result = await orch.runTurn(state, new Map([['Darian', 'olha']]));
@@ -205,7 +205,7 @@ describe('MicroTurnOrchestrator.runTurn', () => {
   });
 });
 
-describe('MicroTurnOrchestrator — heurísticas', () => {
+describe('TurnOrchestrator — heurísticas', () => {
 
   let stubs: ReturnType<typeof makeStubs>;
 
@@ -235,7 +235,7 @@ describe('MicroTurnOrchestrator — heurísticas', () => {
   });
 });
 
-describe('MicroTurnOrchestrator — fechamento de cena (doc 27, Fase 4)', () => {
+describe('TurnOrchestrator — fechamento de cena', () => {
   let stubs: ReturnType<typeof makeStubs>;
 
   beforeEach(() => {
@@ -251,7 +251,7 @@ describe('MicroTurnOrchestrator — fechamento de cena (doc 27, Fase 4)', () => 
   }
 
   function makeOrchestratorWithScene(current: ReturnType<typeof makeStubs>, scene: { extractor: unknown; memory: unknown }) {
-    return new MicroTurnOrchestrator(
+    return new TurnOrchestrator(
       current.arbiter as any, current.gate as any, current.narrator as any,
       current.inventory as any, current.movement as any, current.conditions as any,
       current.management, current.cpuReflection as any,
@@ -259,8 +259,8 @@ describe('MicroTurnOrchestrator — fechamento de cena (doc 27, Fase 4)', () => 
     );
   }
 
-  it('sem cena: comportamento Fase 3 preservado (sem factSheet, sem vitalidade)', async () => {
-    stubs.arbiter.arbitrateMicro.mockResolvedValue({ outcome: 'success', violent: true, reason: 'golpe', hit: ['Elara'] });
+  it('sem cena: sem factSheet, sem vitalidade', async () => {
+    stubs.arbiter.arbitrateStep.mockResolvedValue({ outcome: 'success', violent: true, reason: 'golpe', hit: ['Elara'] });
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
     await orch.runTurn(state, new Map([['Darian', 'Darian ataca Elara']]));
@@ -269,7 +269,7 @@ describe('MicroTurnOrchestrator — fechamento de cena (doc 27, Fase 4)', () => 
   });
 
   it('com cena: vitalidade do hit + consolidateFacts + factSheet', async () => {
-    stubs.arbiter.arbitrateMicro.mockResolvedValue({ outcome: 'success', violent: true, reason: 'golpe', hit: ['Elara'] });
+    stubs.arbiter.arbitrateStep.mockResolvedValue({ outcome: 'success', violent: true, reason: 'golpe', hit: ['Elara'] });
     const scene = makeSceneStubs();
     const orch = makeOrchestratorWithScene(stubs, scene);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
@@ -283,8 +283,8 @@ describe('MicroTurnOrchestrator — fechamento de cena (doc 27, Fase 4)', () => 
   });
 
   it('failure violenta só aplica auto-dano (ator no próprio hit)', async () => {
-    stubs.arbiter.arbitrateMicro.mockImplementation(async (..._args: any[]) => {
-      const action = _args[1] as MicroAction;
+    stubs.arbiter.arbitrateStep.mockImplementation(async (..._args: any[]) => {
+      const action = _args[1] as StepAction;
       return action.actor === 'Darian'
         ? { outcome: 'failure', violent: true, reason: 'caiu do muro', hit: ['Darian', 'Elara'] }
         : { outcome: 'success', violent: false, reason: 'ok', hit: [] };
@@ -300,7 +300,7 @@ describe('MicroTurnOrchestrator — fechamento de cena (doc 27, Fase 4)', () => 
 
   it('pendingMoves retentados contra locais criados na cena', async () => {
     stubs.movement.extract.mockResolvedValue({ move: [{ who: 'Elara', to: 'Sótão' }] });
-    stubs.narrator.narrateMicro.mockResolvedValue('Elara sobe ao Sótão escuro.');
+    stubs.narrator.narrateStep.mockResolvedValue('Elara sobe ao Sótão escuro.');
     const scene = makeSceneStubs();
     scene.extractor.extract.mockResolvedValue({
       new_locations: [{ name: 'Sótão', desc: 'Escuro' }], new_npcs: [], dead: [], lost: [], healed: [],

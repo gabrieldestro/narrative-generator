@@ -1,10 +1,10 @@
-import type { GameState, GameSettings, MicroResolution } from "../../../domain/types.js";
+import type { GameState, GameSettings, StepResolution } from "../../../domain/types.js";
 import type { ILogger } from "../../../domain/ports.js";
 import type { LlmCallLogger } from "../../../infrastructure/LlmCallLogger.js";
 import type { LlmContentLogger } from "../../../infrastructure/LlmContentLogger.js";
 import type { LlmClient } from "../LlmClient.js";
 import type { SelfHealingService } from "../../selfHealing/SelfHealingService.js";
-import { microNarratorSystemPrompt, microNarratorHumanPrompt } from "./prompts.js";
+import { stepNarratorSystemPrompt, stepNarratorHumanPrompt } from "./prompts.js";
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -17,7 +17,7 @@ class NullLogger implements ILogger {
 }
 
 /**
- * Narrador: dono de `narrateMicro` (1-2 parágrafos sobre 1 fato).
+ * Narrador: dono de `narrateStep` (1-2 parágrafos sobre 1 fato).
  */
 export class NarratorAgent {
   /** Temp por função (§3): narrador `0.7-0.8` (mesma ressalva de factory do árbitro). */
@@ -43,17 +43,17 @@ export class NarratorAgent {
     this.appLogger = appLogger ?? new NullLogger();
   }
 
-  async narrateMicro(
+  async narrateStep(
     state: GameState,
     actionLine: string,
-    resolution: MicroResolution,
+    resolution: StepResolution,
     opts: { unexpected?: boolean } = {},
   ): Promise<string> {
     const sizePrompt = this.settings.narrationSizePrompts[this.settings.narrationSize];
     const text = await this.client.invoke(
-      microNarratorSystemPrompt(state, sizePrompt),
-      microNarratorHumanPrompt(actionLine, resolution, opts.unexpected),
-      { agent: 'Narrador:Micro', turn: state.turnNumber, temperature: this.temperature },
+      stepNarratorSystemPrompt(state, sizePrompt),
+      stepNarratorHumanPrompt(actionLine, resolution, opts.unexpected),
+      { agent: 'Narrador:Step', turn: state.turnNumber, temperature: this.temperature },
     );
     return text;
   }

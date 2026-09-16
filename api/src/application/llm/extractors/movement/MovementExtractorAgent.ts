@@ -43,13 +43,13 @@ export class MovementExtractorAgent extends ExtractorBase<MovementDelta> {
     return validateMovementDelta(value);
   }
 
-  async extract(state: GameState, microNarration: string): Promise<MovementDelta> {
-    if (!this.hasSignal(microNarration) && !this.hasLocationSignal(state, microNarration)) return {};
+  async extract(state: GameState, stepNarration: string): Promise<MovementDelta> {
+    if (!this.hasSignal(stepNarration) && !this.hasLocationSignal(state, stepNarration)) return {};
     const healed = await this.resolver.resolveJson({
       agent: 'Extrator:Movimento',
       turn: state.turnNumber,
       system: MOVEMENT_SYSTEM_PROMPT,
-      human: movementHumanPrompt(state, microNarration),
+      human: movementHumanPrompt(state, stepNarration),
       schemaSpec: this.formatSpec,
       validate: validateMovementDelta,
       compact: true,

@@ -203,7 +203,7 @@ export class FileSaveStore implements ISaveStore {
     }
 
     if (schemaVersion === 3) {
-      // v3 -> v4 (doc 27, Fase 0): campos opcionais do micro-turno.
+      // v3 -> v4: campos opcionais do step.
       // Nunca destrói: só preenche defaults quando ausentes.
       if (!Array.isArray(state.events)) {
         state.events = [];

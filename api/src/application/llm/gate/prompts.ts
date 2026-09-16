@@ -1,4 +1,4 @@
-import type { GateCandidate, MicroAction } from "../../../domain/types.js";
+import type { GateCandidate, StepAction } from "../../../domain/types.js";
 
 /**
  * Prompts do árbitro de percepção (doc 27, Fase 3 — §6.5).
@@ -15,7 +15,7 @@ export const GATE_SYSTEM_PROMPT = [
 ].join(' ');
 
 export function gateHumanPrompt(
-  action: MicroAction,
+  action: StepAction,
   actorWhere: string,
   candidates: GateCandidate[],
 ): string {

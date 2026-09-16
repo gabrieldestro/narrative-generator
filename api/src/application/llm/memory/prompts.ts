@@ -27,7 +27,7 @@ export function consolidateHumanPrompt(
   return [
     old,
     `Eventos da cena:\n${events || '(nenhum)'}`,
-    `Micro-narrações da cena:\n${sceneNarrations.join('\n\n') || '(nenhuma)'}`,
+    `Narrações da cena:\n${sceneNarrations.join('\n\n') || '(nenhuma)'}`,
     `Formato: ${FACTS_FORMAT_SPEC}`,
     'JSON:',
   ].join('\n');

@@ -2,7 +2,7 @@ import type { GameState, Character, Location, CharacterStatus, WorldConcept } fr
 import type {
   ConditionsDelta,
   InventoryDelta,
-  MicroDeltas,
+  StepDeltas,
   MovementDelta,
   Vitality,
 } from "../domain/types.js";
@@ -228,11 +228,11 @@ export class GameManagementService {
     // 1. Processar mudanças de inventário
     if (changes.inventoryChanges) {
       for (const change of changes.inventoryChanges) {
-        // Fase 0 (doc 27, §3): grounding log-only — avisa quando o item não
-        // aparece na narração, mas AINDA aplica (enforcement estrito só na
-        // Fase 2, nos micro-extratores; filtro aqui quebraria o legado).
+        // Grounding log-only — avisa quando o item não
+        // aparece na narração, mas AINDA aplica (enforcement estrito só nos
+        // extratores por categoria).
         if (typeof change?.item === 'string' && !isGroundedTerm(change.item, narration)) {
-          this.logger.warn('[Grounding] item sem citação na narração (aplicado mesmo assim na Fase 0)', {
+          this.logger.warn('[Grounding] item sem citação na narração (aplicado mesmo assim)', {
             characterName: change.characterName,
             item: change.item,
           });
@@ -350,30 +350,30 @@ export class GameManagementService {
     return updatedState;
   }
 
-  // ── Doc 27, Fase 2 — fusão dos micro-deltas por categoria (§6.2) ──
-  // Chamado pelo `MicroTurnOrchestrator` (Fase 3), 1x por micro-commit, com
+  // ── Fusão dos deltas do step por categoria ──
+  // Chamado pelo `TurnOrchestrator`, 1x por step, com
   // os deltas já validados em forma pelos extratores. Aqui valem as regras
   // determinísticas: allowlist de nomes (case-insensitive) + grounding na
-  // micro-narração (descarte estrito — difere do legado log-only).
+  // narração do step (descarte estrito).
 
   /** Move para local desconhecido: não aplica, devolve para o orquestrador
-   * disparar o cena-extrator de forma síncrona (armadilha §10/Fase 2b). */
-  public applyMicroUpdates(
+   * disparar o cena-extrator de forma síncrona. */
+  public applyStepUpdates(
     state: GameState,
-    microNarration: string,
-    deltas: MicroDeltas,
+    stepNarration: string,
+    deltas: StepDeltas,
   ): { state: GameState; pendingMoves: { who: string; to: string }[] } {
     let updated = { ...state };
-    updated = this.applyInventoryDelta(updated, microNarration, deltas.inventory);
-    const movement = this.applyMovementDelta(updated, microNarration, deltas.movement);
+    updated = this.applyInventoryDelta(updated, stepNarration, deltas.inventory);
+    const movement = this.applyMovementDelta(updated, stepNarration, deltas.movement);
     updated = movement.state;
-    updated = this.applyConditionsDelta(updated, microNarration, deltas.conditions);
+    updated = this.applyConditionsDelta(updated, stepNarration, deltas.conditions);
     return { state: updated, pendingMoves: movement.pendingMoves };
   }
 
   public applyInventoryDelta(
     state: GameState,
-    microNarration: string,
+    stepNarration: string,
     delta: InventoryDelta | undefined,
   ): GameState {
     if (!delta) return state;
@@ -382,7 +382,7 @@ export class GameManagementService {
       for (const entry of entries ?? []) {
         const char = updated.characters.find((c) => c.name.toLowerCase() === entry.who.toLowerCase());
         if (!char) continue; // allowlist: nome válido
-        if (!isGroundedTerm(entry.item, microNarration)) continue; // grounding estrito
+        if (!isGroundedTerm(entry.item, stepNarration)) continue; // grounding estrito
         updated = action === 'grab'
           ? this.addItemToCharacter(updated, char.name, entry.item)
           : this.removeItemFromCharacter(updated, char.name, entry.item);
@@ -395,7 +395,7 @@ export class GameManagementService {
 
   public applyMovementDelta(
     state: GameState,
-    microNarration: string,
+    stepNarration: string,
     delta: MovementDelta | undefined,
   ): { state: GameState; pendingMoves: { who: string; to: string }[] } {
     const pendingMoves: { who: string; to: string }[] = [];
@@ -404,7 +404,7 @@ export class GameManagementService {
     for (const entry of delta.move ?? []) {
       const char = updated.characters.find((c) => c.name.toLowerCase() === entry.who.toLowerCase());
       if (!char) continue;
-      if (!isGroundedTerm(entry.to, microNarration)) continue;
+      if (!isGroundedTerm(entry.to, stepNarration)) continue;
       const known = (updated.locations ?? []).find(
         (l) => l.name.toLowerCase() === entry.to.toLowerCase() || l.id.toLowerCase() === entry.to.toLowerCase(),
       );
@@ -424,7 +424,7 @@ export class GameManagementService {
 
   public applyConditionsDelta(
     state: GameState,
-    microNarration: string,
+    stepNarration: string,
     delta: ConditionsDelta | undefined,
   ): GameState {
     if (!delta) return state;
@@ -432,7 +432,7 @@ export class GameManagementService {
     for (const entry of delta.conditions ?? []) {
       const char = updated.characters.find((c) => c.name.toLowerCase() === entry.who.toLowerCase());
       if (!char) continue;
-      if (!isGroundedTerm(entry.add, microNarration)) continue;
+      if (!isGroundedTerm(entry.add, stepNarration)) continue;
       const current = [...(char.conditions ?? [])];
       if (current.some((c) => c.toLowerCase() === entry.add.toLowerCase())) continue; // dedup
       if (current.length >= 3) continue; // max 3 por char (§6.2)

@@ -16,14 +16,14 @@ export const MOVEMENT_SYSTEM_PROMPT = [
 
 export function movementHumanPrompt(
   state: GameState,
-  microNarration: string,
+  stepNarration: string,
 ): string {
   const validNames = state.characters.map((c) => c.name).join(', ');
   const validPlaces = (state.locations ?? []).map((l) => l.name).join(', ');
   return [
     `Personagens válidos: [${validNames}].`,
     `Locais válidos: [${validPlaces}].`,
-    `Micro-narração: ${microNarration}`,
+    `Narração do passo: ${stepNarration}`,
     `Formato: ${MOVEMENT_FORMAT_SPEC}`,
     'JSON:',
   ].join('\n');

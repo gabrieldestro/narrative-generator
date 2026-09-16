@@ -96,7 +96,7 @@ describe('GameStateService.restore', () => {
   });
 });
 
-describe('GameStateService.setTurnResult — microTrace (doc 27, Fase 5)', () => {
+describe('GameStateService.setTurnResult — stepTrace', () => {
   let service: GameStateService;
 
   beforeEach(() => {
@@ -106,7 +106,7 @@ describe('GameStateService.setTurnResult — microTrace (doc 27, Fase 5)', () =>
   function makeTrace() {
     return [
       {
-        micro: 1, actor: 'Darian', actorWhere: 'Pátio', spotlight: 'Darian',
+        step: 1, actor: 'Darian', actorWhere: 'Pátio', spotlight: 'Darian',
         queue: [
           { who: 'Darian', where: 'Pátio', status: 'done' as const },
           { who: 'Elara', where: 'Porão', status: 'done' as const },
@@ -114,7 +114,7 @@ describe('GameStateService.setTurnResult — microTrace (doc 27, Fase 5)', () =>
         gate: { allowed: [{ who: 'Elara', channel: 'heard' as const }], denied: [] },
       },
       {
-        micro: 2, actor: 'Elara', actorWhere: 'Porão', spotlight: 'Elara',
+        step: 2, actor: 'Elara', actorWhere: 'Porão', spotlight: 'Elara',
         queue: [
           { who: 'Elara', where: 'Porão', status: 'done' as const },
           { who: 'Vulto', where: 'Sótão', status: 'denied' as const },
@@ -124,36 +124,36 @@ describe('GameStateService.setTurnResult — microTrace (doc 27, Fase 5)', () =>
     ];
   }
 
-  it('armazena o trace e seleciona o último micro por default', () => {
+  it('armazena o trace e seleciona o último step por default', () => {
     const state = {
       narrativeStyle: 'F', writingStyle: 'E', worldContext: 'P.',
       turnNumber: 3, history: [], characters: [],
     };
     service.setTurnResult({
       sessionId: 's-1', narrative: 'N.', logicalResolution: 'L.',
-      updatedState: state, microTrace: makeTrace(),
+      updatedState: state, stepTrace: makeTrace(),
     });
     expect(service.hasTrace()).toBe(true);
-    expect(service.selectedMicro()).toBe(1);
-    expect(service.selectedBlock()?.actor).toBe('Elara');
+    expect(service.selectedStepIndex()).toBe(1);
+    expect(service.selectedStep()?.actor).toBe('Elara');
     expect(service.turnQueue().map(q => q.who)).toEqual(['Elara', 'Vulto']);
   });
 
-  it('selectMicro troca o bloco; nextInOrder é o primeiro após o foco', () => {
+  it('selectStep troca o bloco; nextInOrder é o primeiro após o foco', () => {
     const state = {
       narrativeStyle: 'F', writingStyle: 'E', worldContext: 'P.',
       turnNumber: 3, history: [], characters: [],
     };
     service.setTurnResult({
       sessionId: 's-1', narrative: 'N.', logicalResolution: 'L.',
-      updatedState: state, microTrace: makeTrace(),
+      updatedState: state, stepTrace: makeTrace(),
     });
-    service.selectMicro(0);
-    expect(service.selectedBlock()?.actor).toBe('Darian');
+    service.selectStep(0);
+    expect(service.selectedStep()?.actor).toBe('Darian');
     expect(service.nextInOrder()).toBe('Elara');
     // clamp fora da faixa
-    service.selectMicro(99);
-    expect(service.selectedMicro()).toBe(1);
+    service.selectStep(99);
+    expect(service.selectedStepIndex()).toBe(1);
   });
 
   it('sem trace: fila vazia, sem próximo, ledger vazio', () => {

@@ -41,10 +41,10 @@ function buildEngine() {
     npcDecisions: [],
     diceRolls: [],
     npcOrder: ['Aric'],
-    microTrace: [],
+    stepTrace: [],
     pendingMoves: [],
   }));
-  const microOrchestrator = { runTurn, updateSettings: vi.fn() };
+  const orchestrator = { runTurn, updateSettings: vi.fn() };
 
   const mockCpuReflection = {
     reflectAndAct: vi.fn(),
@@ -62,7 +62,7 @@ function buildEngine() {
     undefined,
     undefined,
     undefined,
-    microOrchestrator as any,
+    orchestrator as any,
   );
 
   return { engine, llmService, mockLlm, mockOutput, runTurn };
@@ -79,7 +79,7 @@ describe('GameEngine — descrição de cenário por mudança de local', () => {
 
     expect(genSceneSpy).toHaveBeenCalledTimes(1);
     expect(genSceneSpy).toHaveBeenCalledWith(state, 'Taverna');
-    // A descrição é repassada ao orquestrador (prefixo do 1º micro).
+    // A descrição é repassada ao orquestrador (prefixo do 1º step).
     expect(runTurn).toHaveBeenCalledOnce();
     expect(runTurn.mock.calls[0]![2]?.sceneDescription).toBe('A taverna cheira a alecrim e fumaça.');
     expect(result.narrative).toBe('A taverna cheira a alecrim e fumaça.\n\nnarração mockada.');

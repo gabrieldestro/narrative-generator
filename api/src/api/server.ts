@@ -9,11 +9,15 @@ import { SessionFactory } from '../application/SessionFactory.js';
 import { GameEngine } from '../application/GameEngine.js';
 import { CpuReflectionService } from '../application/npcAgent/CpuReflectionService.js';
 import { GameManagementService } from '../application/GameManagementService.js';
-import { buildMicroOrchestrator } from '../application/buildMicroOrchestrator.js';
+import { buildTurnOrchestrator } from '../application/buildTurnOrchestrator.js';
 import { SessionRepository } from '../infrastructure/SessionRepository.js';
 import { FileSaveStore } from '../infrastructure/FileSaveStore.js';
 import { AdminCommandService } from '../application/AdminCommandService.js';
-import { GameController } from './controllers/GameController.js';
+import { CheckpointService } from '../application/CheckpointService.js';
+import { SetupController } from './controllers/SetupController.js';
+import { TurnController } from './controllers/TurnController.js';
+import { SavesController } from './controllers/SavesController.js';
+import { AdminController } from './controllers/AdminController.js';
 import { EnrichController } from './controllers/EnrichController.js';
 import { registerGameRoutes } from './routes/gameRoutes.js';
 import { PinoLogger } from '../infrastructure/PinoLogger.js';
@@ -85,7 +89,7 @@ export async function buildApp(options: AppOptions = {}) {
   const cpuReflectionService = new CpuReflectionService(llmService, {}, logger);
   const sessionFactory = new SessionFactory(undefined, undefined, undefined, llmService, worldRepo);
   // O orquestrador recebe os agentes por DI (nunca `LlmService`).
-  const microOrchestrator = buildMicroOrchestrator(llmModel, gameManagementService, cpuReflectionService, llmService, logger, llmCallLogger, llmContentLogger);
+  const orchestrator = buildTurnOrchestrator(llmModel, gameManagementService, cpuReflectionService, llmService, logger, llmCallLogger, llmContentLogger);
   const gameEngine = new GameEngine(
     undefined,
     undefined,
@@ -97,39 +101,51 @@ export async function buildApp(options: AppOptions = {}) {
     gameManagementService,
     logger,
     adminCommandService,
-    microOrchestrator,
+    orchestrator,
   );
 
-  const gameController = new GameController(
+  const checkpoints = new CheckpointService(saveStore, sessionRepo, logger);
+
+  const setupController = new SetupController(
     worldRepo,
     sessionFactory,
     gameEngine,
     llmService,
     gameManagementService,
     sessionRepo,
-    saveStore,
+    checkpoints,
     logger,
-    adminCommandService
+  );
+
+  const turnController = new TurnController(
+    sessionRepo,
+    gameEngine,
+    checkpoints,
+    logger,
+  );
+
+  const savesController = new SavesController(
+    saveStore,
+    sessionRepo,
+    logger,
+  );
+
+  const adminController = new AdminController(
+    sessionRepo,
+    gameEngine,
+    adminCommandService,
+    checkpoints,
+    logger,
   );
 
   const enrichController = new EnrichController(llmService, logger);
 
-  registerGameRoutes(app, gameController, enrichController);
-
-  app.post('/api/logs', async (req, reply) => {
-    const body = req.body as { logs?: Array<{ level: string; message: string; context?: Record<string, unknown> }> };
-    if (!body?.logs) {
-      return reply.status(400).send({ error: 'logs array required' });
-    }
-    for (const entry of body.logs) {
-      switch (entry.level) {
-        case 'debug': logger.debug(entry.message, entry.context ?? {}); break;
-        case 'info':  logger.info(entry.message, entry.context ?? {}); break;
-        case 'warn':  logger.warn(entry.message, entry.context ?? {}); break;
-        case 'error': logger.error(entry.message, entry.context ?? {}); break;
-      }
-    }
-    return reply.status(200).send({ received: body.logs.length });
+  registerGameRoutes(app, {
+    setup: setupController,
+    turn: turnController,
+    saves: savesController,
+    admin: adminController,
+    enrich: enrichController,
   });
 
   return app;

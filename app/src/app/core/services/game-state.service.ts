@@ -5,7 +5,7 @@ import type { Location } from '../models/location.model';
 import type { WorldConcept } from '../models/world-concept.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
 import type { TurnResponse, ObserveResponse, NarrateResponse } from '../models/api-payloads.model';
-import type { ActionEvent, MicroBlock } from '../models/micro-turn.model';
+import type { ActionEvent, TurnStep } from '../models/turn-step.model';
 
 export interface AppError {
   message: string;
@@ -49,17 +49,17 @@ export class GameStateService {
   readonly turnDebugHistory = signal<TurnDebugEntry[]>([]);
   readonly hasProcessedFirstTurn = signal<boolean>(false);
 
-  // Fila de turno a partir do `microTrace` da resposta: renderiza após
+  // Fila de turno a partir do `stepTrace` da resposta: renderiza após
   // o turno concluir; durante o processamento, `isLoading` mostra esqueleto.
-  readonly microTrace = signal<MicroBlock[]>([]);
-  readonly selectedMicro = signal<number>(0);
-  readonly hasTrace = computed(() => this.microTrace().length > 0);
-  readonly selectedBlock = computed<MicroBlock | null>(() => {
-    const trace = this.microTrace();
+  readonly stepTrace = signal<TurnStep[]>([]);
+  readonly selectedStepIndex = signal<number>(0);
+  readonly hasTrace = computed(() => this.stepTrace().length > 0);
+  readonly selectedStep = computed<TurnStep | null>(() => {
+    const trace = this.stepTrace();
     if (trace.length === 0) return null;
-    return trace[Math.min(this.selectedMicro(), trace.length - 1)] ?? null;
+    return trace[Math.min(this.selectedStepIndex(), trace.length - 1)] ?? null;
   });
-  readonly turnQueue = computed(() => this.selectedBlock()?.queue ?? []);
+  readonly turnQueue = computed(() => this.selectedStep()?.queue ?? []);
   readonly nextInOrder = computed<string | null>(() => {
     const queue = this.turnQueue();
     // queue[0] = foco (ator); o próximo é o primeiro após o foco.
@@ -76,8 +76,8 @@ export class GameStateService {
     this.error.set(null);
     this.turnDebugHistory.set([]);
     this.hasProcessedFirstTurn.set(false);
-    this.microTrace.set([]);
-    this.selectedMicro.set(0);
+    this.stepTrace.set([]);
+    this.selectedStepIndex.set(0);
   }
 
   // Restaura uma partida salva: aplica o estado completo (incl. history) sem tocar nos settings.
@@ -91,8 +91,8 @@ export class GameStateService {
     this.arbiterResolution.set(null);
     this.turnDebugHistory.set([]);
     this.hasProcessedFirstTurn.set(false);
-    this.microTrace.set([]);
-    this.selectedMicro.set(0);
+    this.stepTrace.set([]);
+    this.selectedStepIndex.set(0);
   }
 
   setObservation(result: ObserveResponse): void {
@@ -133,17 +133,17 @@ export class GameStateService {
     this.arbiterResolution.set(result.logicalResolution);
     this.npcDecisions.set(result.npcDecisions ?? []);
     this.diceRolls.set(result.diceRolls ?? []);
-    // Armazena o trace junto; default = último micro.
-    this.microTrace.set(result.microTrace ?? []);
-    this.selectedMicro.set(Math.max(0, (result.microTrace ?? []).length - 1));
+    // Armazena o trace junto; default = último step.
+    this.stepTrace.set(result.stepTrace ?? []);
+    this.selectedStepIndex.set(Math.max(0, (result.stepTrace ?? []).length - 1));
     this.error.set(null);
     this.saveCurrentTurnToHistory(turnBeforeUpdate);
   }
 
-  selectMicro(index: number): void {
-    const trace = this.microTrace();
+  selectStep(index: number): void {
+    const trace = this.stepTrace();
     if (trace.length === 0) return;
-    this.selectedMicro.set(Math.min(Math.max(0, index), trace.length - 1));
+    this.selectedStepIndex.set(Math.min(Math.max(0, index), trace.length - 1));
   }
 
   saveCurrentTurnToHistory(turnNumber: number): void {

@@ -15,12 +15,12 @@ export const CONDITIONS_SYSTEM_PROMPT = [
 
 export function conditionsHumanPrompt(
   state: GameState,
-  microNarration: string,
+  stepNarration: string,
 ): string {
   const validNames = state.characters.map((c) => c.name).join(', ');
   return [
     `Personagens válidos: [${validNames}].`,
-    `Micro-narração: ${microNarration}`,
+    `Narração do passo: ${stepNarration}`,
     `Formato: ${CONDITIONS_FORMAT_SPEC}`,
     'JSON:',
   ].join('\n');

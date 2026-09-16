@@ -11,7 +11,7 @@
   flex-wrap: wrap;
 }
 
-.turn-queue__micro-btn {
+.turn-queue__step-btn {
   border: 1px solid var(--border);
   background: transparent;
   border-radius: 999px;
@@ -21,7 +21,7 @@
   color: inherit;
 }
 
-.turn-queue__micro-btn--active {
+.turn-queue__step-btn--active {
   background: var(--accent, #89b4fa);
   border-color: var(--accent, #89b4fa);
   color: #11111b;

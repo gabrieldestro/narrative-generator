@@ -16,12 +16,12 @@ function makeState(): GameState {
 }
 
 // Doc 27, Fase 1 — `NarratorAgent`.
-describe('NarratorAgent.narrateMicro', () => {
+describe('NarratorAgent.narrateStep', () => {
   it('retorna o texto do `invoke`', async () => {
     const client = { invoke: vi.fn(async () => 'Darian cai no chão úmido.') };
     const selfHealing = { invokeWithRetry: vi.fn() };
     const agent = new NarratorAgent(client as any, selfHealing as any, { ...DEFAULT_SETTINGS });
-    const out = await agent.narrateMicro(
+    const out = await agent.narrateStep(
       makeState(),
       'Darian tenta: escalar muro',
       { outcome: 'failure', violent: true, reason: 'muro liso', hit: ['Darian'] },

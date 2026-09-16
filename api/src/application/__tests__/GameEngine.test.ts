@@ -236,7 +236,7 @@ describe('GameEngine', () => {
   let mockLlmService: LlmService;
   let mockCpuReflection: CpuReflectionService;
   let mockSessionFactory: SessionFactory;
-  let mockMicroOrchestrator: { runTurn: ReturnType<typeof vi.fn>; updateSettings: ReturnType<typeof vi.fn> };
+  let mockOrchestrator: { runTurn: ReturnType<typeof vi.fn>; updateSettings: ReturnType<typeof vi.fn> };
   let engine: GameEngine;
 
   function makeOrchestrator(narrative = 'Cena narrada.') {
@@ -247,7 +247,7 @@ describe('GameEngine', () => {
         npcDecisions: [],
         diceRolls: [],
         npcOrder: ['Aric', 'Elara'],
-        microTrace: [],
+        stepTrace: [],
         pendingMoves: [],
       })),
       updateSettings: vi.fn(),
@@ -287,8 +287,8 @@ describe('GameEngine', () => {
     } as unknown as CpuReflectionService;
 
     mockSessionFactory = new SessionFactory(mockInput, mockOutput, mockRepo, mockLlmService);
-    mockMicroOrchestrator = makeOrchestrator();
-    engine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, mockMicroOrchestrator as any);
+    mockOrchestrator = makeOrchestrator();
+    engine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, mockOrchestrator as any);
   });
 
   it('deve carregar save e executar um turno', async () => {
@@ -306,7 +306,7 @@ describe('GameEngine', () => {
     )?.[0] as GameState;
     expect(savedState).toBeDefined();
     expect(savedState.turnNumber).toBe(4);
-    expect(mockMicroOrchestrator.runTurn).toHaveBeenCalledOnce();
+    expect(mockOrchestrator.runTurn).toHaveBeenCalledOnce();
   });
 
   it('deve limitar o histórico ao memoryWindowSize e disparar sumarização', async () => {
@@ -353,13 +353,13 @@ describe('GameEngine', () => {
 
     const observeSpy = vi.spyOn(mockLlmService, 'generateObservation')
       .mockResolvedValue('A névoa esconde sombras rastejantes.');
-    mockMicroOrchestrator.runTurn.mockResolvedValueOnce({
+    mockOrchestrator.runTurn.mockResolvedValueOnce({
       narrative: 'Aric avança pela caverna.',
       logicalResolution: 'Resolução lógica.',
       npcDecisions: [],
       diceRolls: [],
       npcOrder: ['Aric', 'Elara'],
-      microTrace: [],
+      stepTrace: [],
       pendingMoves: [],
     });
 
@@ -419,32 +419,32 @@ describe('GameEngine', () => {
     expect(savedState.worldContext).toBe('A biblioteca proibida se revela diante de Aric.');
   });
 
-  it('delega ao orquestrador e retorna npcOrder/microTrace', async () => {
+  it('delega ao orquestrador e retorna npcOrder/stepTrace', async () => {
     const runTurn = vi.fn(async () => ({
-      narrative: 'Micro-narração.',
+      narrative: 'Narração do step.',
       logicalResolution: 'Darian tentou X -> Sucesso porque ...',
       npcDecisions: [],
       diceRolls: [{ characterName: 'Aric', roll: 11, isGodMode: false }],
       npcOrder: ['Aric', 'Elara'],
-      microTrace: [{ micro: 1, actor: 'Aric', actorWhere: 'Floresta', queue: [], spotlight: 'Aric', gate: { allowed: [], denied: [] } }],
+      stepTrace: [{ step: 1, actor: 'Aric', actorWhere: 'Floresta', queue: [], spotlight: 'Aric', gate: { allowed: [], denied: [] } }],
       pendingMoves: [],
     }));
-    const microOrchestrator = { runTurn, updateSettings: vi.fn() };
-    const microEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, microOrchestrator as any);
+    const orchestrator = { runTurn, updateSettings: vi.fn() };
+    const turnEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, orchestrator as any);
     const state = JSON.parse(JSON.stringify(existingState));
 
     vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
     const extractSpy = vi.spyOn(mockLlmService, 'extractStateChanges');
     const locationsSpy = vi.spyOn(mockLlmService, 'extractCharacterLocations');
 
-    const result = await microEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+    const result = await turnEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
 
     expect(runTurn).toHaveBeenCalledTimes(1);
     expect(result.npcOrder).toEqual(['Aric', 'Elara']);
-    expect(result.microTrace).toHaveLength(1);
+    expect(result.stepTrace).toHaveLength(1);
     expect(extractSpy).not.toHaveBeenCalled();
     expect(locationsSpy).not.toHaveBeenCalled();
-    // turnNumber++ 1x por turno + 1 entrada de history (não 1 por micro).
+    // turnNumber++ 1x por turno + 1 entrada de history (não 1 por step).
     expect(result.state.turnNumber).toBe(4);
     expect(result.state.history.filter((h) => h.startsWith('Turno 3:'))).toHaveLength(1);
   });
@@ -453,7 +453,7 @@ describe('GameEngine', () => {
     const noOrchestratorEngine = new GameEngine(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 });
     const state = JSON.parse(JSON.stringify(existingState));
 
-    await expect(noOrchestratorEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]))).rejects.toThrow('MicroTurnOrchestrator não injetado');
+    await expect(noOrchestratorEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]))).rejects.toThrow('TurnOrchestrator não injetado');
   });
 
   it('deve criar novo jogo quando não há save', async () => {

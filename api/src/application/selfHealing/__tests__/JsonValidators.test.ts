@@ -3,7 +3,7 @@ import {
   validateStateChanges,
   validateCharacterSheet,
   validateLocationMap,
-  validateMicroArbiter,
+  validateStepArbiter,
   validateInventoryDelta,
   validateMovementDelta,
   validateConditionsDelta,
@@ -132,34 +132,34 @@ describe('validateLocationMap', () => {
   });
 });
 
-describe('validateMicroArbiter (doc 27, Fase 1)', () => {
+describe('validateStepArbiter', () => {
   it('aceita resolução válida', () => {
-    expect(validateMicroArbiter({
+    expect(validateStepArbiter({
       outcome: 'failure', violent: true, reason: 'muro liso, caiu de 2m', hit: ['Darian'],
     })).toBe(true);
   });
 
   it('aceita `hit` vazio (sem consequência física)', () => {
-    expect(validateMicroArbiter({ outcome: 'success', violent: false, reason: 'trivial', hit: [] })).toBe(true);
+    expect(validateStepArbiter({ outcome: 'success', violent: false, reason: 'trivial', hit: [] })).toBe(true);
   });
 
   it('rejeita `outcome` fora do enum', () => {
-    expect(validateMicroArbiter({ outcome: 'maybe', violent: false, reason: 'x', hit: [] })).toBe(false);
+    expect(validateStepArbiter({ outcome: 'maybe', violent: false, reason: 'x', hit: [] })).toBe(false);
   });
 
   it('rejeita `violent` não-booleano e `reason` vazia', () => {
-    expect(validateMicroArbiter({ outcome: 'success', violent: 'yes', reason: 'x', hit: [] })).toBe(false);
-    expect(validateMicroArbiter({ outcome: 'success', violent: false, reason: '', hit: [] })).toBe(false);
+    expect(validateStepArbiter({ outcome: 'success', violent: 'yes', reason: 'x', hit: [] })).toBe(false);
+    expect(validateStepArbiter({ outcome: 'success', violent: false, reason: '', hit: [] })).toBe(false);
   });
 
   it('rejeita `hit` que não é array de strings', () => {
-    expect(validateMicroArbiter({ outcome: 'success', violent: false, reason: 'x', hit: 'Darian' })).toBe(false);
-    expect(validateMicroArbiter({ outcome: 'success', violent: false, reason: 'x', hit: [42] })).toBe(false);
+    expect(validateStepArbiter({ outcome: 'success', violent: false, reason: 'x', hit: 'Darian' })).toBe(false);
+    expect(validateStepArbiter({ outcome: 'success', violent: false, reason: 'x', hit: [42] })).toBe(false);
   });
 
   it('rejeita não-objeto', () => {
-    expect(validateMicroArbiter(null)).toBe(false);
-    expect(validateMicroArbiter('json')).toBe(false);
+    expect(validateStepArbiter(null)).toBe(false);
+    expect(validateStepArbiter('json')).toBe(false);
   });
 });
 

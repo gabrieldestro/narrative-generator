@@ -12,7 +12,7 @@ import {
 /**
  * Extrator de inventário (doc 27, Fase 2 — §6.2/§7.2).
  * Só roda o LLM com sinal (`hasSignal`); grounding estrito + allowlist de
- * nomes vivem na fusão (`GameManagementService.applyMicroUpdates`).
+ * nomes vivem na fusão (`GameManagementService.applyStepUpdates`).
  */
 export class InventoryExtractorAgent extends ExtractorBase<InventoryDelta> {
   readonly formatSpec = INVENTORY_FORMAT_SPEC;
@@ -34,13 +34,13 @@ export class InventoryExtractorAgent extends ExtractorBase<InventoryDelta> {
     return validateInventoryDelta(value);
   }
 
-  async extract(state: GameState, microNarration: string): Promise<InventoryDelta> {
-    if (!this.hasSignal(microNarration)) return {};
+  async extract(state: GameState, stepNarration: string): Promise<InventoryDelta> {
+    if (!this.hasSignal(stepNarration)) return {};
     const healed = await this.resolver.resolveJson({
       agent: 'Extrator:Inventário',
       turn: state.turnNumber,
       system: INVENTORY_SYSTEM_PROMPT,
-      human: inventoryHumanPrompt(state, microNarration),
+      human: inventoryHumanPrompt(state, stepNarration),
       schemaSpec: this.formatSpec,
       validate: validateInventoryDelta,
       compact: true,

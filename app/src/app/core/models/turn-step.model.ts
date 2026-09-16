@@ -1,21 +1,21 @@
-// Doc 27, Fase 5 (§7.3) — fila de turno e trace (espelho do backend).
+// Fila de turno e trace (espelho do backend).
 // O front só renderiza a ordem que o servidor enviou; sem lógica de ordenação.
 
 export type GateChannel = 'saw' | 'heard' | 'stake' | 'none';
 
 export type QueueStatus = 'done' | 'ignored' | 'denied';
 
-export interface MicroQueueEntry {
+export interface StepQueueEntry {
   who: string;
   where: string;
   status: QueueStatus;
 }
 
-export interface MicroBlock {
-  micro: number;
+export interface TurnStep {
+  step: number;
   actor: string;
   actorWhere: string;
-  queue: MicroQueueEntry[];
+  queue: StepQueueEntry[];
   spotlight: string;
   gate: {
     allowed: { who: string; channel: Exclude<GateChannel, 'none'> }[];

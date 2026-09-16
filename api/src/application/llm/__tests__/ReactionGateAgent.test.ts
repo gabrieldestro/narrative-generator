@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ReactionGateAgent } from '../gate/ReactionGateAgent.js';
-import type { GateCandidate, MicroAction } from '../../../domain/types.js';
+import type { GateCandidate, StepAction } from '../../../domain/types.js';
 
 function mockDeps(resolvedValue: unknown | null) {
   const client = { invoke: vi.fn(async () => 'irrelevante') };
   const resolver = { resolveJson: vi.fn(async () => (resolvedValue === null ? null : { value: resolvedValue, attempt: 1 })) };
   return { client, resolver };
 }
+const BOOM: StepAction = { actor: 'Darian', text: 'explodir barril' };
 
-const BOOM: MicroAction = { actor: 'Darian', text: 'explodir barril' };
-const WHISPER: MicroAction = { actor: 'Darian', text: 'sussurrar o plano' };
+const WHISPER: StepAction = { actor: 'Darian', text: 'sussurrar o plano' };
 
 // Doc 27, Fase 3 — árbitro de percepção (§6.5).
 describe('ReactionGateAgent.gateReactions', () => {

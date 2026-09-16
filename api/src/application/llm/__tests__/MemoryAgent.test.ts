@@ -25,7 +25,7 @@ describe('MemoryAgent.consolidateFacts', () => {
       facts: ['Elara deve a Darian pelo resgate no Porão'],
       threads: [{ id: 'artefato', text: 'recuperar artefato no Sótão', status: 'open' }],
     });
-    // Entrada inclui micro-narrações da cena (armadilha b: events sozinhos insuficientes).
+    // Entrada inclui narrações dos steps da cena (events sozinhos insuficientes).
     const human = resolver.resolveJson.mock.calls[0]![0].human as string;
     expect(human).toContain('Darian resgata Elara no Porão.');
   });

@@ -1,4 +1,4 @@
-import type { GateCandidate, GateChannel, GateRuling, MicroAction } from "../../../domain/types.js";
+import type { GateCandidate, GateChannel, GateRuling, StepAction } from "../../../domain/types.js";
 import type { LlmClient } from "../LlmClient.js";
 import type { IStructuredResolver } from "../StructuredResolver.js";
 import { validateGateRulings, normalizeGateRulings } from "../../selfHealing/JsonValidators.js";
@@ -6,7 +6,7 @@ import { GATE_FORMAT_SPEC, GATE_SYSTEM_PROMPT, gateHumanPrompt } from "./prompts
 
 /**
  * Árbitro de percepção (doc 27, Fase 3 — §4.3/§6.5).
- * 1 chamada batch por micro; decide QUEM pode reagir. Negado nem vê a ação.
+ * 1 chamada batch por step; decide QUEM pode reagir. Negado nem vê a ação.
  * Fail-closed: combinação inválida (`allow=true` + `channel=none`) vira
  * negação; falha total após repair → fallback determinístico.
  */
@@ -20,7 +20,7 @@ export class ReactionGateAgent {
   ) {}
 
   async gateReactions(
-    action: MicroAction,
+    action: StepAction,
     actorWhere: string,
     candidates: GateCandidate[],
     turn: number,
@@ -63,9 +63,9 @@ export class ReactionGateAgent {
   /**
    * Fallback determinístico (exceção documentada de fail-safe, §4.3 item 2):
    * permite mesmo-local (`saw`) + `isTarget`/`ownsItem` (`stake`).
-   * Único `if` de local do plano — só quando o gate falha, nunca trava o micro.
+   * Único `if` de local do plano — só quando o gate falha, nunca trava o step.
    */
-  fallback(action: MicroAction, actorWhere: string, candidates: GateCandidate[]): GateRuling[] {
+  fallback(action: StepAction, actorWhere: string, candidates: GateCandidate[]): GateRuling[] {
     void action;
     const here = actorWhere.toLowerCase();
     return candidates.map((c) => {

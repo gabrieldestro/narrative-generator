@@ -3,8 +3,8 @@ import { GameManagementService } from "../GameManagementService.js";
 import type { GameState } from "../../domain/types.js";
 import type { LlmService } from "../LlmService.js";
 
-// Doc 27, Fase 2 — fusão dos micro-deltas por categoria (§6.2).
-describe("GameManagementService.applyMicroUpdates", () => {
+// Fusão dos deltas do step por categoria.
+describe("GameManagementService.applyStepUpdates", () => {
   const mockLlmService = {} as unknown as LlmService;
 
   const createState = (): GameState => ({
@@ -32,7 +32,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
   it("aplica grab com grounding + dedup, descarta sem citação e nome inválido", () => {
     const service = new GameManagementService(mockLlmService);
     const narration = "Elara pega a Chave de Bronze sobre a mesa.";
-    const out = service.applyMicroUpdates(createState(), narration, {
+    const out = service.applyStepUpdates(createState(), narration, {
       inventory: {
         grab: [
           { who: "Elara", item: "Chave de Bronze" },
@@ -49,7 +49,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
 
   it("grab duplicado (case-insensitive) não duplica", () => {
     const service = new GameManagementService(mockLlmService);
-    const out = service.applyMicroUpdates(createState(), "Darian empunha a espada.", {
+    const out = service.applyStepUpdates(createState(), "Darian empunha a espada.", {
       inventory: { grab: [{ who: "Darian", item: "espada" }] },
     });
     expect(out.state.characters.find((c) => c.name === "Darian")!.inventory).toEqual(["Espada"]);
@@ -57,7 +57,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
 
   it("aplica drop e move para local existente", () => {
     const service = new GameManagementService(mockLlmService);
-    const out = service.applyMicroUpdates(createState(), "Darian larga a Espada e desce ao Porão.", {
+    const out = service.applyStepUpdates(createState(), "Darian larga a Espada e desce ao Porão.", {
       inventory: { drop: [{ who: "Darian", item: "Espada" }] },
       movement: { move: [{ who: "Darian", to: "Porão" }] },
     });
@@ -69,7 +69,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
 
   it("move para nome desconhecido vira `pendingMoves` (não aplica, sem stale)", () => {
     const service = new GameManagementService(mockLlmService);
-    const out = service.applyMicroUpdates(createState(), "Elara sobe ao Sótão escuro.", {
+    const out = service.applyStepUpdates(createState(), "Elara sobe ao Sótão escuro.", {
       movement: { move: [{ who: "Elara", to: "Sótão" }] },
     });
     expect(out.state.characters.find((c) => c.name === "Elara")!.currentLocation).toBe("Pátio");
@@ -80,7 +80,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
     const service = new GameManagementService(mockLlmService);
     const state = createState();
     state.characters[0]!.conditions = ["corte no braço", "ombro deslocado", "tornozelo torcido"];
-    const out = service.applyMicroUpdates(state, "Darian cai do muro e torce o tornozelo, o sangue escorre do corte no braço.", {
+    const out = service.applyStepUpdates(state, "Darian cai do muro e torce o tornozelo, o sangue escorre do corte no braço.", {
       conditions: {
         conditions: [
           { who: "Darian", add: "tornozelo torcido" }, // dedup → ignora
@@ -97,7 +97,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
   it("`{}` válido em toda categoria (nada muda)", () => {
     const service = new GameManagementService(mockLlmService);
     const before = createState();
-    const out = service.applyMicroUpdates(before, "Eles conversam sobre o tempo.", {
+    const out = service.applyStepUpdates(before, "Eles conversam sobre o tempo.", {
       inventory: {}, movement: {}, conditions: {},
     });
     expect(out.state.characters).toEqual(before.characters);
@@ -106,7 +106,7 @@ describe("GameManagementService.applyMicroUpdates", () => {
 
   it("JSON misto (1 válido + 2 inválidos) aplica só o válido", () => {
     const service = new GameManagementService(mockLlmService);
-    const out = service.applyMicroUpdates(createState(), "Elara pega a Chave de Bronze e desce ao Porão.", {
+    const out = service.applyStepUpdates(createState(), "Elara pega a Chave de Bronze e desce ao Porão.", {
       inventory: { grab: [{ who: "Elara", item: "Chave de Bronze" }] },
       movement: { move: [{ who: "Fantasma", to: "Porão" }] }, // nome inválido
       conditions: { conditions: [{ who: "Elara", add: "Asa Quebrada" }] }, // sem grounding
@@ -116,16 +116,16 @@ describe("GameManagementService.applyMicroUpdates", () => {
     expect(out.state.characters.find((c) => c.name === "Elara")!.conditions ?? []).toEqual([]);
   });
 
-  it("morte via micro é ignorada (só via cena-extrator — §6.2)", () => {
+  it("morte via step é ignorada (só via cena-extrator)", () => {
     const service = new GameManagementService(mockLlmService);
     // Não há campo de lifecycle nos deltas: estado vital permanece.
-    const out = service.applyMicroUpdates(createState(), "Darian cai.", { conditions: {} });
+    const out = service.applyStepUpdates(createState(), "Darian cai.", { conditions: {} });
     expect(out.state.characters.find((c) => c.name === "Darian")!.status ?? "active").toBe("active");
     expect(out.state.characters.find((c) => c.name === "Darian")!.vitality ?? "ileso").toBe("ileso");
   });
 });
 
-// Doc 27, Fase 4 — vitalidade (§5) + fusão de cena (§6.3).
+// Vitalidade + fusão de cena.
 describe("GameManagementService.advanceVitality", () => {
   const mockLlmService = {} as unknown as LlmService;
 

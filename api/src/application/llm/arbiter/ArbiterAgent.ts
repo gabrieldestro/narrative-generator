@@ -1,20 +1,20 @@
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
-import type { GameState, MicroAction, MicroOutcome, MicroResolution } from "../../../domain/types.js";
+import type { GameState, StepAction, StepOutcome, StepResolution } from "../../../domain/types.js";
 import type { LlmClient } from "../LlmClient.js";
 import type { IStructuredResolver } from "../StructuredResolver.js";
 import type { SelfHealingService } from "../../selfHealing/SelfHealingService.js";
-import { validateMicroArbiter } from "../../selfHealing/JsonValidators.js";
+import { validateStepArbiter } from "../../selfHealing/JsonValidators.js";
 import { arbiterSystemPrompt, arbiterHumanPrompt } from "../../prompts.js";
 import {
-  MICRO_ARBITER_SYSTEM_PROMPT,
-  MICRO_ARBITER_FORMAT_SPEC,
-  microArbiterHumanPrompt,
+  STEP_ARBITER_SYSTEM_PROMPT,
+  STEP_ARBITER_FORMAT_SPEC,
+  stepArbiterHumanPrompt,
 } from "./prompts.js";
 
 /**
- * Árbitro (doc 27, Fase 1 — §6.1/§7.2). Dono de `arbitrateMicro` (JSON
- * pequeno por ação) + `arbitrateLegacy` (adaptador do `arbitrateLogic`
- * gigante, mesma chamada/retry — prova do padrão sem mudar comportamento).
+ * Árbitro. Dono de `arbitrateStep` (JSON pequeno por ação) +
+ * `arbitrateTurn` (arbitragem do turno inteiro de uma vez, usada pelo
+ * `LlmService.arbitrateLogic`).
  */
 export class ArbiterAgent {
   /** Temp por função (§3): árbitro/extratores `0.0-0.2`. Aplicação real exige
@@ -28,24 +28,24 @@ export class ArbiterAgent {
     private readonly selfHealing: SelfHealingService,
   ) {}
 
-  async arbitrateMicro(
+  async arbitrateStep(
     state: GameState,
-    action: MicroAction,
-    reactions: MicroAction[] = [],
-  ): Promise<MicroResolution> {
+    action: StepAction,
+    reactions: StepAction[] = [],
+  ): Promise<StepResolution> {
     const healed = await this.resolver.resolveJson({
-      agent: 'Árbitro:Micro',
+      agent: 'Árbitro:Step',
       turn: state.turnNumber,
-      system: MICRO_ARBITER_SYSTEM_PROMPT,
-      human: microArbiterHumanPrompt(state, action, reactions),
-      schemaSpec: MICRO_ARBITER_FORMAT_SPEC,
-      validate: validateMicroArbiter,
+      system: STEP_ARBITER_SYSTEM_PROMPT,
+      human: stepArbiterHumanPrompt(state, action, reactions),
+      schemaSpec: STEP_ARBITER_FORMAT_SPEC,
+      validate: validateStepArbiter,
       compact: true,
     });
     if (!healed) {
       return { outcome: 'partial', violent: false, reason: 'inconclusivo', hit: [] };
     }
-    const raw = healed.value as { outcome: MicroOutcome; violent: boolean; reason: string; hit: string[] };
+    const raw = healed.value as { outcome: StepOutcome; violent: boolean; reason: string; hit: string[] };
     // Engine dispõe: `hit` filtrado por allowlist (case-insensitive); entrada
     // inválida descartada, não o objeto inteiro.
     const known = new Set(state.characters.map((c) => c.name.toLowerCase()));
@@ -67,11 +67,10 @@ export class ArbiterAgent {
   }
 
   /**
-   * Adaptador legado: corpo movido de `LlmService.arbitrateLogic` (mesmos
-   * prompts de `prompts.ts`, mesmo `invokeWithRetry`). Usado pelo
-   * `GameEngine.processTurn` até o orquestrador da Fase 3 assumir.
+   * Arbitragem do turno inteiro de uma vez (mesmos prompts de `prompts.ts`,
+   * mesmo `invokeWithRetry`). Usada pelo `LlmService.arbitrateLogic`.
    */
-  async arbitrateLegacy(
+  async arbitrateTurn(
     state: GameState,
     actions: string[],
     recentHistory?: string[],
@@ -97,34 +96,33 @@ export class ArbiterAgent {
   /** Regra do dado (determinística, em código, pós-`resolveJson`): só o
    * `partial` é modulado pelo d20 — impossível físico (`failure`) e trivial
    * (`success`) nunca mudam. `godMode=20` do player flui naturalmente. */
-  applyDiceRule(resolution: MicroResolution, roll: number | undefined): MicroResolution {
+  applyDiceRule(resolution: StepResolution, roll: number | undefined): StepResolution {
     if (resolution.outcome !== 'partial') return resolution;
     if (roll === 20) return { ...resolution, outcome: 'success' };
     if (roll === 1) return { ...resolution, outcome: 'failure' };
     return resolution;
   }
 
-  /** Compat de leitura (não usado no loop — só exposto p/ Fase 3/tests). */
+  /** Compat de leitura (não usado no loop — só exposto p/ tests). */
   getClient(): LlmClient {
     return this.client;
   }
 }
 
-export interface LegacyResolutionEntry {
+export interface ResolutionEntry {
   actor: string;
   text: string;
-  outcome: MicroOutcome;
+  outcome: StepOutcome;
   reason: string;
 }
 
 /**
- * Converte `MicroResolution[]` → linhas legadas
- * `"Fulano tentou X -> Sucesso porque ..."` para o regex de
- * `GameEngine.ts` (`-> Sucesso/Falha`) e `CpuReflectionService`
- * continuar funcionando (uso real na Fase 3).
+ * Converte `StepResolution[]` → linhas
+ * `"Fulano tentou X -> Sucesso porque ..."` para o scratchpad dos NPCs
+ * (`CpuReflectionService`).
  */
-export function renderLegacyResolution(entries: LegacyResolutionEntry[]): string {
-  const label: Record<MicroOutcome, string> = {
+export function renderResolution(entries: ResolutionEntry[]): string {
+  const label: Record<StepOutcome, string> = {
     success: 'Sucesso',
     partial: 'Sucesso parcial',
     failure: 'Falha',

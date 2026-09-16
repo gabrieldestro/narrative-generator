@@ -6,15 +6,15 @@
       <span class="turn-queue__skeleton-chip"></span>
     </div>
   } @else if (gameState.hasTrace()) {
-    @if (layout === 'strip' && gameState.microTrace().length > 1) {
-      <div class="turn-queue__selector" role="group" aria-label="Seletor de micro">
-        @for (block of gameState.microTrace(); track block.micro; let i = $index) {
+    @if (layout === 'strip' && gameState.stepTrace().length > 1) {
+      <div class="turn-queue__selector" role="group" aria-label="Seletor de passo">
+        @for (block of gameState.stepTrace(); track block.step; let i = $index) {
           <button
             type="button"
-            class="turn-queue__micro-btn"
-            [class.turn-queue__micro-btn--active]="i === gameState.selectedMicro()"
-            (click)="gameState.selectMicro(i)">
-            Micro {{ block.micro }}
+            class="turn-queue__step-btn"
+            [class.turn-queue__step-btn--active]="i === gameState.selectedStepIndex()"
+            (click)="gameState.selectStep(i)">
+            Passo {{ block.step }}
           </button>
         }
       </div>
@@ -24,7 +24,7 @@
         <span
           role="listitem"
           class="turn-queue__chip turn-queue__chip--{{ entry.status }}"
-          [class.turn-queue__chip--spotlight]="entry.who === gameState.selectedBlock()?.spotlight"
+          [class.turn-queue__chip--spotlight]="entry.who === gameState.selectedStep()?.spotlight"
           [title]="deniedWhy(entry.who) ?? statusLabel(entry)">
           <span class="turn-queue__icon">{{ statusIcon(entry.status) }}</span>
           <span class="turn-queue__name">{{ i + 1 }} {{ entry.who }}</span>
