@@ -2,7 +2,7 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { GameState, Character, GameSettings } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
-import type { IOutputWriter, ILogger } from "../domain/ports.js";
+import type { ILogger } from "../domain/ports.js";
 import type { LlmCallLogger } from "../infrastructure/LlmCallLogger.js";
 import type { LlmContentLogger } from "../infrastructure/LlmContentLogger.js";
 import {
@@ -34,7 +34,6 @@ import { SelfHealingService } from "./selfHealing/SelfHealingService.js";
 import { PromptJsonResolver } from "./llm/StructuredResolver.js";
 import { LlmClient } from "./llm/LlmClient.js";
 import { ArbiterAgent } from "./llm/arbiter/ArbiterAgent.js";
-import { NarratorAgent } from "./llm/narrator/NarratorAgent.js";
 import { MemoryAgent } from "./llm/memory/MemoryAgent.js";
 import {
   validateStateChanges,
@@ -54,11 +53,9 @@ class NullLogger implements ILogger {
 }
 
 /**
- * @deprecated em favor dos agentes de `api/src/application/llm/` (doc 27,
- * Fase 4 — §7.2). Virou fachada fina: mantém as assinaturas para o
- * `GameEngine` legado/CLI/benchmark, mas delega aos agentes donos.
- * `extractStateChanges` é o último legado sem dono (substituído pelos
- * micro-extratores no loop; removido quando a flag ligar por default).
+ * Fachada fina sobre os agentes de `api/src/application/llm/`: mantém
+ * comandos de sessão e extratores legados (observe/narrate/estado) até a
+ * remoção do monolito; o turno roda no `MicroTurnOrchestrator`.
  */
 export class LlmService {
   private readonly settings: GameSettings;
@@ -70,7 +67,6 @@ export class LlmService {
    * estes métodos delegam (adaptador legado, zero mudança de fluxo). */
   private readonly llmClient: LlmClient;
   private readonly arbiterAgent: ArbiterAgent;
-  private readonly narratorAgent: NarratorAgent;
   /** Doc 27, Fase 4: memória factual junta (`MemoryAgent`). */
   private readonly memoryAgent: MemoryAgent;
 
@@ -87,15 +83,6 @@ export class LlmService {
     this.structuredResolver = new PromptJsonResolver(llm, logger, this.appLogger, this.settings, this.contentLogger);
     this.llmClient = new LlmClient(llm, logger, this.appLogger, this.contentLogger);
     this.arbiterAgent = new ArbiterAgent(this.llmClient, this.structuredResolver, this.selfHealing);
-    this.narratorAgent = new NarratorAgent(
-      this.llmClient,
-      this.selfHealing,
-      this.settings,
-      this.logger,
-      this.appLogger,
-      this.contentLogger,
-      this.summarizeMemory.bind(this),
-    );
     this.memoryAgent = new MemoryAgent(this.llmClient, this.structuredResolver, this.appLogger);
   }
 
@@ -278,26 +265,6 @@ export class LlmService {
     const response = await this.llm.invoke(messages);
     this.appLogger.info('[Narração Declarada] gerada', { characterName, durationMs: Date.now() - start });
     return response.content as string;
-  }
-
-  async narrateFiction(
-    state: GameState,
-    actions: string[],
-    logicalResolution: string,
-    output?: IOutputWriter,
-    unexpectedEventTriggered?: boolean,
-    sceneDescription?: string
-  ): Promise<string> {
-    // Fase 1 (doc 27): delega ao `NarratorAgent.narrateLegacy` — stream +
-    // fallback de overflow idênticos ao corpo movido, zero mudança de fluxo.
-    return this.narratorAgent.narrateLegacy(
-      state,
-      actions,
-      logicalResolution,
-      output,
-      unexpectedEventTriggered,
-      sceneDescription,
-    );
   }
 
   async summarizeMemory(longTermSummary: string | undefined, oldestTurns: string[], turn = 0): Promise<string> {

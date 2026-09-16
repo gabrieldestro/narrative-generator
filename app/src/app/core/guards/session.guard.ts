@@ -14,6 +14,16 @@ export class SessionGuard implements CanActivate {
   canActivate(route: ActivatedRouteSnapshot): Observable<boolean | UrlTree> {
     const sessionId = route.paramMap.get('sessionId')!;
 
+    // O estado já está fresco no serviço (ex.: pós-turno: setTurnResult/
+    // setObservation/setNarration/applyAdminResult atualizam sessionId +
+    // gameState e depois navegam para o novo checkpoint). Refetchar aqui
+    // chamaria setGameState(), que zera o contexto transitório do turno
+    // (microTrace, turnDebugHistory) — só a narrativa central (history,
+    // persistido no GameState) sobreviveria. Evita o GET redundante.
+    if (this.gameState.sessionId() === sessionId && this.gameState.gameState() !== null) {
+      return of(true);
+    }
+
     return this.api.getGameState(sessionId).pipe(
       map(response => {
         this.gameState.setGameState(sessionId, response.state);

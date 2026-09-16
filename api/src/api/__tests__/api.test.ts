@@ -119,31 +119,6 @@ describe('Fastify Game API', () => {
     expect(turnBody).toHaveProperty('updatedState');
   });
 
-  it('POST /api/games/:sessionId/turn/stream deve transmitir eventos SSE durante o turno', async () => {
-    const createRes = await app.inject({
-      method: 'POST',
-      url: '/api/games/new',
-      payload: {
-        mode: 'template',
-        templateName: 'fantasia_masmorra.json',
-      },
-    });
-    const { sessionId } = JSON.parse(createRes.payload);
-
-    const streamRes = await app.inject({
-      method: 'POST',
-      url: `/api/games/${sessionId}/turn/stream`,
-      payload: {
-        playerText: 'Olho ao redor procurando por perigos.',
-      },
-    });
-
-    expect(streamRes.statusCode).toBe(200);
-    expect(streamRes.headers['content-type']).toContain('text/event-stream');
-    expect(streamRes.payload).toContain('event: start');
-    expect(streamRes.payload).toContain('event: done');
-  });
-
   it('POST /api/games/:sessionId/observe deve detalhar a cena sem avançar o turno', async () => {
     const fakeLlm = new FakeListChatModel({
       responses: [

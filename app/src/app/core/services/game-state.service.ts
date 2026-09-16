@@ -49,9 +49,8 @@ export class GameStateService {
   readonly turnDebugHistory = signal<TurnDebugEntry[]>([]);
   readonly hasProcessedFirstTurn = signal<boolean>(false);
 
-  // Doc 27, Fase 5 (§7.3): fila de turno a partir do `microTrace` da resposta.
-  // Sem streaming: a fila renderiza após o turno concluir; durante o
-  // processamento, `isLoading` mostra esqueleto.
+  // Fila de turno a partir do `microTrace` da resposta: renderiza após
+  // o turno concluir; durante o processamento, `isLoading` mostra esqueleto.
   readonly microTrace = signal<MicroBlock[]>([]);
   readonly selectedMicro = signal<number>(0);
   readonly hasTrace = computed(() => this.microTrace().length > 0);
@@ -134,8 +133,7 @@ export class GameStateService {
     this.arbiterResolution.set(result.logicalResolution);
     this.npcDecisions.set(result.npcDecisions ?? []);
     this.diceRolls.set(result.diceRolls ?? []);
-    // Doc 27, Fase 5: armazena o trace junto (padrão atual, sem SseService);
-    // default = último micro.
+    // Armazena o trace junto; default = último micro.
     this.microTrace.set(result.microTrace ?? []);
     this.selectedMicro.set(Math.max(0, (result.microTrace ?? []).length - 1));
     this.error.set(null);

@@ -10,6 +10,7 @@ import { SessionFactory } from "./application/SessionFactory.js";
 import { GameEngine } from "./application/GameEngine.js";
 import { CpuReflectionService } from "./application/npcAgent/CpuReflectionService.js";
 import { GameManagementService } from "./application/GameManagementService.js";
+import { buildMicroOrchestrator } from "./application/buildMicroOrchestrator.js";
 import { PinoLogger } from "./infrastructure/PinoLogger.js";
 import { LlmContentLogger } from "./infrastructure/LlmContentLogger.js";
 
@@ -32,10 +33,13 @@ async function main() {
     const output = new ConsoleOutput();
     const repository = new JsonStateRepository('savegame.json');
     const worldRepo = new WorldTemplateRepository();
-    const llmService = new LlmService(llm, {}, new LlmCallLogger('logs/llm_calls.jsonl'), mainLogger, new LlmContentLogger('logs/llm_content.jsonl'));
+    const llmCallLogger = new LlmCallLogger('logs/llm_calls.jsonl');
+    const llmContentLogger = new LlmContentLogger('logs/llm_content.jsonl');
+    const llmService = new LlmService(llm, {}, llmCallLogger, mainLogger, llmContentLogger);
     const gameManagementService = new GameManagementService(llmService, mainLogger);
     const cpuReflectionService = new CpuReflectionService(llmService, {}, mainLogger);
     const sessionFactory = new SessionFactory(input, output, repository, llmService, worldRepo);
+    const microOrchestrator = buildMicroOrchestrator(llm, gameManagementService, cpuReflectionService, llmService, mainLogger, llmCallLogger, llmContentLogger);
     const engine = new GameEngine(
       input,
       output,
@@ -45,7 +49,9 @@ async function main() {
       sessionFactory,
       { godMode: false },
       gameManagementService,
-      mainLogger
+      mainLogger,
+      undefined,
+      microOrchestrator
     );
     await engine.start();
   } catch (error) {

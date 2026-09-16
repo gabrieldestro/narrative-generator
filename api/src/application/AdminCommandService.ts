@@ -1,4 +1,4 @@
-﻿import type { GameState, Character, Location, Concept } from "../domain/types.js";
+﻿import type { GameState, Character, Location } from "../domain/types.js";
 import type { ILogger } from "../domain/ports.js";
 import type { GameManagementService } from "./GameManagementService.js";
 import type { LlmService } from "./LlmService.js";

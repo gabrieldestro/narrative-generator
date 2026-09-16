@@ -100,7 +100,7 @@ export class GameController {
       parentId,
       branchId,
       depth,
-      branchLabel: meta.branchLabel,
+      ...(meta.branchLabel !== undefined ? { branchLabel: meta.branchLabel } : {}),
       mode,
       title,
       createdAt: now,
@@ -305,84 +305,11 @@ export class GameController {
       logicalResolution: turnResult.logicalResolution,
       npcDecisions: turnResult.npcDecisions,
       diceRolls: turnResult.diceRolls,
-      // Doc 27, Fase 3 (§7.3): fila + trace do turno (aditivo; ausentes no legado).
+      // Fila + trace do turno.
       ...(turnResult.npcOrder !== undefined ? { npcOrder: turnResult.npcOrder } : {}),
       ...(turnResult.microTrace !== undefined ? { microTrace: turnResult.microTrace } : {}),
       updatedState: turnResult.state
     });
-  }
-
-  public async processTurnStream(
-    req: FastifyRequest<{ Params: { sessionId: string }; Body: PlayerActionPayload }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    const { sessionId } = req.params;
-    let state = this.sessionRepo.getSession(sessionId);
-
-    if (!state) {
-      const parentBundle = await this.saveStore.get(sessionId);
-      if (parentBundle) {
-        state = parentBundle.state;
-        this.sessionRepo.saveSession(sessionId, state);
-      }
-    }
-
-    if (!state) {
-      this.logger.warn('Sessão não encontrada', { sessionId });
-      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
-    }
-
-    const payload = req.body;
-    if (!payload || !payload.playerText) {
-      return reply.status(400).send({ error: "O campo 'playerText' é obrigatório no corpo da requisição." });
-    }
-
-    const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
-    reqLog.info('processTurnStream iniciado');
-
-    if (payload.settings) {
-      this.gameEngine.updateSettings(payload.settings);
-    }
-
-    // Define cabeçalhos de resposta para Server-Sent Events (SSE)
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    });
-
-    const sendSseEvent = (event: string, data: any) => {
-      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
-
-    const enrichedAction = ActionBuilderService.buildActionString(payload);
-    const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
-    const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
-
-    const playerActionsMap = new Map<string, string>();
-    playerActionsMap.set(charName, enrichedAction);
-
-    sendSseEvent('start', { message: 'Iniciando processamento do turno...' });
-
-    const turnStart = Date.now();
-    const turnResult = await this.gameEngine.processTurn(state, playerActionsMap, (token: string) => {
-      sendSseEvent('token', { token });
-    });
-    reqLog.info('processTurnStream concluído', { durationMs: Date.now() - turnStart });
-
-    const newCheckpointId = randomUUID();
-    this.sessionRepo.saveSession(newCheckpointId, turnResult.state);
-    await this.persistCheckpoint(sessionId, newCheckpointId, turnResult.state);
-
-    sendSseEvent('done', {
-      sessionId: newCheckpointId,
-      narrative: turnResult.narrative,
-      logicalResolution: turnResult.logicalResolution,
-      updatedState: turnResult.state
-    });
-
-    reply.raw.end();
   }
 
   public async observe(
@@ -532,8 +459,8 @@ export class GameController {
 
     const result = await this.adminCommandService.execute(state, {
       command: payload.command,
-      args: payload.args,
-      fields: payload.fields
+      ...(payload.args !== undefined ? { args: payload.args } : {}),
+      ...(payload.fields !== undefined ? { fields: payload.fields } : {})
     });
 
     const newCheckpointId = randomUUID();

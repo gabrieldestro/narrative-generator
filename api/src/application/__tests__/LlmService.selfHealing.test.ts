@@ -121,33 +121,3 @@ describe('LlmService.extractCharacterLocations (reparo de JSON)', () => {
     expect(result['Kael']).toBe('Taverna');
   });
 });
-
-describe('LlmService.narrateFiction (retry pré-stream)', () => {
-  it('deve reenviar por invoke completo com contexto reduzido quando o stream estourar o contexto', async () => {
-    const mockLlm = {
-      stream: vi.fn().mockRejectedValue(contextOverflowError),
-      invoke: vi.fn().mockResolvedValue({ content: 'Narração completa após redução.' }),
-    };
-    const service = new LlmService(mockLlm as any);
-    const state = makeState();
-
-    const result = await service.narrateFiction(state, ['Kael tenta: Abrir a porta'], 'Kael tentou abrir -> Sucesso.');
-
-    expect(result).toBe('Narração completa após redução.');
-    expect(mockLlm.invoke).toHaveBeenCalled();
-    expect(state.history).toHaveLength(2);
-  });
-
-  it('propaga erro que não é de contexto', async () => {
-    const mockLlm = {
-      stream: vi.fn().mockRejectedValue(new Error('connection reset')),
-      invoke: vi.fn(),
-    };
-    const service = new LlmService(mockLlm as any);
-
-    await expect(
-      service.narrateFiction(makeState(), ['Ação'], 'Resolução.'),
-    ).rejects.toThrow('connection reset');
-    expect(mockLlm.invoke).not.toHaveBeenCalled();
-  });
-});

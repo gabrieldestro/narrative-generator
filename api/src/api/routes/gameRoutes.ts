@@ -126,38 +126,6 @@ export function registerGameRoutes(fastify: FastifyInstance, controller: GameCon
     },
   }, (req: any, reply) => controller.processTurn(req, reply));
 
-  // Processa 1 turno via streaming SSE (Server-Sent Events)
-  fastify.post('/api/games/:sessionId/turn/stream', {
-    schema: {
-      params: {
-        type: 'object',
-        required: ['sessionId'],
-        properties: {
-          sessionId: { type: 'string' },
-        },
-      },
-      body: {
-        type: 'object',
-        required: ['playerText'],
-        properties: {
-          actionType: {
-            type: 'string',
-            enum: ['observe', 'speak', 'attack', 'sneak', 'use_item', 'interact', 'flee', 'free'],
-            default: 'free'
-          },
-          actionIntent: {
-            type: 'string',
-            enum: ['curious', 'aggressive', 'cautious', 'friendly', 'intimidating', 'desperate', 'neutral'],
-            default: 'neutral'
-          },
-          playerText: { type: 'string' },
-          characterName: { type: 'string' },
-          settings: { type: 'object', additionalProperties: true },
-        },
-      },
-    },
-  }, (req: any, reply) => controller.processTurnStream(req, reply));
-
   // Observa/detalha um aspecto da cena sem avançar o turno
   fastify.post('/api/games/:sessionId/observe', {
     schema: {

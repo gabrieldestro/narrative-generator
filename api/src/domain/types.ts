@@ -126,8 +126,6 @@ export interface GameSettings {
   maxHealRetries: number;
   healSummaryOnOverflow: boolean;
   jsonRepairMaxInputChars: number;
-  // Doc 27, Fase 0 — flags do micro-turno (default false até estabilizar).
-  microTurno?: boolean;
   structuredMode?: 'prompt-json' | 'tool-call';
 }
 

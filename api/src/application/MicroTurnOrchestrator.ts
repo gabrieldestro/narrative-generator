@@ -49,7 +49,7 @@ export interface IMicroNarrator {
     state: GameState,
     actionLine: string,
     resolution: MicroResolution,
-    opts?: { onToken?: (token: string) => void; unexpected?: boolean },
+    opts?: { unexpected?: boolean },
   ): Promise<string>;
 }
 
@@ -84,7 +84,6 @@ export interface MicroTurnResult {
 
 export interface RunTurnOptions {
   output?: IOutputWriter;
-  onToken?: (token: string) => void;
   unexpectedEvent?: boolean;
   sceneDescription?: string | undefined;
 }
@@ -219,10 +218,7 @@ export class MicroTurnOrchestrator {
 
       // ── Micro-narração ──
       const actionLine = `${actor.name} tenta: ${actionText} (d20: ${roll})`;
-      const tokenForward = opts.onToken ?? output?.write.bind(output);
       const microNarration = await this.narrator.narrateMicro(state, actionLine, resolution, {
-        // `exactOptionalPropertyTypes`: só inclui `onToken` quando há destino.
-        ...(tokenForward ? { onToken: (t: string) => tokenForward(t) } : {}),
         unexpected: micro === 1 && opts.unexpectedEvent === true,
       });
       microNarrations.push(microNarration);

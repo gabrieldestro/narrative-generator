@@ -78,7 +78,7 @@ export function arbiterHumanPrompt(state: GameState, actions: string[], recentHi
   return promptParts.join('\n');
 }
 
-// ── Agent 3: Narrator (narrateFiction) ──
+// ── Agent 3: Narrator (micro-narração por fato) ──
 
 export function narratorSystemPrompt(
   state: GameState,

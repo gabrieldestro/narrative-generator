@@ -1,4 +1,4 @@
-import type { GameState, Character, GameSettings, Location, NpcDecision, DiceRoll, MicroBlock } from "../domain/types.js";
+import type { GameState, GameSettings, NpcDecision, DiceRoll, MicroBlock } from "../domain/types.js";
 import { DEFAULT_SETTINGS } from "../domain/types.js";
 import type { IUserInput, IOutputWriter, ILogger } from "../domain/ports.js";
 import type { IStateRepository } from "../infrastructure/JsonStateRepository.js";
@@ -147,270 +147,50 @@ export class GameEngine {
     this.input.close();
   }
 
+  /**
+   * O turno: sequência de micros do orquestrador (1 por personagem ativo).
+   * `turnNumber++` 1x por turno; `sceneDescription` embutida só no 1º micro;
+   * `unexpectedEvent` 1x por turno no narrador do 1º micro.
+   */
   public async processTurn(
     state: GameState,
     playerActions: Map<string, string>,
-    onToken?: (token: string) => void
-  ): Promise<{ narrative: string; logicalResolution: string; npcDecisions: NpcDecision[]; diceRolls: DiceRoll[]; state: GameState; npcOrder?: string[]; microTrace?: MicroBlock[] }> {
+  ): Promise<{ narrative: string; logicalResolution: string; npcDecisions: NpcDecision[]; diceRolls: DiceRoll[]; state: GameState; npcOrder: string[]; microTrace: MicroBlock[] }> {
     const turnLog = this.logger.child({ turnNumber: state.turnNumber });
     const totalStart = Date.now();
     turnLog.info('[processTurn iniciado]');
 
-    // Doc 27, Fase 3: com `microTurno=true` E orquestrador injetado, o turno
-    // vira N micros. Sem orquestrador (ou flag OFF): legado (fail-safe).
-    if (this.settings.microTurno && this.microOrchestrator) {
-      return this.processTurnMicro(state, playerActions, onToken, turnLog, totalStart);
+    const orchestrator = this.microOrchestrator;
+    if (!orchestrator) {
+      throw new Error('MicroTurnOrchestrator não injetado no GameEngine.');
     }
 
-    const actions: string[] = [];
-
-    // ── Passo 1: reflete os NPCs em sequência, em ordem aleatória ──
-    const npcChars = state.characters.filter(c => !c.isPlayer && (!c.status || c.status === 'active'));
-    turnLog.debug('[NPC Reflection] refletindo N NPCs', { n: npcChars.length });
-    if (npcChars.length > 0) {
-      this.output.writeLine(`[CPU] Refletindo ${npcChars.length} NPC(s) em sequência...`);
-    }
-
-    const orderedNpcs = this.shuffle(npcChars);
-    const npcResults: { char: Character; action: string; reasoning: string; ok: boolean }[] = [];
-    const priorNpcActions: string[] = [];
-
-    for (const char of orderedNpcs) {
-      try {
-        const decision = await this.cpuReflectionService!
-          .reflectAndAct(state, char, this.output, priorNpcActions)
-          .then(decision => {
-            turnLog.debug('[NPC] decision', { charName: char.name, reasoning: decision.reasoning, action: decision.action });
-            return decision;
-          });
-        npcResults.push({ char, action: decision.action, reasoning: decision.reasoning, ok: true });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        turnLog.error('[NPC] falha na reflexão', { charName: char.name, error: msg });
-        this.output.writeLine(`\r\x1b[91m[CPU - ${char.name}] erro na reflexão: ${msg}\x1b[0m`);
-        npcResults.push({ char, action: `${char.name} observa os arredores e reconsidera suas opções.`, reasoning: '', ok: false });
-      }
-      priorNpcActions.push(`${char.name}: ${npcResults[npcResults.length - 1]!.action}`);
-    }
-
-    // Coleta decisões estruturadas dos NPCs
-    const npcDecisions: NpcDecision[] = [];
-    for (const { char, action, reasoning } of npcResults) {
-      npcDecisions.push({ characterName: char.name, action, reasoning, success: false });
-    }
-
-    // ── Passo 2: consolida ações (player + NPC) e rola dados ──
-    const diceRolls: DiceRoll[] = [];
-    for (const char of state.characters) {
-      if (char.status && char.status !== 'active') continue;
-
-      let action: string;
-      if (char.isPlayer) {
-        action = playerActions.get(char.name) ?? `${char.name} hesita por um momento.`;
-      } else {
-        const npcResult = npcResults.find(
-          r => r.char.name === char.name,
-        );
-        if (npcResult) {
-          action = npcResult.action;
-          if (!npcResult.ok) {
-            this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
-          } else {
-            this.output.write(`\r[CPU - ${char.name}] tenta: ${action} \n`);
-          }
-        } else {
-          action = `${char.name} observa os arredores e reconsidera suas opções.`;
-          this.output.writeLine(`[CPU - ${char.name}] (fallback) ${action}`);
-        }
-      }
-
-      // Rola d20 — o god mode garante 20 apenas para o personagem do jogador;
-      // os NPCs continuam rolando normalmente.
-      const isGodModeRoll = this.settings.godMode && char.isPlayer;
-      const roll = isGodModeRoll ? 20 : Math.floor(Math.random() * 20) + 1;
-      const prefix = isGodModeRoll ? "\x1b[91m[GOD MODE 🎲]" : "\x1b[93m[Dado 🎲]";
-      this.output.writeLine(`${prefix} ${char.name} rolou: ${roll}\x1b[0m`);
-      actions.push(`${char.name} tenta: ${action} (Resultado do dado d20: ${roll})`);
-      diceRolls.push({ characterName: char.name, roll, isGodMode: isGodModeRoll });
-    }
-
-    // Chance de evento inesperado
+    // Chance de evento inesperado (1x por turno).
     const unexpectedEvent = Math.random() < this.settings.unexpectedEventChance;
     if (unexpectedEvent && this.settings.debug) {
       this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
     }
 
-    this.output.writeLine("\n[Árbitro] Calculando as consequências...");
-    const arbiterStart = Date.now();
-    const recentHistory = this.settings.arbiterHistoryTurns > 0
-      ? state.history.slice(-this.settings.arbiterHistoryTurns)
-      : undefined;
-    const logicalResolution = await this.llmService!.arbitrateLogic(state, actions, recentHistory, state.longTermSummary);
-    turnLog.info('[Árbitro] resolução obtida', { durationMs: Date.now() - arbiterStart });
-    this.output.writeLine(`\x1b[90m(Resolução Mecânica: ${logicalResolution.replace(/\n/g, ' - ')})\x1b[0m`);
-
-    // Determina sucesso/falha de cada NPC a partir da resolução do árbitro
-    for (const decision of npcDecisions) {
-      const escaped = this.escapeRegex(decision.characterName);
-      const failMatch = logicalResolution.match(new RegExp(`${escaped}.*?->\\s*Falha`, 'i'));
-      const successMatch = logicalResolution.match(new RegExp(`${escaped}.*?->\\s*Sucesso`, 'i'));
-      if (failMatch) {
-        decision.success = false;
-      } else if (successMatch) {
-        decision.success = true;
-      }
-    }
-
-    // Atualiza scratchpad dos NPCs com base na resolução do árbitro
-    for (const char of state.characters) {
-      if (!char.isPlayer && char.status === 'active') {
-        // Doc 27, Fase 1: passa a ação do `npcResults` para o scratchpad
-        // parar de gravar '(ação desconhecida)'.
-        const npcAction = npcResults.find((r) => r.char.name === char.name)?.action;
-        this.cpuReflectionService!.recordArbiterResult(char, state.turnNumber, logicalResolution, npcAction);
-      }
-    }
-
-    // ── Passo 4: descreve o cenário quando o jogador entra/retorna a um novo local ──
+    // Cenário novo uma vez por turno (prefixo do 1º micro).
     let sceneDescription: string | undefined;
     const scenePlayer = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
     const playerLocation = scenePlayer?.currentLocation;
     if (playerLocation && playerLocation !== state.lastSceneLocation) {
       this.output.writeLine("\n[Cenário] Novo local detectado, descrevendo o ambiente...");
-      turnLog.debug('[Cenário] novo local', { location: playerLocation });
       sceneDescription = await this.llmService!.generateSceneDescription(state, playerLocation);
       state.lastSceneLocation = playerLocation;
     }
 
     this.output.writeLine("\n[Narrador] Escrevendo a cena...");
     this.output.writeLine("--------------------------------------------------");
-    const narrationStart = Date.now();
-    const streamWriter: IOutputWriter = {
-      write: (text: string) => {
-        this.output.write(text);
-        if (onToken) onToken(text);
-      },
-      writeLine: (text: string) => {
-        this.output.writeLine(text);
-        if (onToken) onToken(text + "\n");
-      },
-      clear: () => this.output.clear(),
-    };
-    const outcome = await this.llmService!.narrateFiction(state, actions, logicalResolution, streamWriter, unexpectedEvent, sceneDescription);
-    turnLog.info('[Narração] concluída', { durationMs: Date.now() - narrationStart });
-    this.output.writeLine("\n--------------------------------------------------");
 
-    state.history.push(`Turno ${state.turnNumber}: ${outcome}`);
-
-    // Doc 27, Fase 2: com `microTurno=true`, o merge pertence aos
-    // micro-extratores (orquestrador, Fase 3) — pula os legados
-    // `extractStateChanges` + `extractCharacterLocations` (sem duplo merge).
-    // Default `false`: fluxo legado inalterado. `observe/narrate` (fora do
-    // `processTurn`) sempre usam o legado — ver armadilha (c) no doc 27.
-    if (this.settings.microTurno) {
-      this.output.writeLine("\n[Motor] Micro-turno ativo: fusão delegada aos micro-extratores.");
-    } else {
-      // Executa a extração automática pós-narração pelo LLM
-      this.output.writeLine("\n[Motor] Analisando narrativa para atualizar estado de RPG...");
-      const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, outcome);
-      state.characters = stateWithUpdates.characters;
-      if (stateWithUpdates.locations !== undefined) {
-        state.locations = stateWithUpdates.locations;
-      }
-    }
-
-    if (state.history.length > this.settings.memoryWindowSize) {
-      this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
-      const excessCount = state.history.length - this.settings.memoryWindowSize;
-      const oldestTurns = state.history.slice(0, excessCount);
-      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
-      state.history = state.history.slice(excessCount);
-    }
-
-    this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
-    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, outcome, state.turnNumber);
-
-    // Doc 27, Fase 2: com `microTurno=true` o legado é pulado (ver acima).
-    if (!this.settings.microTurno) {
-      this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
-      const locations = await this.llmService!.extractCharacterLocations(state, outcome);
-      if (Object.keys(locations).length > 0) {
-        for (const char of state.characters) {
-          const loc = locations[char.name];
-          if (loc) {
-            char.currentLocation = loc;
-          }
-        }
-      }
-      // Fase 0 (doc 27): `{}` = "ninguém se moveu" — não tocar em currentLocation.
-      // (Antes: preenchia com `worldContext.slice(0, 60)`, corrompendo o local.)
-    }
-
-    state.turnNumber++;
-
-    const totalDuration = Date.now() - totalStart;
-    turnLog.info('[processTurn concluído]', { durationMs: totalDuration });
-
-    return {
-      narrative: outcome,
-      logicalResolution,
-      npcDecisions,
-      diceRolls,
-      state
-    };
-  }
-
-  /**
-   * Doc 27, Fase 3: turno por micro-turnos (1 micro por personagem ativo).
-   * `turnNumber++` 1x por turno; `sceneDescription` embutida só no 1º micro;
-   * `unexpectedEvent` 1x por turno no narrador do 1º micro. Pós-turno
-   * (sumarização + contexto) idêntico ao legado; extração legada pulada
-   * (gate da Fase 2 — merge pertence aos micro-extratores).
-   */
-  private async processTurnMicro(
-    state: GameState,
-    playerActions: Map<string, string>,
-    onToken: ((token: string) => void) | undefined,
-    turnLog: ILogger,
-    totalStart: number,
-  ): Promise<{ narrative: string; logicalResolution: string; npcDecisions: NpcDecision[]; diceRolls: DiceRoll[]; state: GameState; npcOrder: string[]; microTrace: MicroBlock[] }> {
-    // Chance de evento inesperado (1x por turno, como no legado).
-    const unexpectedEvent = Math.random() < this.settings.unexpectedEventChance;
-    if (unexpectedEvent && this.settings.debug) {
-      this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
-    }
-
-    // Cenário novo uma vez por turno (prefixo do 1º micro, como no legado).
-    let sceneDescription: string | undefined;
-    const scenePlayer = state.characters.find(c => c.isPlayer && (!c.status || c.status === 'active'));
-    const playerLocation = scenePlayer?.currentLocation;
-    if (playerLocation && playerLocation !== state.lastSceneLocation) {
-      this.output.writeLine("\n[Cenário] Novo local detectado, descrevendo o ambiente...");
-      sceneDescription = await this.llmService!.generateSceneDescription(state, playerLocation);
-      state.lastSceneLocation = playerLocation;
-    }
-
-    this.output.writeLine("\n[Narrador] Escrevendo a cena por micro-turnos...");
-    this.output.writeLine("--------------------------------------------------");
-    const streamWriter: IOutputWriter = {
-      write: (text: string) => {
-        this.output.write(text);
-        if (onToken) onToken(text);
-      },
-      writeLine: (text: string) => {
-        this.output.writeLine(text);
-        if (onToken) onToken(text + "\n");
-      },
-      clear: () => this.output.clear(),
-    };
-
-    const micro = await this.microOrchestrator!.runTurn(state, playerActions, {
+    const micro = await orchestrator.runTurn(state, playerActions, {
       output: this.output,
-      onToken: (token: string) => streamWriter.write(token),
       unexpectedEvent,
       sceneDescription,
     });
-    this.output.writeLine("\n--------------------------------------------------");
+    this.output.writeLine(micro.narrative);
+    this.output.writeLine("--------------------------------------------------");
 
     state.history.push(`Turno ${state.turnNumber}: ${micro.narrative}`);
 
@@ -428,7 +208,7 @@ export class GameEngine {
     state.turnNumber++;
 
     const totalDuration = Date.now() - totalStart;
-    turnLog.info('[processTurn-micro concluído]', { durationMs: totalDuration, micros: micro.microTrace.length });
+    turnLog.info('[processTurn concluído]', { durationMs: totalDuration, micros: micro.microTrace.length });
 
     return {
       narrative: micro.narrative,
@@ -612,18 +392,5 @@ export class GameEngine {
       }
     }
     return "(Nenhuma narrativa encontrada no histórico)";
-  }
-
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  private shuffle<T>(items: T[]): T[] {
-    const result = [...items];
-    for (let i = result.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [result[i], result[j]] = [result[j]!, result[i]!];
-    }
-    return result;
   }
 }
