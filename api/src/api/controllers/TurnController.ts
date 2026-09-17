@@ -1,11 +1,11 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
 import type { PlayerActionPayload } from '../../domain/types.js';
-import type { GameEngine } from '../../application/GameEngine.js';
-import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
-import type { CheckpointService } from '../../application/CheckpointService.js';
+import type { GameService } from '../../application/session/GameService.js';
+import type { SessionRepository } from '../../infrastructure/persistence/SessionRepository.js';
+import type { CheckpointService } from '../../application/session/CheckpointService.js';
 import type { ILogger } from '../../domain/ports.js';
-import { ActionBuilderService } from '../../application/ActionBuilderService.js';
+import { ActionBuilderService } from '../../application/turn/ActionBuilderService.js';
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -23,7 +23,7 @@ export class TurnController {
 
   constructor(
     private readonly sessionRepo: SessionRepository,
-    private readonly gameEngine: GameEngine,
+    private readonly gameService: GameService,
     private readonly checkpoints: CheckpointService,
     logger?: ILogger,
   ) {
@@ -51,7 +51,7 @@ export class TurnController {
     reqLog.info('processTurn chamado');
 
     if (payload.settings) {
-      this.gameEngine.updateSettings(payload.settings);
+      this.gameService.updateSettings(payload.settings);
     }
 
     // Enriquece a ação do jogador usando o ActionBuilderService
@@ -66,7 +66,7 @@ export class TurnController {
 
     // Executa o turno narrativo no engine
     const turnStart = Date.now();
-    const turnResult = await this.gameEngine.processTurn(state, playerActionsMap);
+    const turnResult = await this.gameService.processTurn(state, playerActionsMap);
     reqLog.info('processTurn concluído', { durationMs: Date.now() - turnStart });
 
     // Gera novo checkpoint imutável
@@ -108,7 +108,7 @@ export class TurnController {
     reqLog.info('observe chamado');
 
     if (payload.settings) {
-      this.gameEngine.updateSettings(payload.settings);
+      this.gameService.updateSettings(payload.settings);
     }
 
     // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
@@ -117,7 +117,7 @@ export class TurnController {
 
     // Gera a observação detalhada via LLM (não avança a história nem o turno)
     const observeStart = Date.now();
-    const observation = await this.gameEngine.recordObservation(state, payload.playerText, charName);
+    const observation = await this.gameService.recordObservation(state, payload.playerText, charName);
     reqLog.info('observe concluído', { durationMs: Date.now() - observeStart });
 
     const newCheckpointId = randomUUID();
@@ -152,7 +152,7 @@ export class TurnController {
     reqLog.info('narrate chamado');
 
     if (payload.settings) {
-      this.gameEngine.updateSettings(payload.settings);
+      this.gameService.updateSettings(payload.settings);
     }
 
     // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
@@ -162,7 +162,7 @@ export class TurnController {
     // Gera a narração respeitando a declaração do jogador e resolve o estado do mundo
     // (bypassa árbitro, NPCs e dados, e não avança o turno)
     const narrateStart = Date.now();
-    const narration = await this.gameEngine.recordPlayerNarration(state, payload.playerText, charName);
+    const narration = await this.gameService.recordPlayerNarration(state, payload.playerText, charName);
     reqLog.info('narrate concluído', { durationMs: Date.now() - narrateStart });
 
     const newCheckpointId = randomUUID();

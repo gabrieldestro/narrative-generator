@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
-import { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
+import type { SessionRepository } from '../../infrastructure/persistence/SessionRepository.js';
+import { CheckpointRepository } from '../../infrastructure/persistence/CheckpointRepository.js';
 import type { ILogger } from '../../domain/ports.js';
 
 class NullLogger implements ILogger {
@@ -18,7 +18,7 @@ export class SavesController {
   private readonly logger: ILogger;
 
   constructor(
-    private readonly saveStore: FileSaveStore,
+    private readonly checkpointRepo: CheckpointRepository,
     private readonly sessionRepo: SessionRepository,
     logger?: ILogger,
   ) {
@@ -31,11 +31,11 @@ export class SavesController {
   ): Promise<void> {
     const showAll = req.query?.all === 'true' || req.query?.all === '1';
     if (showAll) {
-      const bundles = await this.saveStore.list();
+      const bundles = await this.checkpointRepo.list();
       this.logger.debug('Listando todos os checkpoints salvos', { count: bundles.length });
       return reply.status(200).send(bundles);
     }
-    const summaries = await this.saveStore.listLatestPerRoot();
+    const summaries = await this.checkpointRepo.listLatestPerRoot();
     this.logger.debug('Listando partidas salvas (latest por campanha)', { count: summaries.length });
     return reply.status(200).send(summaries);
   }
@@ -45,7 +45,7 @@ export class SavesController {
     reply: FastifyReply
   ): Promise<void> {
     const { rootId } = req.params;
-    const history = await this.saveStore.listByRootId(rootId);
+    const history = await this.checkpointRepo.listByRootId(rootId);
     this.logger.debug('Listando histórico de checkpoints da campanha', { rootId, count: history.length });
     return reply.status(200).send(history);
   }
@@ -55,7 +55,7 @@ export class SavesController {
     reply: FastifyReply
   ): Promise<void> {
     const options = req.body ?? {};
-    const result = await this.saveStore.prune(options);
+    const result = await this.checkpointRepo.prune(options);
     this.logger.info('Checkpoints podados', { deleted: result.deleted, kept: result.kept });
     return reply.status(200).send(result);
   }
@@ -65,7 +65,7 @@ export class SavesController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    const bundle = await this.saveStore.get(sessionId);
+    const bundle = await this.checkpointRepo.get(sessionId);
 
     if (!bundle) {
       this.logger.warn('Save não encontrado', { sessionId });
@@ -80,7 +80,7 @@ export class SavesController {
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
-    await this.saveStore.delete(sessionId);
+    await this.checkpointRepo.delete(sessionId);
     this.sessionRepo.deleteSession(sessionId);
     this.logger.info('Save apagado', { sessionId });
     return reply.status(204).send();

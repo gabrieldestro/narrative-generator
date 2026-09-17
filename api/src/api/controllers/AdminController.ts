@@ -1,11 +1,11 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
 import type { GameSettings } from '../../domain/types.js';
-import type { GameEngine } from '../../application/GameEngine.js';
-import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
-import type { CheckpointService } from '../../application/CheckpointService.js';
+import type { GameService } from '../../application/session/GameService.js';
+import type { SessionRepository } from '../../infrastructure/persistence/SessionRepository.js';
+import type { CheckpointService } from '../../application/session/CheckpointService.js';
 import type { ILogger } from '../../domain/ports.js';
-import { AdminCommandService } from '../../application/AdminCommandService.js';
+import { AdminCommandService } from '../../application/admin/AdminCommandService.js';
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -23,7 +23,7 @@ export class AdminController {
 
   constructor(
     private readonly sessionRepo: SessionRepository,
-    private readonly gameEngine: GameEngine,
+    private readonly GameService: GameService,
     private readonly adminCommandService: AdminCommandService,
     private readonly checkpoints: CheckpointService,
     logger?: ILogger,
@@ -57,7 +57,7 @@ export class AdminController {
     }
 
     if (payload.settings) {
-      this.gameEngine.updateSettings(payload.settings);
+      this.GameService.updateSettings(payload.settings);
     }
 
     const reqLog = this.logger.child({ sessionId, command: payload.command });

@@ -2,13 +2,13 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
 import type { GameState, GameSettings } from '../../domain/types.js';
 import type { WorldTemplate } from '../../domain/types.js';
-import type { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
-import type { SessionFactory } from '../../application/SessionFactory.js';
-import type { GameEngine } from '../../application/GameEngine.js';
-import type { LlmService } from '../../application/LlmService.js';
-import type { GameManagementService } from '../../application/GameManagementService.js';
-import type { SessionRepository } from '../../infrastructure/SessionRepository.js';
-import type { CheckpointService } from '../../application/CheckpointService.js';
+import type { WorldTemplateRepository } from '../../infrastructure/persistence/WorldTemplateRepository.js';
+import type { SessionFactory } from '../../application/session/SessionFactory.js';
+import type { GameService } from '../../application/session/GameService.js';
+import type { LlmService } from '../../application/shared/LlmService.js';
+import type { WorldService } from '../../application/world/WorldService.js';
+import type { SessionRepository } from '../../infrastructure/persistence/SessionRepository.js';
+import type { CheckpointService } from '../../application/session/CheckpointService.js';
 import type { ILogger } from '../../domain/ports.js';
 
 class NullLogger implements ILogger {
@@ -36,9 +36,9 @@ export class SetupController {
   constructor(
     private readonly worldRepo: WorldTemplateRepository,
     private readonly sessionFactory: SessionFactory,
-    private readonly gameEngine: GameEngine,
+    private readonly gameService: GameService,
     private readonly llmService: LlmService,
-    private readonly gameManagementService: GameManagementService,
+    private readonly worldService: WorldService,
     private readonly sessionRepo: SessionRepository,
     private readonly checkpoints: CheckpointService,
     logger?: ILogger,
@@ -61,7 +61,7 @@ export class SetupController {
     let title = '';
 
     if (settings) {
-      this.gameEngine.updateSettings(settings);
+      this.gameService.updateSettings(settings);
     }
 
     if (mode === 'template' && templateName) {
@@ -98,7 +98,7 @@ export class SetupController {
     state.history.push(`Narrativa Inicial: ${initialNarrative}`);
 
     // Extrai localizações da narrativa inicial para o mapa
-    const stateWithUpdates = await this.gameManagementService.applyAutomaticStateUpdates(state, initialNarrative);
+    const stateWithUpdates = await this.worldService.applyAutomaticStateUpdates(state, initialNarrative);
     if (stateWithUpdates.locations !== undefined) {
       state.locations = stateWithUpdates.locations;
     }

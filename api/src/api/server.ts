@@ -3,26 +3,26 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
 
-import { WorldTemplateRepository } from '../infrastructure/WorldTemplateRepository.js';
-import { LlmService } from '../application/LlmService.js';
-import { SessionFactory } from '../application/SessionFactory.js';
-import { GameEngine } from '../application/GameEngine.js';
-import { CpuReflectionService } from '../application/npcAgent/CpuReflectionService.js';
-import { GameManagementService } from '../application/GameManagementService.js';
-import { buildTurnOrchestrator } from '../application/buildTurnOrchestrator.js';
-import { SessionRepository } from '../infrastructure/SessionRepository.js';
-import { FileSaveStore } from '../infrastructure/FileSaveStore.js';
-import { AdminCommandService } from '../application/AdminCommandService.js';
-import { CheckpointService } from '../application/CheckpointService.js';
+import { WorldTemplateRepository } from '../infrastructure/persistence/WorldTemplateRepository.js';
+import { LlmService } from '../application/shared/LlmService.js';
+import { SessionFactory } from '../application/session/SessionFactory.js';
+import { GameService } from '../application/session/GameService.js';
+import { CharacterService } from '../application/characters/CharacterService.js';
+import { WorldService } from '../application/world/WorldService.js';
+import { buildTurnService } from '../application/turn/buildTurnService.js';
+import { SessionRepository } from '../infrastructure/persistence/SessionRepository.js';
+import { CheckpointRepository } from '../infrastructure/persistence/CheckpointRepository.js';
+import { AdminCommandService } from '../application/admin/AdminCommandService.js';
+import { CheckpointService } from '../application/session/CheckpointService.js';
 import { SetupController } from './controllers/SetupController.js';
 import { TurnController } from './controllers/TurnController.js';
 import { SavesController } from './controllers/SavesController.js';
 import { AdminController } from './controllers/AdminController.js';
 import { EnrichController } from './controllers/EnrichController.js';
 import { registerGameRoutes } from './routes/gameRoutes.js';
-import { PinoLogger } from '../infrastructure/PinoLogger.js';
-import { LlmCallLogger } from '../infrastructure/LlmCallLogger.js';
-import { LlmContentLogger } from '../infrastructure/LlmContentLogger.js';
+import { PinoLogger } from '../infrastructure/logging/PinoLogger.js';
+import { LlmCallLogger } from '../infrastructure/logging/LlmCallLogger.js';
+import { LlmContentLogger } from '../infrastructure/logging/LlmContentLogger.js';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { ILogger } from '../domain/ports.js';
 
@@ -32,7 +32,7 @@ export interface AppOptions {
   llmModel?: BaseChatModel;
   worldRepo?: WorldTemplateRepository;
   sessionRepo?: SessionRepository;
-  saveStore?: FileSaveStore;
+  checkpointRepo?: CheckpointRepository;
   logger?: ILogger;
 }
 
@@ -54,11 +54,11 @@ export async function buildApp(options: AppOptions = {}) {
   // Instancia dependências do Core caso não sejam fornecidas
   const worldRepo = options.worldRepo ?? new WorldTemplateRepository();
   const sessionRepo = options.sessionRepo ?? new SessionRepository();
-  const saveStore = options.saveStore ?? new FileSaveStore();
+  const checkpointRepo = options.checkpointRepo ?? new CheckpointRepository();
 
   // Hidrata o cache em memória a partir do disco: assim, após um restart da API,
   // as sessões persistem e `GET /api/games/:id/state` continua respondendo.
-  const savedBundles = await saveStore.list();
+  const savedBundles = await checkpointRepo.list();
   for (const bundle of savedBundles) {
     sessionRepo.saveSession(bundle.id, bundle.state);
   }
@@ -84,34 +84,34 @@ export async function buildApp(options: AppOptions = {}) {
     llmService = new LlmService(llmModel, {}, llmCallLogger, logger, llmContentLogger);
   }
 
-  const gameManagementService = new GameManagementService(llmService, logger);
-  const adminCommandService = new AdminCommandService(gameManagementService, llmService, logger);
-  const cpuReflectionService = new CpuReflectionService(llmService, {}, logger);
+  const worldService = new WorldService(llmService, logger);
+  const adminCommandService = new AdminCommandService(worldService, llmService, logger);
+  const characterService = new CharacterService(llmService, {}, logger);
   const sessionFactory = new SessionFactory(undefined, undefined, undefined, llmService, worldRepo);
   // O orquestrador recebe os agentes por DI (nunca `LlmService`).
-  const orchestrator = buildTurnOrchestrator(llmModel, gameManagementService, cpuReflectionService, llmService, logger, llmCallLogger, llmContentLogger);
-  const gameEngine = new GameEngine(
+  const orchestrator = buildTurnService(llmModel, worldService, characterService, llmService, logger, llmCallLogger, llmContentLogger);
+  const gameService = new GameService(
     undefined,
     undefined,
     undefined,
     llmService,
-    cpuReflectionService,
+    characterService,
     sessionFactory,
     { godMode: false },
-    gameManagementService,
+    worldService,
     logger,
     adminCommandService,
     orchestrator,
   );
 
-  const checkpoints = new CheckpointService(saveStore, sessionRepo, logger);
+  const checkpoints = new CheckpointService(checkpointRepo, sessionRepo, logger);
 
   const setupController = new SetupController(
     worldRepo,
     sessionFactory,
-    gameEngine,
+    gameService,
     llmService,
-    gameManagementService,
+    worldService,
     sessionRepo,
     checkpoints,
     logger,
@@ -119,20 +119,20 @@ export async function buildApp(options: AppOptions = {}) {
 
   const turnController = new TurnController(
     sessionRepo,
-    gameEngine,
+    gameService,
     checkpoints,
     logger,
   );
 
   const savesController = new SavesController(
-    saveStore,
+    checkpointRepo,
     sessionRepo,
     logger,
   );
 
   const adminController = new AdminController(
     sessionRepo,
-    gameEngine,
+    gameService,
     adminCommandService,
     checkpoints,
     logger,

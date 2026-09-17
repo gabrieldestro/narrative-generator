@@ -4,19 +4,19 @@ import * as os from 'os';
 import * as path from 'path';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { buildApp } from '../server.js';
-import { SessionRepository } from '../../infrastructure/SessionRepository.js';
-import { FileSaveStore } from '../../infrastructure/FileSaveStore.js';
-import { WorldTemplateRepository } from '../../infrastructure/WorldTemplateRepository.js';
+import { SessionRepository } from '../../infrastructure/persistence/SessionRepository.js';
+import { CheckpointRepository } from '../../infrastructure/persistence/CheckpointRepository.js';
+import { WorldTemplateRepository } from '../../infrastructure/persistence/WorldTemplateRepository.js';
 
 describe('Fastify Game API', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   let sessionRepo: SessionRepository;
   let saveDir: string;
-  let saveStore: FileSaveStore;
+  let checkpointRepo: CheckpointRepository;
 
   beforeEach(async () => {
     saveDir = await fs.mkdtemp(path.join(os.tmpdir(), 'saves-api-test-'));
-    saveStore = new FileSaveStore(saveDir);
+    checkpointRepo = new CheckpointRepository(saveDir);
 
     const fakeLlm = new FakeListChatModel({
       responses: [
@@ -35,7 +35,7 @@ describe('Fastify Game API', () => {
       llmModel: fakeLlm,
       sessionRepo,
       worldRepo,
-      saveStore,
+      checkpointRepo,
     });
   });
 
@@ -132,7 +132,7 @@ describe('Fastify Game API', () => {
       llmModel: fakeLlm,
       sessionRepo,
       worldRepo: new WorldTemplateRepository(),
-      saveStore: new FileSaveStore(saveDir),
+      checkpointRepo: new CheckpointRepository(saveDir),
     });
 
     // 1. Cria um jogo
@@ -215,7 +215,7 @@ describe('Fastify Game API', () => {
       llmModel: fakeLlm,
       sessionRepo,
       worldRepo: new WorldTemplateRepository(),
-      saveStore: new FileSaveStore(saveDir),
+      checkpointRepo: new CheckpointRepository(saveDir),
     });
 
     // 1. Cria um jogo
@@ -414,7 +414,7 @@ describe('Fastify Game API', () => {
       llmModel: fakeLlm,
       sessionRepo,
       worldRepo: new WorldTemplateRepository(),
-      saveStore: new FileSaveStore(saveDir),
+      checkpointRepo: new CheckpointRepository(saveDir),
     });
 
     const createRes = await app.inject({
@@ -497,7 +497,7 @@ describe('Fastify Game API', () => {
       llmModel: new FakeListChatModel({ responses: [] }),
       sessionRepo: new SessionRepository(),
       worldRepo: new WorldTemplateRepository(),
-      saveStore: new FileSaveStore(saveDir),
+      checkpointRepo: new CheckpointRepository(saveDir),
     });
 
     const stateRes = await restartedApp.inject({

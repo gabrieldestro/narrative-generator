@@ -274,7 +274,7 @@ export interface GameState extends WorldConfig {
 }
 
 // Versão do schema de save. Incremente quando `GameState` ou a estrutura do save mudar de forma incompatível
-// e adicione um passo de migração em `FileSaveStore.migrate`.
+// e adicione um passo de migração em `CheckpointRepository.migrate`.
 export const SAVE_SCHEMA_VERSION = 5 as const;
 
 // Metadados de um checkpoint de save (sem o estado completo).

@@ -1,18 +1,18 @@
 import { ChatOpenAI } from "@langchain/openai";
 import * as dotenv from "dotenv";
-import { JsonStateRepository } from "./infrastructure/JsonStateRepository.js";
-import { WorldTemplateRepository } from "./infrastructure/WorldTemplateRepository.js";
-import { ConsoleInput } from "./infrastructure/ConsoleInput.js";
-import { ConsoleOutput } from "./infrastructure/ConsoleOutput.js";
-import { LlmService } from "./application/LlmService.js";
-import { LlmCallLogger } from "./infrastructure/LlmCallLogger.js";
-import { SessionFactory } from "./application/SessionFactory.js";
-import { GameEngine } from "./application/GameEngine.js";
-import { CpuReflectionService } from "./application/npcAgent/CpuReflectionService.js";
-import { GameManagementService } from "./application/GameManagementService.js";
-import { buildTurnOrchestrator } from "./application/buildTurnOrchestrator.js";
-import { PinoLogger } from "./infrastructure/PinoLogger.js";
-import { LlmContentLogger } from "./infrastructure/LlmContentLogger.js";
+import { JsonStateRepository } from "./infrastructure/persistence/JsonStateRepository.js";
+import { WorldTemplateRepository } from "./infrastructure/persistence/WorldTemplateRepository.js";
+import { ConsoleInput } from "./infrastructure/console/ConsoleInput.js";
+import { ConsoleOutput } from "./infrastructure/console/ConsoleOutput.js";
+import { LlmService } from "./application/shared/LlmService.js";
+import { LlmCallLogger } from "./infrastructure/logging/LlmCallLogger.js";
+import { SessionFactory } from "./application/session/SessionFactory.js";
+import { GameService } from "./application/session/GameService.js";
+import { CharacterService } from "./application/characters/CharacterService.js";
+import { WorldService } from "./application/world/WorldService.js";
+import { buildTurnService } from "./application/turn/buildTurnService.js";
+import { PinoLogger } from "./infrastructure/logging/PinoLogger.js";
+import { LlmContentLogger } from "./infrastructure/logging/LlmContentLogger.js";
 
 dotenv.config();
 
@@ -36,19 +36,19 @@ async function main() {
     const llmCallLogger = new LlmCallLogger('logs/llm_calls.jsonl');
     const llmContentLogger = new LlmContentLogger('logs/llm_content.jsonl');
     const llmService = new LlmService(llm, {}, llmCallLogger, mainLogger, llmContentLogger);
-    const gameManagementService = new GameManagementService(llmService, mainLogger);
-    const cpuReflectionService = new CpuReflectionService(llmService, {}, mainLogger);
+    const worldService = new WorldService(llmService, mainLogger);
+    const characterService = new CharacterService(llmService, {}, mainLogger);
     const sessionFactory = new SessionFactory(input, output, repository, llmService, worldRepo);
-    const orchestrator = buildTurnOrchestrator(llm, gameManagementService, cpuReflectionService, llmService, mainLogger, llmCallLogger, llmContentLogger);
-    const engine = new GameEngine(
+    const orchestrator = buildTurnService(llm, worldService, characterService, llmService, mainLogger, llmCallLogger, llmContentLogger);
+    const engine = new GameService(
       input,
       output,
       repository,
       llmService,
-      cpuReflectionService,
+      characterService,
       sessionFactory,
       { godMode: false },
-      gameManagementService,
+      worldService,
       mainLogger,
       undefined,
       orchestrator

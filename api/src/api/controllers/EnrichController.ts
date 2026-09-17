@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { WorldTemplate } from '../../domain/types.js';
-import type { LlmService } from '../../application/LlmService.js';
-import { EnrichService } from '../../application/EnrichService.js';
+import type { LlmService } from '../../application/shared/LlmService.js';
+import { EnrichService } from '../../application/setup/EnrichService.js';
 import type { ILogger } from '../../domain/ports.js';
 
 class NullLogger implements ILogger {

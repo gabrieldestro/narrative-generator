@@ -21,6 +21,7 @@
 ## 4. Repositório
 * Backend: `api/src/`, `api/worlds/`, `api/package.json`.
 * Frontend: `app/src/app/`.
+* Camadas da API (`api/src/`): `api/` (controllers + routes por área: setup, turn, saves, admin, enrich), `application/` por funcionalidade (`turn/`, `session/`, `world/`, `characters/`, `admin/`, `setup/`, `shared/` — tudo com sufixo `Service`, exceto `SessionFactory`), `domain/` (tipos, ports, `prompts/`, normalizers), `infrastructure/` (`persistence/` só `*Repository`, `logging/`, `console/`).
 * Rodar comandos sempre no diretório correto: `cd api && npm run dev:api`, `cd app && ng serve`.
 * Testes: `cd api && npm test` (294 testes em 37 arquivos, sem LLM).
 
