@@ -68,8 +68,13 @@ Comandos disponíveis durante o jogo: `/help`, `/status`, `/map`, `/add-item`, `
 |--------|------|-----------|
 | `GET` | `/api/worlds` | Lista templates de mundo |
 | `POST` | `/api/games/new` | Inicia nova sessão |
-| `POST` | `/api/games/:id/turn` | Processa turno |
-| `POST` | `/api/games/:id/turn/stream` | Turno com SSE streaming |
+| `POST` | `/api/games/:id/turn/start` | Inicia turno: 1 ação + reações, ator por rotação (sem `playerText`, avança NPC) |
+| `POST` | `/api/games/:id/turn/:turnId/react` | Resolve 1 reator (repetir até `reactionsDone`) |
+| `POST` | `/api/games/:id/turn/:turnId/arbiter` | Julga ação + reações |
+| `POST` | `/api/games/:id/turn/:turnId/narrate` | Prosa do fato julgado |
+| `POST` | `/api/games/:id/turn/:turnId/finish` | Commit + checkpoint (devolve `nextActor`/`awaitingPlayer`) |
+| `GET` | `/api/games/:id/turn/:turnId/status` | Fase + acumulados (resume) |
+| `POST` | `/api/games/:id/turn/:turnId/cancel` | Cancela turno aberto |
 | `GET` | `/api/games/:id/state` | Estado atual da sessão |
 
 ---

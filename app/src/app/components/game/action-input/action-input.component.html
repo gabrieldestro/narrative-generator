@@ -6,12 +6,29 @@
 
   <ng-action-text-input [text]="playerText()" (textChange)="playerText.set($event)" [disabled]="gameState.isLoading()"/>
 
+  @if (gameState.isLoading() && gameState.turnProgress()) {
+    <div class="action-input__progress" role="status" aria-label="Progresso do turno">
+      <mat-progress-bar mode="determinate" [value]="progressValue()"/>
+      <span class="action-input__progress-label">{{ progressLabel() }}</span>
+    </div>
+  }
+
   <div class="action-input__actions">
     @if (gameState.isLoading()) {
       <button mat-raised-button class="btn-action btn-action--loading" disabled aria-label="Aguardando processamento">
         <mat-spinner diameter="20" aria-hidden="true"/>
-        Aguardando...
+        {{ progressLabel() ?? 'Aguardando...' }}
       </button>
+      @if (gameState.activeTurnId()) {
+        <button
+          mat-stroked-button
+          class="btn-action btn-action--cancel"
+          (click)="cancel()"
+          aria-label="Cancelar turno">
+          <mat-icon>close</mat-icon>
+          Cancelar
+        </button>
+      }
     } @else {
       <button
         mat-stroked-button

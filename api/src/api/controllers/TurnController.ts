@@ -6,6 +6,7 @@ import type { SessionRepository } from '../../infrastructure/persistence/Session
 import type { CheckpointService } from '../../application/session/CheckpointService.js';
 import type { ILogger } from '../../domain/ports.js';
 import { ActionBuilderService } from '../../application/turn/ActionBuilderService.js';
+import { TurnError } from '../../application/turn/TurnStore.js';
 
 class NullLogger implements ILogger {
   trace(_msg: string, ..._args: unknown[]): void {}
@@ -30,8 +31,14 @@ export class TurnController {
     this.logger = logger ?? new NullLogger();
   }
 
-  public async processTurn(
-    req: FastifyRequest<{ Params: { sessionId: string }; Body: PlayerActionPayload }>,
+  /**
+   * Turno = 1 ação + reações, em fases sequenciais com visual progressivo:
+   * `start` (ação+dado+gate) → N× `react` (1 reator) → `arbiter` →
+   * `narrate` → `finish` (commit + checkpoint). Ator por rotação automática.
+   */
+
+  public async startTurn(
+    req: FastifyRequest<{ Params: { sessionId: string }; Body: Partial<PlayerActionPayload> }>,
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId } = req.params;
@@ -42,49 +49,157 @@ export class TurnController {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
 
-    const payload = req.body;
-    if (!payload || !payload.playerText) {
-      return reply.status(400).send({ error: "O campo 'playerText' é obrigatório no corpo da requisição." });
-    }
-
+    const payload = req.body ?? {};
     const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
-    reqLog.info('processTurn chamado');
+    reqLog.info('startTurn chamado');
 
     if (payload.settings) {
       this.gameService.updateSettings(payload.settings);
     }
 
-    // Enriquece a ação do jogador usando o ActionBuilderService
-    const enrichedAction = ActionBuilderService.buildActionString(payload);
+    // Ação do jogador (opcional): presente ⇒ turno do jogador; ausente ⇒
+    // próximo da rotação (NPC avança sozinho; jogador na vez ⇒ 409).
+    let playerAction: { charName: string; text: string } | null = null;
+    if (payload.playerText) {
+      const enrichedAction = ActionBuilderService.buildActionString(payload as PlayerActionPayload);
+      const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
+      const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
+      playerAction = { charName, text: enrichedAction };
+    }
 
-    // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
-    const playerChar = state.characters.find((c: { isPlayer: boolean; status?: string }) => c.isPlayer && (!c.status || c.status === 'active'));
-    const charName = payload.characterName || (playerChar ? playerChar.name : 'Jogador');
+    try {
+      const started = await this.gameService.beginTurn(sessionId, state, playerAction);
+      reqLog.info('startTurn concluído', { turnId: started.turnId, actor: started.actor });
+      return reply.status(201).send({ sessionId, ...started });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
 
-    const playerActionsMap = new Map<string, string>();
-    playerActionsMap.set(charName, enrichedAction);
+  public async reactTurn(
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId, turnId } = req.params;
+    const state = await this.checkpoints.resolveSession(sessionId);
+    if (!state) {
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    try {
+      const reaction = await this.gameService.reactNext(turnId, sessionId);
+      return reply.status(200).send({ sessionId, ...reaction });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
 
-    // Executa o turno narrativo no engine
-    const turnStart = Date.now();
-    const turnResult = await this.gameService.processTurn(state, playerActionsMap);
-    reqLog.info('processTurn concluído', { durationMs: Date.now() - turnStart });
+  public async arbiterTurn(
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId, turnId } = req.params;
+    const state = await this.checkpoints.resolveSession(sessionId);
+    if (!state) {
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    try {
+      const judged = await this.gameService.arbitrateTurn(turnId, sessionId);
+      return reply.status(200).send({ sessionId, ...judged });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
 
-    // Gera novo checkpoint imutável
-    const newCheckpointId = randomUUID();
-    this.sessionRepo.saveSession(newCheckpointId, turnResult.state);
-    await this.checkpoints.persistCheckpoint(sessionId, newCheckpointId, turnResult.state);
+  public async narrateTurn(
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId, turnId } = req.params;
+    const state = await this.checkpoints.resolveSession(sessionId);
+    if (!state) {
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    try {
+      const told = await this.gameService.narrateTurn(turnId, sessionId);
+      return reply.status(200).send({ sessionId, ...told });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
 
-    return reply.status(200).send({
-      sessionId: newCheckpointId,
-      narrative: turnResult.narrative,
-      logicalResolution: turnResult.logicalResolution,
-      npcDecisions: turnResult.npcDecisions,
-      diceRolls: turnResult.diceRolls,
-      // Fila + trace do turno.
-      ...(turnResult.npcOrder !== undefined ? { npcOrder: turnResult.npcOrder } : {}),
-      ...(turnResult.stepTrace !== undefined ? { stepTrace: turnResult.stepTrace } : {}),
-      updatedState: turnResult.state
-    });
+  public async finishTurn(
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId, turnId } = req.params;
+    const state = await this.checkpoints.resolveSession(sessionId);
+    if (!state) {
+      return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    try {
+      const turnResult = await this.gameService.finishTurn(turnId, sessionId);
+
+      // Gera novo checkpoint imutável (só no finish o estado é definitivo)
+      const newCheckpointId = randomUUID();
+      this.sessionRepo.saveSession(newCheckpointId, turnResult.state);
+      await this.checkpoints.persistCheckpoint(sessionId, newCheckpointId, turnResult.state);
+      this.gameService.carryRotation(sessionId, newCheckpointId);
+
+      return reply.status(200).send({
+        sessionId: newCheckpointId,
+        narrative: turnResult.narrative,
+        logicalResolution: turnResult.logicalResolution,
+        npcDecisions: turnResult.npcDecisions,
+        diceRolls: turnResult.diceRolls,
+        stepTrace: turnResult.stepTrace,
+        nextActor: turnResult.nextActor,
+        awaitingPlayer: turnResult.awaitingPlayer,
+        updatedState: turnResult.state
+      });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
+
+  public async turnStatus(
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId, turnId } = req.params;
+    try {
+      const status = this.gameService.getTurnStatus(turnId, sessionId);
+      return reply.status(200).send({ sessionId, ...status });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
+
+  public async cancelTurn(
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { sessionId, turnId } = req.params;
+    try {
+      this.gameService.cancelTurn(turnId, sessionId);
+      return reply.status(200).send({ sessionId, turnId, cancelled: true });
+    } catch (err) {
+      return this.sendTurnError(reply, err);
+    }
+  }
+
+  private async sendTurnError(reply: FastifyReply, err: unknown): Promise<void> {
+    if (err instanceof TurnError) {
+      const status =
+        err.code === 'TURN_NOT_FOUND' ? 404 :
+        err.code === 'SESSION_MISMATCH' ? 400 : 409;
+      return reply.status(status).send({
+        error: err.message,
+        code: err.code,
+        ...(err.turnId !== undefined ? { turnId: err.turnId } : {}),
+        ...(err.meta !== undefined ? err.meta : {}),
+      });
+    }
+    throw err;
   }
 
   public async observe(
@@ -123,6 +238,7 @@ export class TurnController {
     const newCheckpointId = randomUUID();
     this.sessionRepo.saveSession(newCheckpointId, state);
     await this.checkpoints.persistCheckpoint(sessionId, newCheckpointId, state);
+    this.gameService.carryRotation(sessionId, newCheckpointId);
 
     return reply.status(200).send({
       sessionId: newCheckpointId,
@@ -168,6 +284,7 @@ export class TurnController {
     const newCheckpointId = randomUUID();
     this.sessionRepo.saveSession(newCheckpointId, state);
     await this.checkpoints.persistCheckpoint(sessionId, newCheckpointId, state);
+    this.gameService.carryRotation(sessionId, newCheckpointId);
 
     return reply.status(200).send({
       sessionId: newCheckpointId,

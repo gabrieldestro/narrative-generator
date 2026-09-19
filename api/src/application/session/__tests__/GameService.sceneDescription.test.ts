@@ -35,16 +35,37 @@ function buildEngine() {
 
   vi.spyOn(llmService, 'updateWorldContext').mockResolvedValue('Contexto atualizado.');
 
-  const runTurn = vi.fn(async (_state: GameState, _actions: Map<string, string>, opts?: { sceneDescription?: string }) => ({
-    narrative: opts?.sceneDescription ? `${opts.sceneDescription}\n\nnarração mockada.` : 'narração mockada.',
-    logicalResolution: 'Resolução lógica.',
-    npcDecisions: [],
-    diceRolls: [],
-    npcOrder: ['Aric'],
-    stepTrace: [],
-    pendingMoves: [],
-  }));
-  const orchestrator = { runTurn, updateSettings: vi.fn() };
+  const startAction = vi.fn(async (_state: GameState, actor: { name: string }, actions: Map<string, string>) => {
+    const text = actions.get(actor.name) ?? `${actor.name} age.`;
+    return {
+      actor,
+      actorWhere: 'Taverna',
+      text,
+      reasoning: '',
+      roll: 11,
+      diceRoll: { characterName: actor.name, roll: 11, isGodMode: false },
+      action: { actor: actor.name, text, roll: 11 },
+      allowed: [],
+      denied: [],
+      ordered: [],
+    };
+  });
+  const orchestrator = {
+    activeRoster: vi.fn((state: GameState) =>
+      state.characters.filter((c) => !c.status || c.status === 'active')),
+    spotlightOrder: vi.fn((roster: GameState['characters']) => roster),
+    startAction,
+    resolveReaction: vi.fn(),
+    arbitrateAction: vi.fn(async () => ({ outcome: 'success', violent: false, reason: 'ok', hit: [] })),
+    narrateAction: vi.fn(async () => 'narração mockada.'),
+    renderResolutionLine: vi.fn(() => 'x'),
+    commitTurn: vi.fn(async () => ({
+      pendingMoves: [],
+      resolutionLine: 'x',
+      trace: { step: 1, actor: 'Aric', actorWhere: 'Taverna', queue: [], spotlight: 'Aric', gate: { allowed: [], denied: [] } },
+    })),
+    updateSettings: vi.fn(),
+  };
 
   const mockCpuReflection = {
     reflectAndAct: vi.fn(),
@@ -65,52 +86,76 @@ function buildEngine() {
     orchestrator as any,
   );
 
-  return { engine, llmService, mockLlm, mockOutput, runTurn };
+  return { engine, llmService, mockLlm, mockOutput, startAction, orchestrator };
+}
+
+/** Roda o turno do jogador pelas fases até o commit. */
+async function runPlayerTurn(engine: GameService, sessionId: string, state: GameState, text: string) {
+  const started = await engine.beginTurn(sessionId, state, { charName: 'Aric', text });
+  let pending = started.reactionsPending;
+  while (pending > 0) {
+    const r = await engine.reactNext(started.turnId, sessionId);
+    pending = r.reactionsPending;
+  }
+  await engine.arbitrateTurn(started.turnId, sessionId);
+  await engine.narrateTurn(started.turnId, sessionId);
+  return engine.finishTurn(started.turnId, sessionId);
 }
 
 describe('GameService — descrição de cenário por mudança de local', () => {
-  it('deve gerar descrição de cenário quando o jogador está num local diferente do último descrito', async () => {
-    const state = makeState({ lastSceneLocation: 'Vila' }); // jogador agora em 'Taverna'
-    const { engine, llmService, runTurn } = buildEngine();
+  it('deve gerar descrição de cenário quando o ator está num local diferente do último descrito', async () => {
+    const state = makeState({ lastSceneLocation: 'Vila' }); // Aric agora em 'Taverna'
+    const { engine, llmService } = buildEngine();
 
     const genSceneSpy = vi.spyOn(llmService, 'generateSceneDescription').mockResolvedValue('A taverna cheira a alecrim e fumaça.');
 
-    const result = await engine.processTurn(state, new Map([['Aric', 'Investigar o bar']]));
+    const started = await engine.beginTurn('s-1', state, { charName: 'Aric', text: 'Investigar o bar' });
 
     expect(genSceneSpy).toHaveBeenCalledTimes(1);
-    expect(genSceneSpy).toHaveBeenCalledWith(state, 'Taverna');
-    // A descrição é repassada ao orquestrador (prefixo do 1º step).
-    expect(runTurn).toHaveBeenCalledOnce();
-    expect(runTurn.mock.calls[0]![2]?.sceneDescription).toBe('A taverna cheira a alecrim e fumaça.');
-    expect(result.narrative).toBe('A taverna cheira a alecrim e fumaça.\n\nnarração mockada.');
-    expect(state.lastSceneLocation).toBe('Taverna');
+    expect(genSceneSpy.mock.calls[0]![1]).toBe('Taverna');
+    expect(started.sceneDescription).toBe('A taverna cheira a alecrim e fumaça.');
+
+    const finished = await runPlayerTurnContinued(engine, 's-1', started.turnId);
+    expect(finished.narrative).toBe('A taverna cheira a alecrim e fumaça.\n\nnarração mockada.');
+    expect(finished.state.lastSceneLocation).toBe('Taverna');
   });
 
-  it('NÃO deve gerar descrição de cenário quando o jogador continua no mesmo local', async () => {
+  it('NÃO deve gerar descrição de cenário quando o ator continua no mesmo local', async () => {
     const state = makeState({ lastSceneLocation: 'Taverna' });
-    const { engine, llmService, runTurn } = buildEngine();
+    const { engine, llmService } = buildEngine();
 
     const genSceneSpy = vi.spyOn(llmService, 'generateSceneDescription');
 
-    const result = await engine.processTurn(state, new Map([['Aric', 'Pedir uma bebida']]));
+    const result = await runPlayerTurn(engine, 's-2', state, 'Pedir uma bebida');
 
     expect(genSceneSpy).not.toHaveBeenCalled();
-    expect(runTurn.mock.calls[0]![2]?.sceneDescription).toBeUndefined();
     expect(result.narrative).toBe('narração mockada.');
-    expect(state.lastSceneLocation).toBe('Taverna');
+    expect(result.state.lastSceneLocation).toBe('Taverna');
   });
 
-  it('deve manter lastSceneLocation inalterado quando o jogador não tem local definido', async () => {
+  it('deve manter lastSceneLocation inalterado quando o ator não tem local definido', async () => {
     const state = makeState({ lastSceneLocation: 'Vila' });
     delete state.characters[0]!.currentLocation;
-    const { engine, llmService, runTurn } = buildEngine();
+    const { engine, llmService } = buildEngine();
 
     const genSceneSpy = vi.spyOn(llmService, 'generateSceneDescription');
 
-    await engine.processTurn(state, new Map([['Aric', 'Observar o ambiente']]));
+    const result = await runPlayerTurn(engine, 's-3', state, 'Observar o ambiente');
 
     expect(genSceneSpy).not.toHaveBeenCalled();
-    expect(runTurn.mock.calls[0]![2]?.sceneDescription).toBeUndefined();
-    expect(state.lastSceneLocation).toBe('Vila');
+    expect(result.state.lastSceneLocation).toBe('Vila');
   });
 });
+
+/** Continua um turno já iniciado (útil quando o `start` foi assertado à parte). */
+async function runPlayerTurnContinued(engine: GameService, sessionId: string, turnId: string) {
+  const status = engine.getTurnStatus(turnId, sessionId);
+  let pending = status.reactionsPending;
+  while (pending > 0) {
+    const r = await engine.reactNext(turnId, sessionId);
+    pending = r.reactionsPending;
+  }
+  await engine.arbitrateTurn(turnId, sessionId);
+  await engine.narrateTurn(turnId, sessionId);
+  return engine.finishTurn(turnId, sessionId);
+}

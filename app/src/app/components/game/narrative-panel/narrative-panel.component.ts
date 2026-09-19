@@ -65,6 +65,22 @@ export class NarrativePanelComponent {
       });
     }
 
+    // Turno em andamento (1 ação + reações): fases já resolvidas rendem
+    // visual antes do `finish` (ação → reações → árbitro → narração).
+    const pending = this.gameState.pendingMessages();
+    if (pending.length > 0) {
+      const turnNumber = this.gameState.turnNumber();
+      const actor = this.gameState.turnActor();
+      msgs.push({ type: 'system', text: `Turno ${turnNumber} — ${actor ?? 'em andamento'}`, turnNumber });
+      for (const chunk of pending) {
+        msgs.push({
+          type: chunk.type === 'narrative' ? 'narrative' : chunk.type === 'resolution' ? 'system' : 'action',
+          text: chunk.text,
+          turnNumber,
+        });
+      }
+    }
+
     return msgs;
   });
 

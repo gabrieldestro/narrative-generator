@@ -1,12 +1,16 @@
 flowchart TD
-    START(["INÍCIO DO TURNO"]) --> COLETA["COLETA DE AÇÕES<br/>para cada personagem ativo"]
+    START(["INÍCIO DO TURNO<br/>1 turno = 1 ação + reações"]) --> ROTACAO["ROTAÇÃO AUTOMÁTICA<br/>próximo ativo após o último ator<br/>(players → NPCs)"]
     
-    COLETA --> PLAYER{"É o<br/>player?"}
-    PLAYER -->|Sim| INPUT["Usuário digita a ação<br/>(ConsoleInput)"]
+    ROTACAO --> PLAYER{"Ator é<br/>player?"}
+    PLAYER -->|Sim| INPUT["Usuário digita a ação<br/>(ConsoleInput / POST start)"]
     PLAYER -->|Não| NPC["CPU Reflection (LLM)<br/>decide ação do NPC"]
     
     INPUT --> D20["d20:<br/>Jogador: godMode? 20 : random(1-20)<br/>NPC: random(1-20)"]
     NPC --> D20
+
+    D20 --> GATE["GATE DE PERCEPÇÃO (LLM)<br/>quem viu/ouviu/é alvo reage<br/>negado nem vê a ação"]
+    GATE --> REACT["REAÇÕES (1 LLM por reator)<br/>em ordem de stake<br/>'ignorar' é descartado"]
+    REACT --> EVENTO
     
     D20 --> EVENTO{"Evento<br/>inesperado?"}
     EVENTO -->|"15% de chance"| FLAG["flag = true<br/>(passada ao Narrador)"]
@@ -62,7 +66,7 @@ flowchart TD
     
     CONTEXT --> LOCATIONS["EXTRAI LOCALIZAÇÕES (LLM JSON)<br/>mapeia personagens → locais<br/>→ atualiza currentLocation"]
     
-    LOCATIONS --> END["FIM DO TURNO<br/>turnNumber++<br/>persiste savegame.json<br/>'Continuar? (s/n)'"]
+    LOCATIONS --> END["FIM DO TURNO<br/>turnNumber++<br/>checkpoint imutável novo<br/>devolve nextActor/awaitingPlayer<br/>'Continuar? (s/n)'"]
     
     END -->|s| START
     END -->|n| EXIT(["FIM DO JOGO"])

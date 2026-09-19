@@ -236,22 +236,65 @@ describe('GameService', () => {
   let mockLlmService: LlmService;
   let mockCpuReflection: CharacterService;
   let mockSessionFactory: SessionFactory;
-  let mockOrchestrator: { runTurn: ReturnType<typeof vi.fn>; updateSettings: ReturnType<typeof vi.fn> };
+  let mockOrchestrator: ReturnType<typeof makeOrchestrator>;
   let engine: GameService;
 
-  function makeOrchestrator(narrative = 'Cena narrada.') {
+  function makeOrchestrator(narrative = 'Cena narrada.', allowedNames: string[] = ['Elara']) {
     return {
-      runTurn: vi.fn(async () => ({
-        narrative,
-        logicalResolution: 'Resolução lógica.',
-        npcDecisions: [],
-        diceRolls: [],
-        npcOrder: ['Aric', 'Elara'],
-        stepTrace: [],
+      activeRoster: vi.fn((state: GameState) =>
+        state.characters.filter((c) => !c.status || c.status === 'active')),
+      spotlightOrder: vi.fn((roster: GameState['characters']) => [
+        ...roster.filter((c) => c.isPlayer === true),
+        ...roster.filter((c) => c.isPlayer !== true),
+      ]),
+      startAction: vi.fn(async (_state: GameState, actor: { name: string }, actions: Map<string, string>) => {
+        const text = actions.get(actor.name) ?? `${actor.name} age com cautela.`;
+        return {
+          actor,
+          actorWhere: 'Floresta',
+          text,
+          reasoning: 'r',
+          roll: 11,
+          diceRoll: { characterName: actor.name, roll: 11, isGodMode: false },
+          action: { actor: actor.name, text, roll: 11 },
+          allowed: allowedNames.map((who) => ({ who, channel: 'saw' as const, why: 'viu' })),
+          denied: [],
+          ordered: allowedNames.map((who) => ({ who, channel: 'saw' as const, why: 'viu' })),
+        };
+      }),
+      resolveReaction: vi.fn(async (_state: GameState, reactor: { name: string }) => ({
+        who: reactor.name,
+        action: `${reactor.name} reage com cautela.`,
+        reasoning: 'rr',
+        ignored: false,
+        channel: 'saw' as const,
+      })),
+      arbitrateAction: vi.fn(async () => ({ outcome: 'success', violent: false, reason: 'ok', hit: [] })),
+      narrateAction: vi.fn(async () => narrative),
+      renderResolutionLine: vi.fn(() => 'Aric tentou abrir a porta -> Sucesso porque ok'),
+      commitTurn: vi.fn(async () => ({
         pendingMoves: [],
+        resolutionLine: 'Aric tentou abrir a porta -> Sucesso porque ok',
+        trace: {
+          step: 1, actor: 'Aric', actorWhere: 'Floresta', queue: [], spotlight: 'Aric',
+          gate: { allowed: [], denied: [] },
+        },
       })),
       updateSettings: vi.fn(),
     };
+  }
+
+  /** Roda 1 turno completo pelas fases (start → react* → arbiter → narrate → finish). */
+  async function runFullTurn(svc: GameService, sessionId: string, state: GameState, playerAction: { charName: string; text: string } | null) {
+    const started = await svc.beginTurn(sessionId, state, playerAction);
+    let pending = started.reactionsPending;
+    while (pending > 0) {
+      const reaction = await svc.reactNext(started.turnId, sessionId);
+      pending = reaction.reactionsPending;
+    }
+    await svc.arbitrateTurn(started.turnId, sessionId);
+    await svc.narrateTurn(started.turnId, sessionId);
+    return svc.finishTurn(started.turnId, sessionId);
   }
 
   const defaultDecision: CpuAgentDecision = {
@@ -291,12 +334,12 @@ describe('GameService', () => {
     engine = new GameService(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, mockOrchestrator as any);
   });
 
-  it('deve carregar save e executar um turno', async () => {
+  it('deve carregar save e executar um turno (1 ação do jogador + 1 reação)', async () => {
     vi.mocked(mockRepo.load).mockResolvedValue(JSON.parse(JSON.stringify(existingState)));
     vi.mocked(mockInput.question)
       .mockResolvedValueOnce('s')        // carregar save
       .mockResolvedValueOnce('')         // Enter para continuar
-      .mockResolvedValueOnce('Explorar a caverna')  // ação do jogador
+      .mockResolvedValueOnce('Explorar a caverna')  // ação do jogador (vez de Aric)
       .mockResolvedValueOnce('n');       // continuar? → não
 
     await engine.start();
@@ -306,7 +349,11 @@ describe('GameService', () => {
     )?.[0] as GameState;
     expect(savedState).toBeDefined();
     expect(savedState.turnNumber).toBe(4);
-    expect(mockOrchestrator.runTurn).toHaveBeenCalledOnce();
+    expect(savedState.history.some((h) => h.startsWith('Turno 3:'))).toBe(true);
+    expect(mockOrchestrator.startAction).toHaveBeenCalledTimes(1);
+    expect(mockOrchestrator.resolveReaction).toHaveBeenCalledTimes(1);
+    expect(mockOrchestrator.arbitrateAction).toHaveBeenCalledTimes(1);
+    expect(mockOrchestrator.commitTurn).toHaveBeenCalledTimes(1);
   });
 
   it('deve limitar o histórico ao memoryWindowSize e disparar sumarização', async () => {
@@ -353,15 +400,6 @@ describe('GameService', () => {
 
     const observeSpy = vi.spyOn(mockLlmService, 'generateObservation')
       .mockResolvedValue('A névoa esconde sombras rastejantes.');
-    mockOrchestrator.runTurn.mockResolvedValueOnce({
-      narrative: 'Aric avança pela caverna.',
-      logicalResolution: 'Resolução lógica.',
-      npcDecisions: [],
-      diceRolls: [],
-      npcOrder: ['Aric', 'Elara'],
-      stepTrace: [],
-      pendingMoves: [],
-    });
 
     await engine.start();
 
@@ -377,7 +415,7 @@ describe('GameService', () => {
     )?.[0] as GameState;
     expect(savedState).toBeDefined();
     expect(savedState.history.some(h => h.startsWith('Observação (Turno 3): A névoa esconde sombras rastejantes.'))).toBe(true);
-    expect(savedState.history.some(h => h.startsWith('Turno 3: Aric avança pela caverna.'))).toBe(true);
+    expect(savedState.history.some(h => h.startsWith('Turno 3: Cena narrada.'))).toBe(true);
   });
 
   it('deve processar o comando /narrate respeitando a declaração e resolvendo o estado do mundo sem avançar o turno', async () => {
@@ -419,41 +457,112 @@ describe('GameService', () => {
     expect(savedState.worldContext).toBe('A biblioteca proibida se revela diante de Aric.');
   });
 
-  it('delega ao orquestrador e retorna npcOrder/stepTrace', async () => {
-    const runTurn = vi.fn(async () => ({
-      narrative: 'Narração do step.',
-      logicalResolution: 'Darian tentou X -> Sucesso porque ...',
-      npcDecisions: [],
-      diceRolls: [{ characterName: 'Aric', roll: 11, isGodMode: false }],
-      npcOrder: ['Aric', 'Elara'],
-      stepTrace: [{ step: 1, actor: 'Aric', actorWhere: 'Floresta', queue: [], spotlight: 'Aric', gate: { allowed: [], denied: [] } }],
-      pendingMoves: [],
-    }));
-    const orchestrator = { runTurn, updateSettings: vi.fn() };
-    const turnEngine = new GameService(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, orchestrator as any);
+  it('saga por fases: start → react → arbiter → narrate → finish com turnNumber++', async () => {
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
     const state = JSON.parse(JSON.stringify(existingState));
 
-    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
-    const extractSpy = vi.spyOn(mockLlmService, 'extractStateChanges');
-    const locationsSpy = vi.spyOn(mockLlmService, 'extractCharacterLocations');
+    const started = await engine.beginTurn('sess-1', state, { charName: 'Aric', text: 'Abrir a porta' });
+    expect(started.actor).toBe('Aric');
+    expect(started.actionText).toBe('Abrir a porta');
+    expect(started.diceRoll).toMatchObject({ characterName: 'Aric', roll: 11 });
+    expect(started.reactionsPending).toBe(1);
+    // Estado original intacto até o finish (cópia de trabalho).
+    expect(state.turnNumber).toBe(3);
+    expect(state.history).toHaveLength(2);
 
-    const result = await turnEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]));
+    const reaction = await engine.reactNext(started.turnId, 'sess-1');
+    expect(reaction.who).toBe('Elara');
+    expect(reaction.ignored).toBe(false);
+    expect(reaction.reactionsDone).toBe(true);
 
-    expect(runTurn).toHaveBeenCalledTimes(1);
-    expect(result.npcOrder).toEqual(['Aric', 'Elara']);
-    expect(result.stepTrace).toHaveLength(1);
-    expect(extractSpy).not.toHaveBeenCalled();
-    expect(locationsSpy).not.toHaveBeenCalled();
-    // turnNumber++ 1x por turno + 1 entrada de history (não 1 por step).
-    expect(result.state.turnNumber).toBe(4);
-    expect(result.state.history.filter((h) => h.startsWith('Turno 3:'))).toHaveLength(1);
+    const status = engine.getTurnStatus(started.turnId, 'sess-1');
+    expect(status.phase).toBe('awaiting_arbiter');
+    expect(status.reacted).toHaveLength(1);
+
+    const judged = await engine.arbitrateTurn(started.turnId, 'sess-1');
+    expect(judged.outcome).toBe('success');
+
+    const told = await engine.narrateTurn(started.turnId, 'sess-1');
+    expect(told.narration).toBe('Cena narrada.');
+
+    const finished = await engine.finishTurn(started.turnId, 'sess-1');
+    expect(finished.narrative).toBe('Cena narrada.');
+    expect(finished.state.turnNumber).toBe(4);
+    expect(finished.state.history.filter((h: string) => h.startsWith('Turno 3:'))).toHaveLength(1);
+    expect(finished.stepTrace).toHaveLength(1);
+    expect(finished.nextActor).toBe('Elara');
+    expect(finished.awaitingPlayer).toBe(false);
   });
 
-  it('sem orquestrador: processTurn lança erro', async () => {
+  it('rotação automática: Zé age no turno 1, João no turno 2', async () => {
+    vi.spyOn(mockLlmService, 'updateWorldContext').mockResolvedValue('Cenário atualizado.');
+    const zeJoao: GameState = {
+      ...JSON.parse(JSON.stringify(existingState)),
+      characters: [
+        { id: '1', name: 'Zé', description: 'd', personality: 'p', isPlayer: true },
+        { id: '2', name: 'João', description: 'd', personality: 'p', isPlayer: false },
+      ],
+    };
+    const npcOrchestrator = makeOrchestrator('Narração.', []);
+    const svc = new GameService(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, npcOrchestrator as any);
+
+    // Sem ação do jogador e com jogador na vez ⇒ 409 AWAITING_PLAYER.
+    await expect(svc.beginTurn('rot', zeJoao, null)).rejects.toMatchObject({ code: 'AWAITING_PLAYER' });
+
+    // Turno 1: Zé age.
+    const t1 = await runFullTurn(svc, 'rot', zeJoao, { charName: 'Zé', text: 'Zé olha ao redor' });
+    expect(t1.state.turnNumber).toBe(4);
+    expect(t1.nextActor).toBe('João');
+    expect(t1.awaitingPlayer).toBe(false);
+
+    // Turno 2: João age sozinho (NPC avança sem input).
+    const started2 = await svc.beginTurn('rot', t1.state, null);
+    expect(started2.actor).toBe('João');
+    expect(started2.actionText).toBe('João age com cautela.');
+    let pending = started2.reactionsPending;
+    while (pending > 0) {
+      const r = await svc.reactNext(started2.turnId, 'rot');
+      pending = r.reactionsPending;
+    }
+    await svc.arbitrateTurn(started2.turnId, 'rot');
+    await svc.narrateTurn(started2.turnId, 'rot');
+    const t2 = await svc.finishTurn(started2.turnId, 'rot');
+    expect(t2.state.turnNumber).toBe(5);
+    expect(t2.nextActor).toBe('Zé');
+    expect(t2.awaitingPlayer).toBe(true);
+  });
+
+  it('ordem das fases é fiscalizada: arbiter antes das reações → OUT_OF_ORDER', async () => {
+    const state = JSON.parse(JSON.stringify(existingState));
+    const started = await engine.beginTurn('sess-ord', state, { charName: 'Aric', text: 'Abrir a porta' });
+    await expect(engine.arbitrateTurn(started.turnId, 'sess-ord')).rejects.toMatchObject({ code: 'OUT_OF_ORDER' });
+    await expect(engine.narrateTurn(started.turnId, 'sess-ord')).rejects.toMatchObject({ code: 'OUT_OF_ORDER' });
+    await expect(engine.finishTurn(started.turnId, 'sess-ord')).rejects.toMatchObject({ code: 'OUT_OF_ORDER' });
+  });
+
+  it('react sem pendências → OUT_OF_ORDER', async () => {
+    const npcOrchestrator = makeOrchestrator('Narração.', []);
+    const svc = new GameService(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 }, undefined, undefined, undefined, npcOrchestrator as any);
+    const state = JSON.parse(JSON.stringify(existingState));
+    const started = await svc.beginTurn('sess-nr', state, { charName: 'Aric', text: 'Abrir a porta' });
+    expect(started.reactionsPending).toBe(0);
+    await expect(svc.reactNext(started.turnId, 'sess-nr')).rejects.toMatchObject({ code: 'OUT_OF_ORDER' });
+  });
+
+  it('sem orquestrador: beginTurn lança erro', async () => {
     const noOrchestratorEngine = new GameService(mockInput, mockOutput, mockRepo, mockLlmService, mockCpuReflection, mockSessionFactory, { arbiterHistoryTurns: 0 });
     const state = JSON.parse(JSON.stringify(existingState));
 
-    await expect(noOrchestratorEngine.processTurn(state, new Map([['Aric', 'Abrir a porta']]))).rejects.toThrow('TurnService não injetado');
+    await expect(noOrchestratorEngine.beginTurn('s', state, { charName: 'Aric', text: 'Abrir a porta' })).rejects.toThrow('TurnService não injetado');
+  });
+
+  it('2 begins sem finish → TURN_IN_PROGRESS; cancel libera', async () => {
+    const state = JSON.parse(JSON.stringify(existingState));
+    const started = await engine.beginTurn('sess-3', state, { charName: 'Aric', text: 'Outra ação' });
+    await expect(engine.beginTurn('sess-3', state, { charName: 'Aric', text: 'Outra ação' })).rejects.toMatchObject({ code: 'TURN_IN_PROGRESS' });
+    engine.cancelTurn(started.turnId, 'sess-3');
+    const restarted = await engine.beginTurn('sess-3', state, { charName: 'Aric', text: 'Outra ação' });
+    expect(restarted.turnId).not.toBe(started.turnId);
   });
 
   it('deve criar novo jogo quando não há save', async () => {

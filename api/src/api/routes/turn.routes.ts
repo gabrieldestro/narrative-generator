@@ -9,6 +9,15 @@ const sessionIdParams = {
   },
 } as const;
 
+const turnParams = {
+  type: 'object',
+  required: ['sessionId', 'turnId'],
+  properties: {
+    sessionId: { type: 'string' },
+    turnId: { type: 'string' },
+  },
+} as const;
+
 const playerTextBody = {
   type: 'object',
   required: ['playerText'],
@@ -21,7 +30,7 @@ const playerTextBody = {
 
 const turnBody = {
   type: 'object',
-  required: ['playerText'],
+  required: [],
   properties: {
     actionType: {
       type: 'string',
@@ -40,13 +49,53 @@ const turnBody = {
 } as const;
 
 export function registerTurnRoutes(fastify: FastifyInstance, controller: TurnController) {
-  // Processa 1 turno do jogo
-  fastify.post('/api/games/:sessionId/turn', {
+  // Turno = 1 ação + reações, em fases sequenciais com visual progressivo:
+  // `start` (ação+dado+gate) → N× `react` (1 reator) → `arbiter` →
+  // `narrate` → `finish` (commit + checkpoint). Ator por rotação automática
+  // (`start` sem `playerText` avança NPC; jogador na vez ⇒ 409).
+  fastify.post('/api/games/:sessionId/turn/start', {
     schema: {
       params: sessionIdParams,
       body: turnBody,
     },
-  }, (req: any, reply) => controller.processTurn(req, reply));
+  }, (req: any, reply) => controller.startTurn(req, reply));
+
+  fastify.post('/api/games/:sessionId/turn/:turnId/react', {
+    schema: {
+      params: turnParams,
+    },
+  }, (req: any, reply) => controller.reactTurn(req, reply));
+
+  fastify.post('/api/games/:sessionId/turn/:turnId/arbiter', {
+    schema: {
+      params: turnParams,
+    },
+  }, (req: any, reply) => controller.arbiterTurn(req, reply));
+
+  fastify.post('/api/games/:sessionId/turn/:turnId/narrate', {
+    schema: {
+      params: turnParams,
+    },
+  }, (req: any, reply) => controller.narrateTurn(req, reply));
+
+  fastify.post('/api/games/:sessionId/turn/:turnId/finish', {
+    schema: {
+      params: turnParams,
+    },
+  }, (req: any, reply) => controller.finishTurn(req, reply));
+
+  // Resume após F5 + abandono explícito (TurnStore em memória, sem TTL).
+  fastify.get('/api/games/:sessionId/turn/:turnId/status', {
+    schema: {
+      params: turnParams,
+    },
+  }, (req: any, reply) => controller.turnStatus(req, reply));
+
+  fastify.post('/api/games/:sessionId/turn/:turnId/cancel', {
+    schema: {
+      params: turnParams,
+    },
+  }, (req: any, reply) => controller.cancelTurn(req, reply));
 
   // Observa/detalha um aspecto da cena sem avançar o turno
   fastify.post('/api/games/:sessionId/observe', {

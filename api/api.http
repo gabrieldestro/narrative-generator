@@ -34,8 +34,9 @@ Content-Type: application/json
 
 ###
 
-### 5. Processar 1 Turno do Jogo (Ação Simples — Padrão sem Enriquecimento)
-POST {{baseUrl}}/api/games/{{sessionId}}/turn
+### 5. Iniciar Turno (1 ação + reações; ator por rotação automática)
+# @name startTurn
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/start
 Content-Type: application/json
 
 {
@@ -44,8 +45,51 @@ Content-Type: application/json
 
 ###
 
-### 6. Processar 1 Turno do Jogo (Ação Estruturada com Skills / Intenção Opcional)
-POST {{baseUrl}}/api/games/{{sessionId}}/turn
+### 5.1 Armazenar o turnId (cole o ID retornado ou use a variável abaixo)
+@turnId = {{startTurn.response.body.turnId}}
+
+###
+
+### 5.2 Avançar NPC pela rotação (sem playerText; jogador na vez ⇒ 409 AWAITING_PLAYER)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/start
+Content-Type: application/json
+
+{}
+
+###
+
+### 6. Reagir (1 reator por chamada; repetir até reactionsDone)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/{{turnId}}/react
+Content-Type: application/json
+
+###
+
+### 6.1 Árbitro (julga ação + reações)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/{{turnId}}/arbiter
+Content-Type: application/json
+
+###
+
+### 6.2 Narração (prosa do fato julgado)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/{{turnId}}/narrate
+Content-Type: application/json
+
+###
+
+### 6.3 Consultar fase + acumulados (resume após F5)
+GET {{baseUrl}}/api/games/{{sessionId}}/turn/{{turnId}}/status
+Content-Type: application/json
+
+###
+
+### 7. Fechar o Turno (commit + cena + memória + checkpoint novo)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/{{turnId}}/finish
+Content-Type: application/json
+
+###
+
+### 7.1 Ação estruturada com skills / intenção (também via start)
+POST {{baseUrl}}/api/games/{{sessionId}}/turn/start
 Content-Type: application/json
 
 {
@@ -57,17 +101,7 @@ Content-Type: application/json
 
 ###
 
-### 7. Processar 1 Turno via Streaming em Tempo Real (SSE - Server-Sent Events)
-POST {{baseUrl}}/api/games/{{sessionId}}/turn/stream
-Content-Type: application/json
-
-{
-  "playerText": "Examino cuidadosamente os baús no centro da sala."
-}
-
-###
-
-### 7.1 Observar/Detalhar um Aspecto da Cena (não avança o turno)
+### 7.2 Observar/Detalhar um Aspecto da Cena (não avança o turno)
 POST {{baseUrl}}/api/games/{{sessionId}}/observe
 Content-Type: application/json
 

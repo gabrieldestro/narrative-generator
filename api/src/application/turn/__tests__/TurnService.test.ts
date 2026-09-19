@@ -48,18 +48,82 @@ function makeStubs() {
   return { arbiter, gate, narrator, inventory, movement, conditions, management, cpuReflection };
 }
 
-function makeOrchestrator(stubs: ReturnType<typeof makeStubs>, settings: Record<string, unknown> = {}) {
+function makeSceneStubs() {
+  return {
+    extractor: { extract: vi.fn(async (..._args: any[]): Promise<any> => ({ new_locations: [], new_npcs: [], dead: [], lost: [], healed: [] })) },
+    memory: { consolidateFacts: vi.fn(async (..._args: any[]): Promise<any> => ({ facts: ['fato novo'], threads: [] })) },
+  };
+}
+
+function makeOrchestrator(
+  stubs: ReturnType<typeof makeStubs>,
+  settings: Record<string, unknown> = {},
+  scene?: { extractor: unknown; memory: unknown },
+) {
   return new TurnService(
     stubs.arbiter as any, stubs.gate as any, stubs.narrator as any,
     stubs.inventory as any, stubs.movement as any, stubs.conditions as any,
     stubs.management, stubs.cpuReflection as any,
     { godMode: false, memoryWindowSize: 5, debug: false, unexpectedEventChance: 0, narrationSize: 'balanced', narrationSizePrompts: { concise: '', balanced: '', descriptive: '' }, arbiterHistoryTurns: 0, maxScratchpadSize: 5, maxCpuRetries: 1, maxHealRetries: 0, healSummaryOnOverflow: false, jsonRepairMaxInputChars: 100, ...settings } as any,
     undefined,
+    scene as any,
   );
 }
 
-// Orquestrador com agentes mockados por interface.
-describe('TurnService.runTurn', () => {
+/**
+ * Roda 1 turno completo (1 ação + reações) pelas fases, como o
+ * `GameService` faz via HTTP: start → react* → arbiter → narrate → commit.
+ */
+async function runSingleTurn(
+  orch: ReturnType<typeof makeOrchestrator>,
+  state: GameState,
+  actorName: string,
+  playerText?: string,
+) {
+  const actor = state.characters.find((c) => c.name === actorName)!;
+  const actions = new Map<string, string>();
+  if (playerText !== undefined) actions.set(actorName, playerText);
+  const started = await orch.startAction(state, actor, actions);
+
+  const priorLines = [`${actorName}: ${started.text}`];
+  const reactions: StepAction[] = [];
+  const reacted: string[] = [];
+  const ignored: string[] = [];
+  for (const ruling of started.ordered) {
+    const reactor = state.characters.find((c) => c.name === ruling.who)!;
+    const result = await orch.resolveReaction(state, reactor, priorLines, started.action, ruling.channel);
+    if (result.ignored) {
+      ignored.push(reactor.name);
+      continue;
+    }
+    reactions.push({ actor: reactor.name, text: result.action });
+    priorLines.push(`${reactor.name}: ${result.action}`);
+    reacted.push(reactor.name);
+  }
+
+  const resolution = await orch.arbitrateAction(state, started.action, reactions, started.roll);
+  const narration = await orch.narrateAction(
+    state, `${actorName} tenta: ${started.text} (d20: ${started.roll})`, resolution, false,
+  );
+  const committed = await orch.commitTurn(state, {
+    actorName,
+    actionText: started.text,
+    reactions: reactions.map((r) => ({ who: r.actor, action: r.text })),
+    resolution,
+    actorWhere: started.actorWhere,
+    narration,
+    gate: {
+      allowed: started.ordered.map((r) => ({ who: r.who, channel: r.channel })),
+      denied: started.denied.map((r) => ({ who: r.who, why: r.why })),
+    },
+    reacted,
+    ignored,
+  });
+  return { started, reactions, resolution, narration, committed };
+}
+
+// Orquestrador com agentes mockados por interface (fases de ação única).
+describe('TurnService.startAction', () => {
   let stubs: ReturnType<typeof makeStubs>;
 
   beforeEach(() => {
@@ -67,73 +131,142 @@ describe('TurnService.runTurn', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5); // d20 = 11
   });
 
-  it('1 ação + 1 reação com stake gera 1 event + 1 narração de step por step', async () => {
+  it('ação do jogador + gate: devolve texto, dado e fila sem mutar o mundo', async () => {
     stubs.gate.gateReactions.mockImplementation(async (_a: unknown, _w: unknown, candidates: { name: string }[]) =>
       candidates.map((c) => ({ who: c.name, allow: true, channel: 'saw' as const, why: 'viu' })),
     );
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    const result = await orch.runTurn(state, new Map([['Darian', 'Darian avança até a porta']]));
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
 
-    expect(result.stepTrace).toHaveLength(2);
-    expect(result.npcOrder).toEqual(['Darian', 'Elara']);
-    expect(state.events).toHaveLength(2);
-    expect(state.events![0]).toMatchObject({ seq: 1, turn: 2, who: 'Darian', outcome: 'success', where: 'Pátio' });
-    expect(state.events![1]!.seq).toBe(2);
-    expect(result.diceRolls).toHaveLength(2);
-    expect(result.npcDecisions).toHaveLength(1);
-    // turnNumber++ é do GameService, não do orquestrador.
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian avança até a porta']]));
+
+    expect(started.text).toBe('Darian avança até a porta');
+    expect(started.diceRoll).toMatchObject({ characterName: 'Darian', roll: 11 });
+    expect(started.ordered.map((r) => r.who)).toEqual(['Elara']);
+    expect(started.denied).toEqual([]);
+    // Fases 1-3 não comitam: sem ledger, sem turnNumber++ (do GameService).
+    expect(state.events ?? []).toHaveLength(0);
     expect(state.turnNumber).toBe(2);
   });
 
-  it('caído/morto/self nunca são chamados (spotlight + gate)', async () => {
+  it('ator NPC resolve via reflexão (1 LLM) com reasoning', async () => {
+    const orch = makeOrchestrator(stubs);
+    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
+    const actor = state.characters.find((c) => c.name === 'Elara')!;
+
+    const started = await orch.startAction(state, actor, new Map());
+
+    expect(started.text).toBe('Elara age com cautela.');
+    expect(started.reasoning).toBe('r');
+    expect(stubs.cpuReflection.reflectAndAct).toHaveBeenCalledTimes(1);
+    expect(stubs.cpuReflection.reflectAndAct.mock.calls[0]![4]).toBeUndefined();
+  });
+
+  it('caído/morto/self nunca são candidatos do gate', async () => {
     const orch = makeOrchestrator(stubs);
     const state = makeState([
       { name: 'Darian', isPlayer: true },
       { name: 'Caido', vitality: 'caído' },
       { name: 'Morto', status: 'dead' },
     ]);
-    const result = await orch.runTurn(state, new Map([['Darian', 'olha ao redor']]));
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
 
-    expect(result.npcOrder).toEqual(['Darian']);
-    expect(result.stepTrace).toHaveLength(1);
-    const calledNames = stubs.cpuReflection.reflectAndAct.mock.calls.map((c) => (c[1] as { name: string }).name);
-    expect(calledNames).not.toContain('Caido');
-    expect(calledNames).not.toContain('Morto');
-    // self nunca é candidato do gate.
-    for (const call of stubs.gate.gateReactions.mock.calls) {
-      const candidates = call[2] as { name: string }[];
-      const actor = (call[0] as { actor: string }).actor;
-      expect(candidates.map((c) => c.name)).not.toContain(actor);
-    }
+    await orch.startAction(state, actor, new Map([['Darian', 'olha ao redor']]));
+
+    const candidates = stubs.gate.gateReactions.mock.calls[0]![2] as { name: string }[];
+    expect(candidates.map((c) => c.name)).toEqual([]);
   });
 
-  it('gate negando → NPC não é chamado para reagir (só age no próprio step)', async () => {
+  it('gate negando → allowed vazio (reação nunca chamada)', async () => {
     stubs.gate.gateReactions.mockResolvedValue([]);
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian sussurra']]));
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
 
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian sussurra']]));
+
+    expect(started.ordered).toEqual([]);
     const reactionCalls = stubs.cpuReflection.reflectAndAct.mock.calls.filter((c) => c[4] !== undefined);
     expect(reactionCalls).toHaveLength(0);
-    // Elara foi chamada 1x: só a própria ação.
-    const elaraCalls = stubs.cpuReflection.reflectAndAct.mock.calls.filter((c) => (c[1] as { name: string }).name === 'Elara');
-    expect(elaraCalls).toHaveLength(1);
   });
 
-  it('gate permitindo → reação carrega o channel; árbitro recebe as reações', async () => {
+  it('ordena por stake: alvo antes de mesmo-local', async () => {
+    stubs.gate.gateReactions.mockImplementation(async () => [
+      { who: 'Perto', allow: true, channel: 'saw' as const, why: 'viu' },
+      { who: 'Alvo', allow: true, channel: 'stake' as const, why: 'alvo' },
+    ]);
+    const orch = makeOrchestrator(stubs);
+    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Perto' }, { name: 'Alvo' }]);
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
+
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian ataca Alvo']]));
+
+    expect(started.ordered[0]!.who).toBe('Alvo');
+  });
+
+  it('godMode=20 só para o player; player sem ação hesita', async () => {
+    const orch = makeOrchestrator(stubs, { godMode: true });
+    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
+
+    const playerStarted = await orch.startAction(
+      state, state.characters.find((c) => c.name === 'Darian')!, new Map(),
+    );
+    expect(playerStarted.diceRoll).toMatchObject({ roll: 20, isGodMode: true });
+    expect(playerStarted.text).toContain('hesita');
+
+    const npcStarted = await orch.startAction(
+      state, state.characters.find((c) => c.name === 'Elara')!, new Map(),
+    );
+    expect(npcStarted.diceRoll.roll).toBe(11);
+  });
+});
+
+describe('TurnService — reação, árbitro e commit', () => {
+  let stubs: ReturnType<typeof makeStubs>;
+
+  beforeEach(() => {
+    stubs = makeStubs();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  });
+
+  it('1 ação + 1 reação gera 1 event + trace com queue', async () => {
     stubs.gate.gateReactions.mockImplementation(async (_a: unknown, _w: unknown, candidates: { name: string }[]) =>
       candidates.map((c) => ({ who: c.name, allow: true, channel: 'saw' as const, why: 'viu' })),
     );
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian grita']]));
 
-    const reactionCalls = stubs.cpuReflection.reflectAndAct.mock.calls.filter((c) => c[4] !== undefined);
-    expect(reactionCalls.length).toBeGreaterThan(0);
-    expect(reactionCalls[0]![4]).toMatchObject({ channel: 'saw' });
-    const darianArbiter = stubs.arbiter.arbitrateStep.mock.calls.find((c) => (c[1] as { actor: string }).actor === 'Darian');
-    expect((darianArbiter![2] as unknown[])).toHaveLength(1);
+    const { started, reactions, committed } = await runSingleTurn(orch, state, 'Darian', 'Darian avança até a porta');
+
+    expect(reactions).toHaveLength(1);
+    expect(state.events).toHaveLength(1);
+    expect(state.events![0]).toMatchObject({ seq: 1, turn: 2, who: 'Darian', outcome: 'success', where: 'Pátio' });
+    expect(committed.trace).toMatchObject({ step: 1, actor: 'Darian', spotlight: 'Darian' });
+    expect(committed.trace.queue.map((q) => q.who)).toEqual(['Darian', 'Elara']);
+    expect(started.diceRoll.roll).toBe(11);
+  });
+
+  it('reação carrega o channel; árbitro recebe as reações', async () => {
+    stubs.gate.gateReactions.mockImplementation(async (_a: unknown, _w: unknown, candidates: { name: string }[]) =>
+      candidates.map((c) => ({ who: c.name, allow: true, channel: 'heard' as const, why: 'ouviu' })),
+    );
+    const orch = makeOrchestrator(stubs);
+    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian grita']]));
+
+    const reactor = state.characters.find((c) => c.name === 'Elara')!;
+    const reaction = await orch.resolveReaction(state, reactor, [], started.action, 'heard');
+    expect(reaction.ignored).toBe(false);
+    expect(reaction.channel).toBe('heard');
+
+    const resolution = await orch.arbitrateAction(
+      state, started.action, [{ actor: 'Elara', text: reaction.action }], started.roll,
+    );
+    expect(stubs.arbiter.arbitrateStep).toHaveBeenCalledTimes(1);
+    expect(stubs.arbiter.arbitrateStep.mock.calls[0]![2]).toHaveLength(1);
+    expect(resolution.outcome).toBe('success');
   });
 
   it('reação `ignorar` é descartada antes do árbitro', async () => {
@@ -141,19 +274,33 @@ describe('TurnService.runTurn', () => {
       const candidates = _args[2] as { name: string }[];
       return candidates.map((c) => ({ who: c.name, allow: true, channel: 'saw' as const, why: 'viu' }));
     });
-    stubs.cpuReflection.reflectAndAct.mockImplementation(async (..._args: any[]) => {
-      const char = _args[1] as { name: string };
-      const ctx = _args[4] as unknown;
-      if (ctx) return { reasoning: 'r', updatedObjective: 'o', action: 'ignorar' };
-      return { reasoning: 'r', updatedObjective: 'o', action: `${char.name} age.` };
-    });
+    stubs.cpuReflection.reflectAndAct.mockResolvedValue({ reasoning: 'r', updatedObjective: 'o', action: 'ignorar' });
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian grita']]));
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian grita']]));
 
-    for (const call of stubs.arbiter.arbitrateStep.mock.calls) {
-      expect(call[2] as unknown[]).toEqual([]);
-    }
+    const reactor = state.characters.find((c) => c.name === 'Elara')!;
+    const reaction = await orch.resolveReaction(state, reactor, [], started.action, 'saw');
+    expect(reaction.ignored).toBe(true);
+
+    await orch.arbitrateAction(state, started.action, [], started.roll);
+    expect(stubs.arbiter.arbitrateStep.mock.calls[0]![2]).toEqual([]);
+  });
+
+  it('falha do LLM na reação ⇒ reator ignorado sem quebrar o turno', async () => {
+    stubs.gate.gateReactions.mockImplementation(async (_a: unknown, _w: unknown, candidates: { name: string }[]) =>
+      candidates.map((c) => ({ who: c.name, allow: true, channel: 'saw' as const, why: 'viu' })),
+    );
+    stubs.cpuReflection.reflectAndAct.mockRejectedValue(new Error('LLM fora do ar'));
+    const orch = makeOrchestrator(stubs);
+    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian acena']]));
+
+    const reactor = state.characters.find((c) => c.name === 'Elara')!;
+    const reaction = await orch.resolveReaction(state, reactor, [], started.action, 'saw');
+    expect(reaction.ignored).toBe(true);
   });
 
   it('sem teto: 5 permitidos → 5 reações, sem corte', async () => {
@@ -165,43 +312,24 @@ describe('TurnService.runTurn', () => {
       { name: 'Darian', isPlayer: true },
       { name: 'N1' }, { name: 'N2' }, { name: 'N3' }, { name: 'N4' }, { name: 'N5' },
     ]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian explode o barril']]));
+    const actor = state.characters.find((c) => c.name === 'Darian')!;
+    const started = await orch.startAction(state, actor, new Map([['Darian', 'Darian explode o barril']]));
+    expect(started.ordered).toHaveLength(5);
 
-    const darianArbiter = stubs.arbiter.arbitrateStep.mock.calls.find((c) => (c[1] as { actor: string }).actor === 'Darian');
-    expect((darianArbiter![2] as unknown[])).toHaveLength(5);
+    const reactions = started.ordered.map((r) => ({ actor: r.who, text: `${r.who} reage.` }));
+    await orch.arbitrateAction(state, started.action, reactions, started.roll);
+    expect(stubs.arbiter.arbitrateStep.mock.calls[0]![2]).toHaveLength(5);
   });
 
-  it('ordena por stake: alvo antes de mesmo-local', async () => {
-    stubs.gate.gateReactions.mockImplementation(async () => [
-      { who: 'Perto', allow: true, channel: 'saw' as const, why: 'viu' },
-      { who: 'Alvo', allow: true, channel: 'stake' as const, why: 'alvo' },
-    ]);
-    const orch = makeOrchestrator(stubs);
-    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Perto' }, { name: 'Alvo' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian ataca Alvo']]));
-
-    const reactionOrder = stubs.cpuReflection.reflectAndAct.mock.calls
-      .filter((c) => c[4] !== undefined)
-      .map((c) => (c[1] as { name: string }).name);
-    expect(reactionOrder[0]).toBe('Alvo');
-  });
-
-  it('godMode=20 só para o player; player sem ação hesita', async () => {
-    const orch = makeOrchestrator(stubs, { godMode: true });
-    const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    const result = await orch.runTurn(state, new Map());
-    expect(result.diceRolls.find((d) => d.characterName === 'Darian')).toMatchObject({ roll: 20, isGodMode: true });
-    expect(result.diceRolls.find((d) => d.characterName === 'Elara')!.roll).toBe(11);
-  });
-
-  it('pendingMoves atravessam o resultado sem aplicar local desconhecido', async () => {
+  it('pendingMoves sem local conhecido atravessam o commit sem teleportar', async () => {
     stubs.movement.extract.mockResolvedValue({ move: [{ who: 'Elara', to: 'Sótão' }] });
     stubs.narrator.narrateStep.mockResolvedValue('Elara sobe ao Sótão escuro.');
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    const result = await orch.runTurn(state, new Map([['Darian', 'olha']]));
+
+    const { committed } = await runSingleTurn(orch, state, 'Darian', 'olha');
     expect(state.characters.find((c) => c.name === 'Elara')!.currentLocation).toBe('Pátio');
-    expect(result.pendingMoves.length).toBeGreaterThan(0);
+    expect(committed.pendingMoves.length).toBeGreaterThan(0);
   });
 });
 
@@ -243,27 +371,11 @@ describe('TurnService — fechamento de cena', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
   });
 
-  function makeSceneStubs() {
-    return {
-      extractor: { extract: vi.fn(async (..._args: any[]): Promise<any> => ({ new_locations: [], new_npcs: [], dead: [], lost: [], healed: [] })) },
-      memory: { consolidateFacts: vi.fn(async (..._args: any[]): Promise<any> => ({ facts: ['fato novo'], threads: [] })) },
-    };
-  }
-
-  function makeOrchestratorWithScene(current: ReturnType<typeof makeStubs>, scene: { extractor: unknown; memory: unknown }) {
-    return new TurnService(
-      current.arbiter as any, current.gate as any, current.narrator as any,
-      current.inventory as any, current.movement as any, current.conditions as any,
-      current.management, current.cpuReflection as any,
-      { godMode: false } as any, undefined, scene as any,
-    );
-  }
-
   it('sem cena: sem factSheet, sem vitalidade', async () => {
     stubs.arbiter.arbitrateStep.mockResolvedValue({ outcome: 'success', violent: true, reason: 'golpe', hit: ['Elara'] });
     const orch = makeOrchestrator(stubs);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian ataca Elara']]));
+    await runSingleTurn(orch, state, 'Darian', 'Darian ataca Elara');
     expect(state.factSheet).toBeUndefined();
     expect(state.characters.find((c) => c.name === 'Elara')!.vitality ?? 'ileso').toBe('ileso');
   });
@@ -271,9 +383,9 @@ describe('TurnService — fechamento de cena', () => {
   it('com cena: vitalidade do hit + consolidateFacts + factSheet', async () => {
     stubs.arbiter.arbitrateStep.mockResolvedValue({ outcome: 'success', violent: true, reason: 'golpe', hit: ['Elara'] });
     const scene = makeSceneStubs();
-    const orch = makeOrchestratorWithScene(stubs, scene);
+    const orch = makeOrchestrator(stubs, {}, scene);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian ataca Elara']]));
+    await runSingleTurn(orch, state, 'Darian', 'Darian ataca Elara');
 
     expect(scene.extractor.extract).toHaveBeenCalledTimes(1);
     expect(state.characters.find((c) => c.name === 'Elara')!.vitality).toBe('ferido');
@@ -283,16 +395,11 @@ describe('TurnService — fechamento de cena', () => {
   });
 
   it('failure violenta só aplica auto-dano (ator no próprio hit)', async () => {
-    stubs.arbiter.arbitrateStep.mockImplementation(async (..._args: any[]) => {
-      const action = _args[1] as StepAction;
-      return action.actor === 'Darian'
-        ? { outcome: 'failure', violent: true, reason: 'caiu do muro', hit: ['Darian', 'Elara'] }
-        : { outcome: 'success', violent: false, reason: 'ok', hit: [] };
-    });
+    stubs.arbiter.arbitrateStep.mockResolvedValue({ outcome: 'failure', violent: true, reason: 'caiu do muro', hit: ['Darian', 'Elara'] });
     const scene = makeSceneStubs();
-    const orch = makeOrchestratorWithScene(stubs, scene);
+    const orch = makeOrchestrator(stubs, {}, scene);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    await orch.runTurn(state, new Map([['Darian', 'Darian escala o muro']]));
+    await runSingleTurn(orch, state, 'Darian', 'Darian escala o muro');
 
     expect(state.characters.find((c) => c.name === 'Darian')!.vitality).toBe('ferido');
     expect(state.characters.find((c) => c.name === 'Elara')!.vitality ?? 'ileso').toBe('ileso');
@@ -305,11 +412,11 @@ describe('TurnService — fechamento de cena', () => {
     scene.extractor.extract.mockResolvedValue({
       new_locations: [{ name: 'Sótão', desc: 'Escuro' }], new_npcs: [], dead: [], lost: [], healed: [],
     });
-    const orch = makeOrchestratorWithScene(stubs, scene);
+    const orch = makeOrchestrator(stubs, {}, scene);
     const state = makeState([{ name: 'Darian', isPlayer: true }, { name: 'Elara' }]);
-    const result = await orch.runTurn(state, new Map([['Darian', 'olha']]));
+    const { committed } = await runSingleTurn(orch, state, 'Darian', 'olha');
 
-    expect(result.pendingMoves).toEqual([]);
+    expect(committed.pendingMoves).toEqual([]);
     expect(state.characters.find((c) => c.name === 'Elara')!.currentLocation).toBe('Sótão');
   });
 });

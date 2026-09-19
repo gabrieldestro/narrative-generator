@@ -28,6 +28,8 @@ function makeTurnResult(sessionId: string): TurnResponse {
     updatedState: makeState(),
     npcDecisions: [{ characterName: 'Elara', action: 'a', reasoning: 'r', success: true }],
     diceRolls: [{ characterName: 'Darian', roll: 11 }],
+    nextActor: 'Elara',
+    awaitingPlayer: false,
     stepTrace: [
       {
         step: 1,

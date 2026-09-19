@@ -11,7 +11,8 @@ export type ActionIntent = 'curious' | 'aggressive' | 'cautious' | 'friendly' | 
 export interface PlayerActionPayload {
   actionType?: ActionType;
   actionIntent?: ActionIntent;
-  playerText: string;
+  /** Ausente ⇒ avanço de NPC pela rotação (jogador na vez ⇒ 409). */
+  playerText?: string;
   characterName?: string;
   settings?: Partial<GameSettings>;
 }
@@ -65,9 +66,69 @@ export interface TurnResponse {
   updatedState: GameState;
   npcDecisions?: NpcDecision[];
   diceRolls?: DiceRoll[];
-  // Fila + trace do turno.
-  npcOrder?: string[];
+  // Trace do turno (1 ação + reações).
   stepTrace?: TurnStep[];
+  /** Próximo ator pela rotação; `awaitingPlayer` ⇒ front aguarda input. */
+  nextActor: string | null;
+  awaitingPlayer: boolean;
+}
+
+export type TurnPhase = 'awaiting_reactions' | 'awaiting_arbiter' | 'awaiting_narrate' | 'awaiting_finish';
+
+// Turno = 1 ação + reações, em fases sequenciais com visual progressivo:
+// `start` (ação+dado+gate) → N× `react` (1 reator) → `arbiter` → `narrate` → `finish`.
+export interface StartTurnResponse {
+  sessionId: string;
+  turnId: string;
+  turnNumber: number;
+  actor: string;
+  actionText: string;
+  diceRoll: DiceRoll;
+  allowed: { who: string; channel: string }[];
+  denied: { who: string; why: string }[];
+  reactionsPending: number;
+  sceneDescription?: string;
+}
+
+export interface ReactTurnResponse {
+  sessionId: string;
+  turnId: string;
+  who: string;
+  action?: string;
+  ignored: boolean;
+  channel: string;
+  reactionsPending: number;
+  reactionsDone: boolean;
+}
+
+export interface ArbiterTurnResponse {
+  sessionId: string;
+  turnId: string;
+  outcome: 'success' | 'partial' | 'failure';
+  reason: string;
+  violent: boolean;
+  resolutionLine: string;
+}
+
+export interface TurnNarrateResponse {
+  sessionId: string;
+  turnId: string;
+  narration: string;
+}
+
+export interface TurnStatusResponse {
+  sessionId: string;
+  turnId: string;
+  status: string;
+  phase: TurnPhase;
+  actor: string;
+  actionText: string;
+  diceRoll: DiceRoll;
+  reactionsPending: number;
+  reacted: { who: string; action: string }[];
+  ignored: string[];
+  resolutionLine?: string;
+  narration?: string;
 }
 
 export interface GameStateResponse {

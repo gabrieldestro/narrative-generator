@@ -104,27 +104,24 @@ describe('GameStateService.setTurnResult — stepTrace', () => {
   });
 
   function makeTrace() {
+    // 1 turno = 1 ação + reações: trace de bloco único.
     return [
       {
         step: 1, actor: 'Darian', actorWhere: 'Pátio', spotlight: 'Darian',
         queue: [
           { who: 'Darian', where: 'Pátio', status: 'done' as const },
           { who: 'Elara', where: 'Porão', status: 'done' as const },
-        ],
-        gate: { allowed: [{ who: 'Elara', channel: 'heard' as const }], denied: [] },
-      },
-      {
-        step: 2, actor: 'Elara', actorWhere: 'Porão', spotlight: 'Elara',
-        queue: [
-          { who: 'Elara', where: 'Porão', status: 'done' as const },
           { who: 'Vulto', where: 'Sótão', status: 'denied' as const },
         ],
-        gate: { allowed: [], denied: [{ who: 'Vulto', why: 'sótão distante' }] },
+        gate: {
+          allowed: [{ who: 'Elara', channel: 'heard' as const }],
+          denied: [{ who: 'Vulto', why: 'sótão distante' }],
+        },
       },
     ];
   }
 
-  it('armazena o trace e seleciona o último step por default', () => {
+  it('armazena o trace do turno (ator + reatores)', () => {
     const state = {
       narrativeStyle: 'F', writingStyle: 'E', worldContext: 'P.',
       turnNumber: 3, history: [], characters: [],
@@ -132,14 +129,14 @@ describe('GameStateService.setTurnResult — stepTrace', () => {
     service.setTurnResult({
       sessionId: 's-1', narrative: 'N.', logicalResolution: 'L.',
       updatedState: state, stepTrace: makeTrace(),
+      nextActor: 'Elara', awaitingPlayer: false,
     });
     expect(service.hasTrace()).toBe(true);
-    expect(service.selectedStepIndex()).toBe(1);
-    expect(service.selectedStep()?.actor).toBe('Elara');
-    expect(service.turnQueue().map(q => q.who)).toEqual(['Elara', 'Vulto']);
+    expect(service.selectedStep()?.actor).toBe('Darian');
+    expect(service.turnQueue().map(q => q.who)).toEqual(['Darian', 'Elara', 'Vulto']);
   });
 
-  it('selectStep troca o bloco; nextInOrder é o primeiro após o foco', () => {
+  it('nextInOrder é o primeiro após o foco', () => {
     const state = {
       narrativeStyle: 'F', writingStyle: 'E', worldContext: 'P.',
       turnNumber: 3, history: [], characters: [],
@@ -147,13 +144,12 @@ describe('GameStateService.setTurnResult — stepTrace', () => {
     service.setTurnResult({
       sessionId: 's-1', narrative: 'N.', logicalResolution: 'L.',
       updatedState: state, stepTrace: makeTrace(),
+      nextActor: 'Elara', awaitingPlayer: false,
     });
-    service.selectStep(0);
-    expect(service.selectedStep()?.actor).toBe('Darian');
     expect(service.nextInOrder()).toBe('Elara');
     // clamp fora da faixa
     service.selectStep(99);
-    expect(service.selectedStepIndex()).toBe(1);
+    expect(service.selectedStepIndex()).toBe(0);
   });
 
   it('sem trace: fila vazia, sem próximo, ledger vazio', () => {
@@ -161,6 +157,50 @@ describe('GameStateService.setTurnResult — stepTrace', () => {
     expect(service.turnQueue()).toEqual([]);
     expect(service.nextInOrder()).toBeNull();
     expect(service.eventsLedger()).toEqual([]);
+  });
+
+  it('fases: begin → reaction → arbiter → narration atualizam parciais ao vivo', () => {
+    const state = {
+      narrativeStyle: 'F', writingStyle: 'E', worldContext: 'P.',
+      turnNumber: 3, history: [], characters: [],
+    };
+    service.setGameState('s-1', state);
+
+    service.beginPhasedTurn({
+      sessionId: 's-1', turnId: 't-1', turnNumber: 3,
+      actor: 'Zé', actionText: 'Zé avança.', diceRoll: { characterName: 'Zé', roll: 15 },
+      allowed: [{ who: 'João', channel: 'saw' }], denied: [], reactionsPending: 1,
+    });
+    expect(service.activeTurnId()).toBe('t-1');
+    expect(service.turnActor()).toBe('Zé');
+    expect(service.turnPhase()).toBe('awaiting_reactions');
+    expect(service.diceRolls().length).toBe(1);
+    expect(service.pendingMessages().length).toBe(1);
+
+    service.applyReaction({
+      sessionId: 's-1', turnId: 't-1', who: 'João', action: 'João acena.',
+      ignored: false, channel: 'saw', reactionsPending: 0, reactionsDone: true,
+    }, 2, 4);
+    expect(service.turnPhase()).toBe('awaiting_arbiter');
+    expect(service.pendingMessages().length).toBe(2);
+
+    service.applyArbiter({
+      sessionId: 's-1', turnId: 't-1', outcome: 'success', reason: 'ok',
+      violent: false, resolutionLine: 'Zé tentou avançar -> Sucesso porque ok',
+    }, 3, 4);
+    expect(service.arbiterResolution()).toContain('Sucesso');
+
+    service.applyNarration('Zé cruza o pátio.', 4, 4);
+    expect(service.pendingMessages().length).toBe(4);
+
+    service.setTurnResult({
+      sessionId: 's-2', narrative: 'Final.', logicalResolution: 'L.',
+      updatedState: state, npcDecisions: [], diceRolls: [],
+      nextActor: 'João', awaitingPlayer: false,
+    });
+    expect(service.activeTurnId()).toBeNull();
+    expect(service.turnProgress()).toBeNull();
+    expect(service.pendingMessages()).toEqual([]);
   });
 
   it('eventsLedger expõe os events do estado (separado da prosa)', () => {

@@ -26,7 +26,8 @@ function makeTurnResponse(): TurnResponse {
     updatedState: { ...makeState(), turnNumber: 3 },
     npcDecisions: [],
     diceRolls: [],
-    npcOrder: ['Darian', 'Elara'],
+    nextActor: 'Elara',
+    awaitingPlayer: false,
     stepTrace: [
       {
         step: 1,
@@ -35,20 +36,13 @@ function makeTurnResponse(): TurnResponse {
         queue: [
           { who: 'Darian', where: 'Pátio', status: 'done' },
           { who: 'Elara', where: 'Porão', status: 'done' },
-        ],
-        spotlight: 'Darian',
-        gate: { allowed: [{ who: 'Elara', channel: 'heard' }], denied: [] },
-      },
-      {
-        step: 2,
-        actor: 'Elara',
-        actorWhere: 'Porão',
-        queue: [
-          { who: 'Elara', where: 'Porão', status: 'done' },
           { who: 'Vulto', where: 'Sótão', status: 'denied' },
         ],
-        spotlight: 'Elara',
-        gate: { allowed: [], denied: [{ who: 'Vulto', why: 'sótão distante' }] },
+        spotlight: 'Darian',
+        gate: {
+          allowed: [{ who: 'Elara', channel: 'heard' }],
+          denied: [{ who: 'Vulto', why: 'sótão distante' }],
+        },
       },
     ],
   };
@@ -73,10 +67,11 @@ describe('TurnQueueComponent', () => {
     return fixture.nativeElement.textContent as string;
   }
 
-  it('renderiza chips na ordem do bloco selecionado (default = último)', () => {
+  it('renderiza chips do turno (ator + reatores + negados)', () => {
     service.setTurnResult(makeTurnResponse());
     fixture.detectChanges();
     const body = text();
+    expect(body).toContain('Darian');
     expect(body).toContain('Elara');
     expect(body).toContain('Vulto');
     expect(body).toContain('não percebeu');
@@ -84,14 +79,12 @@ describe('TurnQueueComponent', () => {
 
   it('mostra "Próximo na ordem: X" (primeiro após o foco)', () => {
     service.setTurnResult(makeTurnResponse());
-    service.selectStep(0);
     fixture.detectChanges();
     expect(text()).toContain('Próximo na ordem: Elara');
   });
 
   it('negado aparece com o `why` (tooltip) e sem ação', () => {
     service.setTurnResult(makeTurnResponse());
-    service.selectStep(1);
     fixture.detectChanges();
     const denied: HTMLElement = fixture.nativeElement.querySelector('.turn-queue__chip--denied');
     expect(denied).withContext('chip denied renderizado').not.toBeNull();
@@ -113,15 +106,15 @@ describe('TurnQueueComponent', () => {
     expect(body).not.toContain('Próximo na ordem');
   });
 
-  it('seletor de passo troca o bloco (strip com 2 steps)', () => {
+  it('exibe 1 bloco por turno (1 ação + reações, sem seletor)', () => {
     service.setTurnResult(makeTurnResponse());
     fixture.detectChanges();
     const buttons: NodeListOf<HTMLButtonElement> =
       fixture.nativeElement.querySelectorAll('.turn-queue__step-btn');
-    expect(buttons.length).toBe(2);
-    buttons[0]!.click();
-    fixture.detectChanges();
-    expect(service.selectedStepIndex()).toBe(0);
+    expect(buttons.length).toBe(0);
+    const chips: NodeListOf<HTMLElement> =
+      fixture.nativeElement.querySelectorAll('.turn-queue__chip');
+    expect(chips.length).toBe(3);
     expect(text()).toContain('(ouviu)');
   });
 });

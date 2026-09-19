@@ -89,7 +89,54 @@ describe('Fastify Game API', () => {
     expect(response.statusCode).toBe(400);
   });
 
-  it('POST /api/games/:sessionId/turn deve processar a ação do jogador com enricher de skills', async () => {
+  /**
+   * Executa 1 turno completo (1 ação + reações) pelas fases:
+   * start → react* → arbiter → narrate → finish.
+   */
+  async function runFullTurn(sessionId: string, payload: Record<string, unknown>) {
+    const startRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/start`,
+      payload,
+    });
+    expect(startRes.statusCode).toBe(201);
+    const started = JSON.parse(startRes.payload);
+    expect(started).toHaveProperty('turnId');
+    expect(started).toHaveProperty('actor');
+    expect(started).toHaveProperty('diceRoll');
+
+    let pending = started.reactionsPending as number;
+    while (pending > 0) {
+      const reactRes = await app.inject({
+        method: 'POST',
+        url: `/api/games/${sessionId}/turn/${started.turnId}/react`,
+      });
+      expect(reactRes.statusCode).toBe(200);
+      pending = JSON.parse(reactRes.payload).reactionsPending as number;
+    }
+
+    const arbiterRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/${started.turnId}/arbiter`,
+    });
+    expect(arbiterRes.statusCode).toBe(200);
+    expect(JSON.parse(arbiterRes.payload)).toHaveProperty('resolutionLine');
+
+    const narrateRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/${started.turnId}/narrate`,
+    });
+    expect(narrateRes.statusCode).toBe(200);
+    expect(JSON.parse(narrateRes.payload)).toHaveProperty('narration');
+
+    const finishRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/${started.turnId}/finish`,
+    });
+    return { finishRes, started };
+  }
+
+  it('POST /api/games/:sessionId/turn/start+react+arbiter+narrate+finish deve processar a ação do jogador com enricher de skills', async () => {
     // 1. Cria um jogo primeiro
     const createRes = await app.inject({
       method: 'POST',
@@ -101,22 +148,94 @@ describe('Fastify Game API', () => {
     });
     const { sessionId } = JSON.parse(createRes.payload);
 
-    // 2. Executa um turno com actionType 'speak' e actionIntent 'intimidating'
-    const turnRes = await app.inject({
-      method: 'POST',
-      url: `/api/games/${sessionId}/turn`,
-      payload: {
-        actionType: 'speak',
-        actionIntent: 'intimidating',
-        playerText: 'Onde fica a saída?',
-      },
+    // 2. Turno por fases com actionType 'speak' e actionIntent 'intimidating'
+    const { finishRes: turnRes, started } = await runFullTurn(sessionId, {
+      actionType: 'speak',
+      actionIntent: 'intimidating',
+      playerText: 'Onde fica a saída?',
     });
 
     expect(turnRes.statusCode).toBe(200);
+    expect(started.actor).toBe('Darian');
     const turnBody = JSON.parse(turnRes.payload);
     expect(turnBody).toHaveProperty('narrative');
     expect(turnBody).toHaveProperty('logicalResolution');
     expect(turnBody).toHaveProperty('updatedState');
+    expect(turnBody).toHaveProperty('nextActor');
+  });
+
+  it('GET /turn/:turnId/status expõe a fase; cada fase devolve visual imediato', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: { mode: 'template', templateName: 'fantasia_masmorra.json' },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    const startRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/start`,
+      payload: { playerText: 'Olho ao redor.' },
+    });
+    expect(startRes.statusCode).toBe(201);
+    const started = JSON.parse(startRes.payload);
+    const { turnId } = started;
+    expect(started.diceRoll).toHaveProperty('roll');
+
+    const statusRes = await app.inject({
+      method: 'GET',
+      url: `/api/games/${sessionId}/turn/${turnId}/status`,
+    });
+    expect(statusRes.statusCode).toBe(200);
+    const status = JSON.parse(statusRes.payload);
+    expect(status.actor).toBe('Darian');
+    expect(status.phase).toMatch(/awaiting_reactions|awaiting_arbiter/);
+
+    // Segundo start sem finish → 409 TURN_IN_PROGRESS
+    const conflictRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/start`,
+      payload: { playerText: 'Outra ação.' },
+    });
+    expect(conflictRes.statusCode).toBe(409);
+    expect(JSON.parse(conflictRes.payload).code).toBe('TURN_IN_PROGRESS');
+  });
+
+  it('start sem playerText com jogador na vez → 409 AWAITING_PLAYER; rotação Zé/João', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/games/new',
+      payload: { mode: 'template', templateName: 'fantasia_masmorra.json' },
+    });
+    const { sessionId } = JSON.parse(createRes.payload);
+
+    // Vez de Darian (jogador) sem ação ⇒ 409 com o próximo ator.
+    const waitingRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${sessionId}/turn/start`,
+      payload: {},
+    });
+    expect(waitingRes.statusCode).toBe(409);
+    const waiting = JSON.parse(waitingRes.payload);
+    expect(waiting.code).toBe('AWAITING_PLAYER');
+    expect(waiting.nextActor).toBe('Darian');
+
+    // Turno 1: Darian age.
+    const { finishRes: t1Res } = await runFullTurn(sessionId, { playerText: 'Avanço com cuidado.' });
+    expect(t1Res.statusCode).toBe(200);
+    const t1 = JSON.parse(t1Res.payload);
+    expect(t1.awaitingPlayer).toBe(false);
+    expect(t1.nextActor).toBe('Elara');
+    const t1Session = t1.sessionId as string;
+
+    // Turno 2: Elara age sozinha (NPC avança sem playerText).
+    const npcStartRes = await app.inject({
+      method: 'POST',
+      url: `/api/games/${t1Session}/turn/start`,
+      payload: {},
+    });
+    expect(npcStartRes.statusCode).toBe(201);
+    expect(JSON.parse(npcStartRes.payload).actor).toBe('Elara');
   });
 
   it('POST /api/games/:sessionId/observe deve detalhar a cena sem avançar o turno', async () => {
@@ -360,11 +479,7 @@ describe('Fastify Game API', () => {
     });
     const { sessionId: parentId } = JSON.parse(createRes.payload);
 
-    const turnRes = await app.inject({
-      method: 'POST',
-      url: `/api/games/${parentId}/turn`,
-      payload: { playerText: 'Avanço pela masmorra com cuidado.' },
-    });
+    const { finishRes: turnRes } = await runFullTurn(parentId, { playerText: 'Avanço pela masmorra com cuidado.' });
     expect(turnRes.statusCode).toBe(200);
     const { sessionId: newCheckpointId } = JSON.parse(turnRes.payload);
 
@@ -425,19 +540,11 @@ describe('Fastify Game API', () => {
     const { sessionId: rootId } = JSON.parse(createRes.payload);
 
     // Fork 1 a partir da raiz
-    const fork1Res = await app.inject({
-      method: 'POST',
-      url: `/api/games/${rootId}/turn`,
-      payload: { playerText: 'Vou para a esquerda.' },
-    });
+    const { finishRes: fork1Res } = await runFullTurn(rootId, { playerText: 'Vou para a esquerda.' });
     const { sessionId: fork1Id } = JSON.parse(fork1Res.payload);
 
     // Fork 2 a partir da mesma raiz
-    const fork2Res = await app.inject({
-      method: 'POST',
-      url: `/api/games/${rootId}/turn`,
-      payload: { playerText: 'Vou para a direita.' },
-    });
+    const { finishRes: fork2Res } = await runFullTurn(rootId, { playerText: 'Vou para a direita.' });
     const { sessionId: fork2Id } = JSON.parse(fork2Res.payload);
 
     const f1Save = JSON.parse((await app.inject({ method: 'GET', url: `/api/saves/${fork1Id}` })).payload);
@@ -459,11 +566,7 @@ describe('Fastify Game API', () => {
     });
     const { sessionId: rootId } = JSON.parse(createRes.payload);
 
-    const turnRes = await app.inject({
-      method: 'POST',
-      url: `/api/games/${rootId}/turn`,
-      payload: { playerText: 'Avanço.' },
-    });
+    const { finishRes: turnRes } = await runFullTurn(rootId, { playerText: 'Avanço.' });
     const { sessionId: t2Id } = JSON.parse(turnRes.payload);
 
     const pruneRes = await app.inject({

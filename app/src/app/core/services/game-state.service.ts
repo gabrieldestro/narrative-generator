@@ -4,8 +4,19 @@ import type { Character } from '../models/character.model';
 import type { Location } from '../models/location.model';
 import type { WorldConcept } from '../models/world-concept.model';
 import type { NpcDecision, DiceRoll } from '../models/turn-result.model';
-import type { TurnResponse, ObserveResponse, NarrateResponse } from '../models/api-payloads.model';
+import type { TurnResponse, ObserveResponse, NarrateResponse, StartTurnResponse, ReactTurnResponse, ArbiterTurnResponse, TurnPhase } from '../models/api-payloads.model';
 import type { ActionEvent, TurnStep } from '../models/turn-step.model';
+
+export interface TurnProgress {
+  label: string;
+  done: number;
+  total: number;
+}
+
+export interface PendingMessage {
+  type: 'action' | 'reaction' | 'resolution' | 'narrative';
+  text: string;
+}
 
 export interface AppError {
   message: string;
@@ -49,8 +60,15 @@ export class GameStateService {
   readonly turnDebugHistory = signal<TurnDebugEntry[]>([]);
   readonly hasProcessedFirstTurn = signal<boolean>(false);
 
-  // Fila de turno a partir do `stepTrace` da resposta: renderiza após
-  // o turno concluir; durante o processamento, `isLoading` mostra esqueleto.
+  // Turno = 1 ação + reações: fase + mensagens parciais ao vivo,
+  // sem esperar o `finish`.
+  readonly activeTurnId = signal<string | null>(null);
+  readonly turnPhase = signal<TurnPhase | null>(null);
+  readonly turnActor = signal<string | null>(null);
+  readonly turnProgress = signal<TurnProgress | null>(null);
+  readonly pendingMessages = signal<PendingMessage[]>([]);
+
+  // Trace do turno (ator + reatores), fechado no `finish`.
   readonly stepTrace = signal<TurnStep[]>([]);
   readonly selectedStepIndex = signal<number>(0);
   readonly hasTrace = computed(() => this.stepTrace().length > 0);
@@ -78,6 +96,7 @@ export class GameStateService {
     this.hasProcessedFirstTurn.set(false);
     this.stepTrace.set([]);
     this.selectedStepIndex.set(0);
+    this.clearPhasedTurn();
   }
 
   // Restaura uma partida salva: aplica o estado completo (incl. history) sem tocar nos settings.
@@ -93,6 +112,55 @@ export class GameStateService {
     this.hasProcessedFirstTurn.set(false);
     this.stepTrace.set([]);
     this.selectedStepIndex.set(0);
+    this.clearPhasedTurn();
+  }
+
+  /** Fase `start`: ação + dado + fila de percepção, ao vivo. */
+  beginPhasedTurn(started: StartTurnResponse): void {
+    this.activeTurnId.set(started.turnId);
+    this.turnPhase.set(started.reactionsPending > 0 ? 'awaiting_reactions' : 'awaiting_arbiter');
+    this.turnActor.set(started.actor);
+    this.pendingMessages.set([
+      { type: 'action', text: `${started.actor} tenta: ${started.actionText} (d20: ${started.diceRoll.roll})` },
+    ]);
+    this.addDiceRoll(started.diceRoll);
+    this.stepTrace.set([]);
+    this.selectedStepIndex.set(0);
+    const total = started.reactionsPending + 3; // reações + árbitro + narração + commit
+    this.turnProgress.set({ label: `${started.actor} agiu`, done: 1, total });
+  }
+
+  /** Fase `react`: 1 reação resolvida, ao vivo. */
+  applyReaction(res: ReactTurnResponse, done: number, total: number): void {
+    if (!res.ignored && res.action) {
+      this.pendingMessages.update(m => [...m, { type: 'reaction', text: `${res.who} reage: ${res.action}` }]);
+    }
+    this.turnPhase.set(res.reactionsDone ? 'awaiting_arbiter' : 'awaiting_reactions');
+    this.turnProgress.set({ label: res.ignored ? `${res.who} ignorou` : `${res.who} reagiu`, done, total });
+  }
+
+  /** Fase `arbiter`: julgamento visível antes da prosa. */
+  applyArbiter(res: ArbiterTurnResponse, done: number, total: number): void {
+    this.arbiterResolution.set(res.resolutionLine);
+    this.pendingMessages.update(m => [...m, { type: 'resolution', text: res.resolutionLine }]);
+    this.turnPhase.set('awaiting_narrate');
+    this.turnProgress.set({ label: `Árbitro: ${res.outcome}`, done, total });
+  }
+
+  /** Fase `narrate`: prosa antes do commit. */
+  applyNarration(narration: string, done: number, total: number): void {
+    this.pendingMessages.update(m => [...m, { type: 'narrative', text: narration }]);
+    this.turnPhase.set('awaiting_finish');
+    const actor = this.turnActor() ?? '';
+    this.turnProgress.set({ label: actor ? `${actor} narrado` : 'Narrado', done, total });
+  }
+
+  clearPhasedTurn(): void {
+    this.activeTurnId.set(null);
+    this.turnPhase.set(null);
+    this.turnActor.set(null);
+    this.turnProgress.set(null);
+    this.pendingMessages.set([]);
   }
 
   setObservation(result: ObserveResponse): void {
@@ -137,6 +205,7 @@ export class GameStateService {
     this.stepTrace.set(result.stepTrace ?? []);
     this.selectedStepIndex.set(Math.max(0, (result.stepTrace ?? []).length - 1));
     this.error.set(null);
+    this.clearPhasedTurn();
     this.saveCurrentTurnToHistory(turnBeforeUpdate);
   }
 

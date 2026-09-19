@@ -15,7 +15,6 @@ import type {
   StepDeltas,
   StepResolution,
   MovementDelta,
-  NpcDecision,
 } from "../../domain/types.js";
 import type { NormalizedSceneDelta } from "../shared/selfHealing/JsonValidators.js";
 import type { IOutputWriter, ILogger } from "../../domain/ports.js";
@@ -72,20 +71,56 @@ export interface ISceneMemory {
   ): Promise<FactSheet>;
 }
 
-export interface TurnResult {
-  narrative: string;
-  logicalResolution: string;
-  npcDecisions: NpcDecision[];
-  diceRolls: DiceRoll[];
-  npcOrder: string[];
-  stepTrace: TurnStep[];
-  pendingMoves: { who: string; to: string }[];
+/**
+ * Turno = 1 ação de 1 ator + reações (`start → react* → arbiter →
+ * narrate → finish`), com `turnNumber++` por turno. Cada fase é 1 chamada
+ * HTTP para resposta visual progressiva; o ator gira por rotação
+ * automática no `GameService`.
+ */
+export interface ActorAction {
+  actor: Character;
+  actorWhere: string;
+  text: string;
+  reasoning: string;
+  roll: number;
+  diceRoll: DiceRoll;
+  action: StepAction;
 }
 
-export interface RunTurnOptions {
-  output?: IOutputWriter;
-  unexpectedEvent?: boolean;
+export interface GateOutcome {
+  allowed: AllowedRuling[];
+  denied: GateRuling[];
+  ordered: AllowedRuling[];
+}
+
+export interface ReactionResult {
+  who: string;
+  action: string;
+  reasoning: string;
+  ignored: boolean;
+  channel: Exclude<GateChannel, 'none'>;
+}
+
+export interface CommitTurnInput {
+  actorName: string;
+  actionText: string;
+  reactions: { who: string; action: string }[];
+  resolution: StepResolution;
+  actorWhere: string;
+  narration: string;
   sceneDescription?: string | undefined;
+  gate: {
+    allowed: { who: string; channel: Exclude<GateChannel, 'none'> }[];
+    denied: { who: string; why: string }[];
+  };
+  reacted: string[];
+  ignored: string[];
+}
+
+export interface CommitTurnResult {
+  pendingMoves: { who: string; to: string }[];
+  resolutionLine: string;
+  trace: TurnStep;
 }
 
 /** Ruling permitida: o gate garante `allow=true` ⇒ `channel != none`. */
@@ -96,9 +131,10 @@ function isAllowed(r: GateRuling): r is AllowedRuling {
 }
 
 /**
- * Orquestrador spotlight: 1 turno (`POST /turn`) = N steps, 1 por personagem
- * ativo; `turnNumber++` 1x por turno (fora, no `GameService`). Sem ordem fixa
- * de iniciativa, sem teto de reatores, sem gate por local em código.
+ * Orquestrador de ação única: 1 turno = 1 ator + reações
+ * (`start/react/arbiter/narrate/finish`); `turnNumber++` 1x por turno
+ * (fora, no `GameService`). Sem ordem fixa de iniciativa, sem teto de
+ * reatores, sem gate por local em código.
  */
 export class TurnService {
   private settings: GameSettings;
@@ -126,184 +162,172 @@ export class TurnService {
     this.settings = settings;
   }
 
-  async runTurn(
+  /** Personagens que podem agir/reagir: ativos (sem `status` = ativo). */
+  activeRoster(state: GameState): Character[] {
+    return state.characters.filter((c) => !c.status || c.status === 'active');
+  }
+
+  /**
+   * Fase `start`: resolve a ação do ator (texto do jogador ou reflexão
+   * do NPC via LLM), rola o d20 e roda o gate de percepção (LLM).
+   * Não muta o mundo — só o `currentObjective` do ator NPC na cópia.
+   */
+  async startAction(
     state: GameState,
+    actor: Character,
     playerActions: Map<string, string>,
-    opts: RunTurnOptions = {},
-  ): Promise<TurnResult> {
-    const output = opts.output;
-    const roster = state.characters.filter((c) => !c.status || c.status === 'active');
-    const spotlight = this.spotlightOrder(roster);
-    const npcOrder = spotlight.map((c) => c.name);
+    output?: IOutputWriter,
+  ): Promise<ActorAction & GateOutcome> {
+    const roster = this.activeRoster(state);
+    const actorWhere = actor.currentLocation ?? 'local desconhecido';
+    if (output) output.writeLine(`[Spotlight] ${actor.name} age...`);
 
-    const npcDecisions: NpcDecision[] = [];
-    const diceRolls: DiceRoll[] = [];
-    const stepTrace: TurnStep[] = [];
-    let pendingMoves: { who: string; to: string }[] = [];
-    const stepNarrations: string[] = [];
-    const resolutionEntries: { actor: string; text: string; outcome: StepResolution['outcome']; reason: string }[] = [];
+    const { text: actionText, reasoning } = await this.resolveActorAction(state, actor, playerActions, [], output);
+    const diceRoll = this.rollDice(actor);
+    const action: StepAction = {
+      actor: actor.name,
+      text: actionText,
+      target: this.inferTarget(actionText, actor.name, roster),
+      roll: diceRoll.roll,
+    };
+
+    const candidates = this.eligibleCandidates(roster, actor, actionText);
+    const rulings = await this.gate.gateReactions(action, actorWhere, candidates, state.turnNumber);
+    const allowed = rulings.filter(isAllowed);
+    const denied = rulings.filter((r) => !r.allow);
+    const ordered = this.orderReactors(state, actorWhere, allowed);
+
+    return {
+      actor, actorWhere, text: actionText, reasoning,
+      roll: diceRoll.roll, diceRoll, action,
+      allowed, denied, ordered,
+    };
+  }
+
+  /** d20: `godMode` ⇒ 20 para o jogador; demais rolam 1-20. */
+  rollDice(actor: Character): DiceRoll {
+    const isGodModeRoll = this.settings.godMode && actor.isPlayer === true;
+    const roll = isGodModeRoll ? 20 : Math.floor(Math.random() * 20) + 1;
+    return { characterName: actor.name, roll, isGodMode: isGodModeRoll };
+  }
+
+  /**
+   * Fase `react`: 1 reator por chamada, na ordem de stake.
+   * Falha do LLM ⇒ reator ignorado (segue sem ele); `ignorar` explícito
+   * também é descartado antes do árbitro (defesa em profundidade).
+   */
+  async resolveReaction(
+    state: GameState,
+    reactor: Character,
+    priorLines: string[],
+    action: StepAction,
+    channel: Exclude<GateChannel, 'none'>,
+    output?: IOutputWriter,
+  ): Promise<ReactionResult> {
+    try {
+      const decision = await this.cpuReflection.reflectAndAct(
+        state, reactor, output, [...priorLines],
+        { actionLine: `${action.actor} tenta: ${action.text}`, channel },
+      );
+      if (decision.action.trim().toLowerCase() === 'ignorar') {
+        return { who: reactor.name, action: decision.action, reasoning: decision.reasoning, ignored: true, channel };
+      }
+      return { who: reactor.name, action: decision.action, reasoning: decision.reasoning, ignored: false, channel };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn('[React] falha na reação, seguindo sem ela', { charName: reactor.name, error: msg });
+      return { who: reactor.name, action: '', reasoning: '', ignored: true, channel };
+    }
+  }
+
+  /** Fase `arbiter`: julga 1 ação + reações e aplica a regra do dado. */
+  async arbitrateAction(
+    state: GameState,
+    action: StepAction,
+    reactions: StepAction[],
+    roll: number | undefined,
+  ): Promise<StepResolution> {
+    const rawResolution = await this.arbiter.arbitrateStep(state, action, reactions);
+    return this.arbiter.applyDiceRule(rawResolution, roll);
+  }
+
+  /** Fase `narrate`: 1-2 parágrafos sobre 1 fato. */
+  async narrateAction(
+    state: GameState,
+    actionLine: string,
+    resolution: StepResolution,
+    unexpected: boolean,
+  ): Promise<string> {
+    return this.narrator.narrateStep(state, actionLine, resolution, { unexpected });
+  }
+
+  renderResolutionLine(actor: string, text: string, resolution: StepResolution): string {
+    return renderResolution([{ actor, text, outcome: resolution.outcome, reason: resolution.reason }]);
+  }
+
+  /**
+   * Fase `finish` (commit): scratchpad + ledger + extratores + vitalidade
+   * + cena + memória factual. Muta `state` (cópia de trabalho da saga).
+   */
+  async commitTurn(state: GameState, input: CommitTurnInput): Promise<CommitTurnResult> {
+    const roster = this.activeRoster(state);
+    const resolutionLine = this.renderResolutionLine(input.actorName, input.actionText, input.resolution);
+
+    // Vitalidade derivada do `hit` (§5): success+violent ⇒ hit piora;
+    // failure violenta ⇒ só auto-dano (ator no próprio `hit`); partial
+    // violenta ⇒ hit piora (houve consequência física).
     const violentHits: string[] = [];
-    const priorLines: string[] = [];
-
-    let step = 0;
-    for (const actor of spotlight) {
-      step++;
-      const actorWhere = actor.currentLocation ?? 'local desconhecido';
-      if (output) output.writeLine(`[Spotlight] ${actor.name} age (passo ${step}/${spotlight.length})...`);
-
-      // ── Ação única ──
-      const { text: actionText, reasoning } = await this.resolveActorAction(state, actor, playerActions, priorLines, output);
-      const isGodModeRoll = this.settings.godMode && actor.isPlayer === true;
-      const roll = isGodModeRoll ? 20 : Math.floor(Math.random() * 20) + 1;
-      diceRolls.push({ characterName: actor.name, roll, isGodMode: isGodModeRoll });
-      const action: StepAction = {
-        actor: actor.name,
-        text: actionText,
-        target: this.inferTarget(actionText, actor.name, roster),
-        roll,
-      };
-      priorLines.push(`${actor.name}: ${actionText}`);
-
-      // ── Elegibilidade + gate de percepção ──
-      const candidates = this.eligibleCandidates(roster, actor, actionText);
-      const rulings = await this.gate.gateReactions(action, actorWhere, candidates, state.turnNumber);
-      const allowed = rulings.filter(isAllowed);
-      const denied = rulings.filter((r) => !r.allow);
-      const ordered = this.orderReactors(state, actorWhere, allowed);
-
-      // ── Reações (sequencial por stake, com priorActions) ──
-      // Decisão armadilha (b): sequencial preserva a semântica anti-contradição
-      // de `CpuAgentPrompts` (priorActions ordenados); paralelo quebraria a ordem.
-      const reactions: StepAction[] = [];
-      const reacted = new Set<string>();
-      const ignored = new Set<string>();
-      for (const ruling of ordered) {
-        const char = roster.find((c) => c.name === ruling.who)!;
-        try {
-          const decision = await this.cpuReflection.reflectAndAct(
-            state, char, output, [...priorLines],
-            { actionLine: `${action.actor} tenta: ${action.text}`, channel: ruling.channel },
-          );
-          if (decision.action.trim().toLowerCase() === 'ignorar') {
-            ignored.add(char.name);
-            continue;
-          }
-          reactions.push({ actor: char.name, text: decision.action });
-          priorLines.push(`${char.name}: ${decision.action}`);
-          reacted.add(char.name);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          this.logger.warn('[Step] falha na reação, seguindo sem ela', { charName: char.name, error: msg });
-          ignored.add(char.name);
+    if (input.resolution.violent) {
+      if (input.resolution.outcome === 'failure') {
+        if (input.resolution.hit.some((n) => n.toLowerCase() === input.actorName.toLowerCase())) {
+          violentHits.push(input.actorName);
         }
-      }
-
-      // ── Árbitro do step + regra do dado ──
-      const rawResolution = await this.arbiter.arbitrateStep(state, action, reactions);
-      const resolution = this.arbiter.applyDiceRule(rawResolution, roll);
-      // Vitalidade derivada do `hit` (§5): success+violent ⇒ hit piora;
-      // failure violenta ⇒ só auto-dano (ator no próprio `hit`); partial
-      // violenta ⇒ hit piora (houve consequência física). Vai para
-      // `advanceVitality` no fechamento da cena (abaixo).
-      if (resolution.violent) {
-        if (resolution.outcome === 'failure') {
-          if (resolution.hit.some((n) => n.toLowerCase() === actor.name.toLowerCase())) {
-            violentHits.push(actor.name);
-          }
-        } else {
-          violentHits.push(...resolution.hit);
-        }
-      }
-
-      // ── Narração do step ──
-      const actionLine = `${actor.name} tenta: ${actionText} (d20: ${roll})`;
-      const stepNarration = await this.narrator.narrateStep(state, actionLine, resolution, {
-        unexpected: step === 1 && opts.unexpectedEvent === true,
-      });
-      stepNarrations.push(stepNarration);
-
-      // ── Commit: scratchpad + ledger + fusão ──
-      const resolutionLine = renderResolution([{ actor: actor.name, text: actionText, outcome: resolution.outcome, reason: resolution.reason }]);
-      resolutionEntries.push({ actor: actor.name, text: actionText, outcome: resolution.outcome, reason: resolution.reason });
-      if (!actor.isPlayer) {
-        this.cpuReflection.recordArbiterResult(actor, state.turnNumber, resolutionLine, actionText);
-      }
-      for (const reaction of reactions) {
-        const reactor = roster.find((c) => c.name === reaction.actor)!;
-        if (!reactor.isPlayer) {
-          this.cpuReflection.recordArbiterResult(
-            reactor, state.turnNumber,
-            renderResolution([{ actor: reaction.actor, text: reaction.text, outcome: resolution.outcome, reason: resolution.reason }]),
-            reaction.text,
-          );
-        }
-      }
-      this.commitEvent(state, actor.name, actionText, resolution, actorWhere);
-
-      const [inventoryDelta, movementDelta, conditionsDelta] = await Promise.all([
-        this.inventory.extract(state, stepNarration),
-        this.movement.extract(state, stepNarration),
-        this.conditions.extract(state, stepNarration, { violent: resolution.violent }),
-      ]);
-      const deltas: StepDeltas = { inventory: inventoryDelta, movement: movementDelta, conditions: conditionsDelta };
-      const merged = this.management.applyStepUpdates(state, stepNarration, deltas);
-      state.characters = merged.state.characters;
-      if (merged.state.locations !== undefined) state.locations = merged.state.locations;
-      if (merged.state.concepts !== undefined) state.concepts = merged.state.concepts;
-      pendingMoves.push(...merged.pendingMoves);
-      if (merged.pendingMoves.length > 0) {
-        this.logger.warn('[Step] moves pendentes', { moves: merged.pendingMoves });
-      }
-
-      // ── Trace do step ──
-      const queue: TurnStep['queue'] = [
-        { who: actor.name, where: actorWhere, status: 'done' },
-        ...ordered.map((r) => {
-          const c = roster.find((x) => x.name === r.who)!;
-          const where = c.currentLocation ?? 'local desconhecido';
-          if (reacted.has(r.who)) return { who: r.who, where, status: 'done' as const };
-          return { who: r.who, where, status: 'ignored' as const };
-        }),
-        ...denied.map((r) => {
-          const c = roster.find((x) => x.name === r.who);
-          return { who: r.who, where: c?.currentLocation ?? 'local desconhecido', status: 'denied' as const };
-        }),
-      ];
-      stepTrace.push({
-        step,
-        actor: actor.name,
-        actorWhere,
-        queue,
-        spotlight: actor.name,
-        gate: {
-          allowed: ordered.map((r) => ({ who: r.who, channel: r.channel })),
-          denied: denied.map((r) => ({ who: r.who, why: r.why })),
-        },
-      });
-
-      if (!actor.isPlayer) {
-        npcDecisions.push({
-          characterName: actor.name,
-          action: actionText,
-          reasoning,
-          success: resolution.outcome !== 'failure',
-        });
+      } else {
+        violentHits.push(...input.resolution.hit);
       }
     }
 
-    const body = stepNarrations.join('\n\n');
-    const narrative = opts.sceneDescription ? `${opts.sceneDescription}\n\n${body}` : body;
+    const actor = roster.find((c) => c.name === input.actorName);
+    if (actor && !actor.isPlayer) {
+      this.cpuReflection.recordArbiterResult(actor, state.turnNumber, resolutionLine, input.actionText);
+    }
+    for (const reaction of input.reactions) {
+      const reactor = roster.find((c) => c.name === reaction.who);
+      if (reactor && !reactor.isPlayer) {
+        this.cpuReflection.recordArbiterResult(
+          reactor, state.turnNumber,
+          this.renderResolutionLine(reaction.who, reaction.action, input.resolution),
+          reaction.action,
+        );
+      }
+    }
+    this.commitEvent(state, input.actorName, input.actionText, input.resolution, input.actorWhere);
 
-    // ── Fechamento da cena: 1x por turno ──
-    // Turno típico (2-6 steps) ≈ 1 cena; eventual contador de steps (3-5) é
-    // ajuste futuro. Sem `scene`: turno sem cena.
+    const [inventoryDelta, movementDelta, conditionsDelta] = await Promise.all([
+      this.inventory.extract(state, input.narration),
+      this.movement.extract(state, input.narration),
+      this.conditions.extract(state, input.narration, { violent: input.resolution.violent }),
+    ]);
+    const deltas: StepDeltas = { inventory: inventoryDelta, movement: movementDelta, conditions: conditionsDelta };
+    const merged = this.management.applyStepUpdates(state, input.narration, deltas);
+    state.characters = merged.state.characters;
+    if (merged.state.locations !== undefined) state.locations = merged.state.locations;
+    if (merged.state.concepts !== undefined) state.concepts = merged.state.concepts;
+    let pendingMoves = [...merged.pendingMoves];
+    if (merged.pendingMoves.length > 0) {
+      this.logger.warn('[Commit] moves pendentes', { moves: merged.pendingMoves });
+    }
+
+    // Cena + memória no fim do turno (ausente = turno sem cena).
     if (this.scene) {
       for (const name of new Set(violentHits.map((n) => n.toLowerCase()))) {
         const canonical = state.characters.find((c) => c.name.toLowerCase() === name)?.name ?? name;
         const next = this.management.advanceVitality(state, canonical, 'worse');
         state.characters = next.characters;
       }
-      const sceneNarration = opts.sceneDescription ? `${opts.sceneDescription}\n\n${body}` : body;
+      const sceneNarration = input.sceneDescription
+        ? `${input.sceneDescription}\n\n${input.narration}`
+        : input.narration;
       const sceneDelta = await this.scene.extractor.extract(state, sceneNarration);
       const mergedScene = this.management.applySceneUpdates(state, sceneNarration, sceneDelta);
       state.characters = mergedScene.characters;
@@ -318,21 +342,37 @@ export class TurnService {
       }
       const turnEvents = (state.events ?? []).filter((e) => e.turn === state.turnNumber);
       state.factSheet = await this.scene.memory.consolidateFacts(
-        state.factSheet, turnEvents, stepNarrations, state.turnNumber,
+        state.factSheet, turnEvents, [input.narration], state.turnNumber,
       );
     }
 
-    return {
-      narrative,
-      logicalResolution: resolutionEntries.map((e) =>
-        renderResolution([{ actor: e.actor, text: e.text, outcome: e.outcome, reason: e.reason }]),
-      ).join('\n'),
-      npcDecisions,
-      diceRolls,
-      npcOrder,
-      stepTrace,
-      pendingMoves,
+    const reactedSet = new Set(input.reacted.map((n) => n.toLowerCase()));
+    const queue: TurnStep['queue'] = [
+      { who: input.actorName, where: input.actorWhere, status: 'done' },
+      ...input.gate.allowed.map((r) => {
+        const c = roster.find((x) => x.name === r.who);
+        const where = c?.currentLocation ?? 'local desconhecido';
+        if (reactedSet.has(r.who.toLowerCase())) return { who: r.who, where, status: 'done' as const };
+        return { who: r.who, where, status: 'ignored' as const };
+      }),
+      ...input.gate.denied.map((r) => {
+        const c = roster.find((x) => x.name === r.who);
+        return { who: r.who, where: c?.currentLocation ?? 'local desconhecido', status: 'denied' as const };
+      }),
+    ];
+    const trace: TurnStep = {
+      step: 1,
+      actor: input.actorName,
+      actorWhere: input.actorWhere,
+      queue,
+      spotlight: input.actorName,
+      gate: {
+        allowed: input.gate.allowed.map((r) => ({ who: r.who, channel: r.channel })),
+        denied: input.gate.denied.map((r) => ({ who: r.who, why: r.why })),
+      },
     };
+
+    return { pendingMoves, resolutionLine, trace };
   }
 
   /** Spotlight rotativo cobrindo todos os ativos: players, depois NPCs (roster). */
@@ -444,12 +484,12 @@ export class TurnService {
     return state.characters.find((c) => c.name === name)?.currentLocation ?? 'local desconhecido';
   }
 
-  private async resolveActorAction(
+  async resolveActorAction(
     state: GameState,
     actor: Character,
     playerActions: Map<string, string>,
     priorLines: string[],
-    output?: IOutputWriter,
+    output: IOutputWriter | undefined,
   ): Promise<{ text: string; reasoning: string }> {
     if (actor.isPlayer === true) {
       return { text: playerActions.get(actor.name) ?? `${actor.name} hesita por um momento.`, reasoning: '' };
