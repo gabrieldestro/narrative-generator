@@ -34,10 +34,16 @@ export interface EnrichPayload {
   field: string;
   value: string;
   context?: WorldTemplate;
+  action?: 'enrich' | 'summarize';
 }
 
 export interface EnrichResponse {
   enriched: string;
+}
+
+export interface SaveWorldResponse {
+  id: string;
+  template: WorldTemplate;
 }
 
 export type CreateGamePayload = CreateGameTemplatePayload | CreateGameCustomPayload;

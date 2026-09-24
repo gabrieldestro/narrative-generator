@@ -56,4 +56,17 @@ export function registerSavesRoutes(fastify: FastifyInstance, controller: SavesC
       },
     },
   }, (req: any, reply) => controller.deleteSave(req, reply));
+
+  // Apaga a campanha inteira (todos os checkpoints do rootId)
+  fastify.delete('/api/saves/campaign/:rootId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['rootId'],
+        properties: {
+          rootId: { type: 'string' },
+        },
+      },
+    },
+  }, (req: any, reply) => controller.deleteCampaign(req, reply));
 }

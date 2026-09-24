@@ -52,6 +52,20 @@ export class SetupController {
     return reply.status(200).send(templates);
   }
 
+  /** Salva um cenário customizado como template reutilizável (Item 3). Não cria sessão. */
+  public async saveWorld(
+    req: FastifyRequest<{ Body: Partial<WorldTemplate> }>,
+    reply: FastifyReply,
+  ): Promise<void> {
+    const body = (req.body ?? {}) as Partial<WorldTemplate>;
+    if (!body.name?.trim() || !body.worldContext?.trim()) {
+      return reply.status(400).send({ error: "Os campos 'name' e 'worldContext' são obrigatórios." });
+    }
+    const { id, template } = await this.worldRepo.save(body);
+    this.logger.info('Template custom salvo', { id, name: template.name });
+    return reply.status(201).send({ id, template });
+  }
+
   public async createGame(
     req: FastifyRequest<{ Body: CreateGameRequestBody }>,
     reply: FastifyReply
@@ -59,6 +73,9 @@ export class SetupController {
     const { mode, templateName, customPrompt, world, settings } = req.body;
     let state: GameState;
     let title = '';
+    // Cenário custom estruturado: o grafo enviado pelo usuário é autoritativo.
+    // Não rodar extração automática sobre a narrativa de abertura (Item 2).
+    let preserveGraph = false;
 
     if (settings) {
       this.gameService.updateSettings(settings);
@@ -82,9 +99,9 @@ export class SetupController {
     } else if (mode === 'custom' && world) {
       state = this.sessionFactory.buildFromCustomWorld(world);
       title = world.name || state.narrativeStyle;
+      preserveGraph = true;
       this.logger.info('Jogo criado a partir de cenário customizado estruturado', { name: world.name });
-    } else if (mode === 'custom' && customPrompt) {
-      state = await this.sessionFactory.buildCustomScenario(customPrompt);
+    } else if (mode === 'custom' && customPrompt) {      state = await this.sessionFactory.buildCustomScenario(customPrompt);
       title = state.narrativeStyle;
       this.logger.info('Jogo criado a partir de cenário customizado (prompt legado)');
     } else {
@@ -93,16 +110,24 @@ export class SetupController {
       });
     }
 
-    // Gera a narrativa inicial via LLM
+    // Gera a narrativa inicial via LLM (só texto de abertura — não muta o estado)
     const initialNarrative = await this.llmService.generateInitialNarrative(state);
     state.history.push(`Narrativa Inicial: ${initialNarrative}`);
 
-    // Extrai localizações da narrativa inicial para o mapa
-    const stateWithUpdates = await this.worldService.applyAutomaticStateUpdates(state, initialNarrative);
-    if (stateWithUpdates.locations !== undefined) {
-      state.locations = stateWithUpdates.locations;
+    if (preserveGraph) {
+      // Grafo custom é fiel ao enviado: garante invariantes sem chamar a extração via LLM.
+      state.turnNumber = 1;
+      const playerChar = state.characters.find((c) => c.isPlayer);
+      state.lastSceneLocation = playerChar?.currentLocation ?? state.lastSceneLocation ?? 'Ponto de Partida';
+      this.logger.info('Grafo custom preservado — extração automática pulada', { title });
+    } else {
+      // Extrai localizações da narrativa inicial para o mapa
+      const stateWithUpdates = await this.worldService.applyAutomaticStateUpdates(state, initialNarrative);
+      if (stateWithUpdates.locations !== undefined) {
+        state.locations = stateWithUpdates.locations;
+      }
+      state.characters = stateWithUpdates.characters;
     }
-    state.characters = stateWithUpdates.characters;
 
     const sessionId = randomUUID();
     this.sessionRepo.saveSession(sessionId, state);

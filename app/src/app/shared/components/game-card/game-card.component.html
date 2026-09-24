@@ -7,6 +7,9 @@
     <mat-chip-set>
       <mat-chip class="game-card__chip">{{ world.narrativeStyle }}</mat-chip>
       <mat-chip class="game-card__chip">{{ world.writingStyle }}</mat-chip>
+      @if (isCustom) {
+        <mat-chip class="game-card__chip game-card__chip--custom">Custom</mat-chip>
+      }
     </mat-chip-set>
   </mat-card-content>
   <mat-card-actions>

@@ -244,6 +244,7 @@ export function initialNarrativeSystemPrompt(state: GameState): string {
     `Sua função é escrever a cena de abertura — envolvente, descritiva e dramática — seguindo estritamente a atmosfera, tom e clichês do gênero ${state.narrativeStyle} sob o estilo de escrita ${state.writingStyle}.`,
     `Adote fortemente o estilo de escrita '${state.writingStyle}' em seu vocabulário, ritmo e descrições.`,
     `Apresente o cenário e os personagens, mas não tome decisões por eles.`,
+    'Use APENAS os personagens, locais e conceitos fornecidos — não invente novos personagens, lugares ou facções.',
     'Não use mais que 500 tokens.',
   ].join('\n');
 }
@@ -578,6 +579,55 @@ export function enrichFieldHumanPrompt(
     '- Torne a descrição mais vívida e imersiva, coerente com o contexto do mundo.',
     '- Se o campo estiver vazio, gere uma descrição padrão adequada ao gênero/estilo.',
     '- Retorne APENAS o texto melhorado.',
+  ].join('\n');
+}
+
+// ── Summarize Field (botão "Resumir" do formulário de cenário custom) ──
+
+export function summarizeFieldSystemPrompt(): string {
+  return [
+    'Você é um assistente de criação de mundos para RPG narrativo.',
+    'Sua função é condensar um único campo de um formulário, preservando todos os fatos, nomes próprios e informações-chave.',
+    'Corte floreios, repetições e adjetivos redundantes, mantendo a intenção original.',
+    'Responda APENAS com o texto resumido, sem explicações, sem prefixos e sem aspas.',
+  ].join('\n');
+}
+
+export function summarizeFieldHumanPrompt(
+  field: string,
+  value: string,
+  context: {
+    narrativeStyle?: string | undefined;
+    writingStyle?: string | undefined;
+    worldContext?: string | undefined;
+    characters?: { name?: string | undefined; description?: string | undefined }[] | undefined;
+    locations?: { name?: string | undefined; description?: string | undefined }[] | undefined;
+    concepts?: { name?: string | undefined; type?: string | undefined; description?: string | undefined }[] | undefined;
+  },
+): string {
+  const ctxParts: string[] = [];
+  if (context.narrativeStyle) ctxParts.push(`Gênero: ${context.narrativeStyle}`);
+  if (context.writingStyle) ctxParts.push(`Estilo: ${context.writingStyle}`);
+  ctxParts.push(summaryOfField('Personagens', context.characters));
+  ctxParts.push(summaryOfField('Lugares', context.locations));
+  ctxParts.push(summaryOfField('Itens/Conceitos', context.concepts));
+  const contextStr = ctxParts.filter((p) => p && p.trim().length > 0).join('\n');
+
+  return [
+    `Campo a resumir: ${field}`,
+    '',
+    '--- Texto atual do campo ---',
+    value,
+    '',
+    '--- Contexto dos outros campos preenchidos ---',
+    contextStr || '(nenhum outro campo preenchido)',
+    '',
+    'Instruções:',
+    '- Condense o texto para 30-50% do tamanho original (ou no máximo 3-5 frases).',
+    '- Preserve todos os fatos, nomes próprios, relações e informações-chave.',
+    '- Corte floreios, repetições e detalhes redundantes.',
+    '- Mantenha o mesmo idioma do texto original.',
+    '- Retorne APENAS o texto resumido.',
   ].join('\n');
 }
 

@@ -1,3 +1,9 @@
+.enrich-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .enrich-btn {
   width: 36px;
   height: 36px;
@@ -7,4 +13,8 @@
   ::ng-deep .mat-progress-spinner circle {
     stroke: #b388ff;
   }
+}
+
+.enrich-btn--summarize {
+  color: #80cbc4;
 }

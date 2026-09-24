@@ -163,6 +163,22 @@ describe('CheckpointRepository', () => {
     expect(list[0]!.id).toBe('c2-t1');
   });
 
+  it('deleteByRootId deve apagar todos os checkpoints da campanha e nada de outras', async () => {
+    await store.save(makeBundle('c1-t1', { rootId: 'camp-1', updatedAt: '2026-01-01T10:00:00.000Z' }));
+    await store.save(makeBundle('c1-t2', { rootId: 'camp-1', updatedAt: '2026-01-01T11:00:00.000Z' }));
+    await store.save(makeBundle('c2-t1', { rootId: 'camp-2', updatedAt: '2026-01-02T08:00:00.000Z' }));
+
+    const deleted = await store.deleteByRootId('camp-1');
+    expect(deleted.sort()).toEqual(['c1-t1', 'c1-t2']);
+
+    // Nenhum checkpoint da campanha resta (o card não "volta" no F5)
+    expect(await store.listByRootId('camp-1')).toHaveLength(0);
+    expect(await store.listLatestPerRoot()).toHaveLength(1);
+
+    // camp-2 não foi afetada
+    expect(await store.get('c2-t1')).not.toBeNull();
+  });
+
   it('migrate deve preencher rootId, parentId, branchId, depth para saves legados', () => {
     const legacy = JSON.parse(JSON.stringify(makeBundle('legacy'))) as any;
     delete legacy.schemaVersion;

@@ -2,7 +2,8 @@
   background: linear-gradient(135deg, #101020 0%, #16162d 100%) !important;
   border: 1px solid rgba(137, 180, 250, 0.08) !important;
   border-radius: 16px !important;
-  cursor: pointer;
+  // Sem ação de clique no corpo do card (só os botões Jogar/Usar como Base agem).
+  cursor: default;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
   width: 100%;

@@ -7,7 +7,7 @@ import { EnrichService } from '../../../../core/services/enrich.service';
 describe('EnrichButtonComponent', () => {
   let fixture: ComponentFixture<EnrichButtonComponent>;
   let component: EnrichButtonComponent;
-  const enrichSpy = jasmine.createSpyObj<EnrichService>('EnrichService', ['enrichField']);
+  const enrichSpy = jasmine.createSpyObj<EnrichService>('EnrichService', ['enrichField', 'summarizeField']);
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -20,6 +20,7 @@ describe('EnrichButtonComponent', () => {
     fixture = TestBed.createComponent(EnrichButtonComponent);
     component = fixture.componentInstance;
     (enrichSpy.enrichField as jasmine.Spy).calls.reset();
+    (enrichSpy.summarizeField as jasmine.Spy).calls.reset();
   });
 
   it('emite o texto enriquecido ao clicar', () => {
@@ -56,5 +57,31 @@ describe('EnrichButtonComponent', () => {
     component.onEnrich();
     component.onEnrich(); // segundo clique ignorado (loading true)
     expect(enrichSpy.enrichField).toHaveBeenCalledTimes(1);
+  });
+
+  it('emite o texto resumido ao clicar em resumir', () => {
+    enrichSpy.summarizeField.and.returnValue(of({ enriched: 'texto curto' }));
+    component.field = 'Descrição';
+    component.value = 'texto longo para resumir';
+    component.getContext = () => null;
+    const emitted: string[] = [];
+    component.enriched.subscribe((v) => emitted.push(v));
+
+    component.onSummarize();
+
+    expect(enrichSpy.summarizeField).toHaveBeenCalled();
+    expect(emitted).toContain('texto curto');
+    expect(component.summarizing()).toBe(false);
+  });
+
+  it('não resume com campo vazio', () => {
+    component.field = 'x';
+    component.value = '   ';
+    component.getContext = () => null;
+
+    component.onSummarize();
+
+    expect(enrichSpy.summarizeField).not.toHaveBeenCalled();
+    expect(component.canSummarize).toBe(false);
   });
 });

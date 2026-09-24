@@ -26,4 +26,8 @@ export class GameCardComponent {
     event.stopPropagation();
     this.useAsBase.emit(this.world);
   }
+
+  get isCustom(): boolean {
+    return (this.world.id ?? '').startsWith('custom-');
+  }
 }

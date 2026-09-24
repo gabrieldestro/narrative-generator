@@ -55,6 +55,7 @@ describe('NewGameComponent (Continuar Aventuras)', () => {
     listSaves: jasmine.Spy;
     loadSave: jasmine.Spy;
     deleteSave: jasmine.Spy;
+    deleteCampaign: jasmine.Spy;
   };
   const routerMock = { navigate: jasmine.createSpy('navigate') };
 
@@ -65,6 +66,7 @@ describe('NewGameComponent (Continuar Aventuras)', () => {
       listSaves: jasmine.createSpy('listSaves').and.returnValue(of([])),
       loadSave: jasmine.createSpy('loadSave'),
       deleteSave: jasmine.createSpy('deleteSave').and.returnValue(of(undefined)),
+      deleteCampaign: jasmine.createSpy('deleteCampaign').and.returnValue(of({ deleted: 1, ids: ['s-1'] })),
     };
     routerMock.navigate.calls.reset();
 
@@ -139,7 +141,7 @@ describe('NewGameComponent (Continuar Aventuras)', () => {
     expect(settingsService.settings()).toEqual(settingsService.settings());
   });
 
-  it('deletar com confirmação deve chamar deleteSave e remover o card', () => {
+  it('deletar com confirmação deve chamar deleteCampaign e remover o card', () => {
     const summary = makeSummary('s-1');
     apiMock.listSaves.and.returnValue(of([summary]));
 
@@ -157,7 +159,7 @@ describe('NewGameComponent (Continuar Aventuras)', () => {
     ref.dismissWithAction();
     fixture.detectChanges();
 
-    expect(apiMock.deleteSave).toHaveBeenCalledWith('s-1');
+    expect(apiMock.deleteCampaign).toHaveBeenCalledWith('s-1');
     expect(component.saves()).toEqual([]);
   });
 

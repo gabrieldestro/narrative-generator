@@ -44,7 +44,7 @@ export class CustomScenarioPageComponent {
   }
 
   onCreateCustom(data: CustomScenarioData): void {
-    this.log.info('Criando jogo a partir de cenário customizado', { narrativeStyle: data.narrativeStyle, writingStyle: data.writingStyle });
+    this.log.info('Salvando cenário customizado como template', { narrativeStyle: data.narrativeStyle, writingStyle: data.writingStyle });
     this.isCreating.set(true);
     const world: WorldTemplate = {
       name: data.narrativeStyle || 'Cenário Customizado',
@@ -56,15 +56,17 @@ export class CustomScenarioPageComponent {
       locations: data.locations,
       concepts: data.concepts,
     };
-    this.api.createGame({ mode: 'custom', world }).subscribe({
+    this.api.saveWorld(world).subscribe({
       next: (res) => {
-        this.log.info('Jogo customizado criado com sucesso', { sessionId: res.sessionId });
-        this.router.navigate(['/game', res.sessionId]);
+        this.log.info('Template custom salvo com sucesso', { id: res.id });
+        this.isCreating.set(false);
+        this.snackBar.open('Template salvo!', 'Fechar', { duration: 3000 });
+        this.router.navigate(['/new-game']);
       },
       error: (err) => {
         this.isCreating.set(false);
-        this.log.error('Erro ao criar jogo (custom)', err);
-        this.snackBar.open('Erro ao criar jogo: ' + (err.message ?? 'Erro desconhecido'), 'Fechar', { duration: 5000 });
+        this.log.error('Erro ao salvar template (custom)', err);
+        this.snackBar.open('Erro ao salvar template: ' + (err.message ?? 'Erro desconhecido'), 'Fechar', { duration: 5000 });
       },
     });
   }

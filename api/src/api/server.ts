@@ -47,6 +47,9 @@ export async function buildApp(options: AppOptions = {}) {
 
   app.register(cors, {
     origin: true, // Permite conexões do frontend Angular local
+    // Inclui DELETE/PUT/PATCH: sem isso o preflight do navegador bloqueia
+    // o `DELETE /api/saves/:id` (front recebia "Falha ao excluir a partida").
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   app.register(sensible);

@@ -12,6 +12,7 @@ export function registerEnrichRoutes(fastify: FastifyInstance, enrichController:
           field: { type: 'string' },
           value: { type: 'string' },
           context: { type: 'object', additionalProperties: true },
+          action: { type: 'string', enum: ['enrich', 'summarize'] },
         },
       },
     },

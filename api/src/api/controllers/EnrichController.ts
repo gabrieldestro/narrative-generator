@@ -18,6 +18,7 @@ export interface EnrichRequestBody {
   field: string;
   value: string;
   context?: Partial<WorldTemplate>;
+  action?: 'enrich' | 'summarize';
 }
 
 export class EnrichController {
@@ -33,14 +34,21 @@ export class EnrichController {
     req: FastifyRequest<{ Body: EnrichRequestBody }>,
     reply: FastifyReply,
   ): Promise<void> {
-    const { field, value, context } = req.body ?? ({} as EnrichRequestBody);
+    const { field, value, context, action } = req.body ?? ({} as EnrichRequestBody);
 
     if (!field || typeof value !== 'string') {
       return reply.status(400).send({ error: "Os campos 'field' e 'value' são obrigatórios." });
     }
+    const resolvedAction = action ?? 'enrich';
+    if (resolvedAction !== 'enrich' && resolvedAction !== 'summarize') {
+      return reply.status(400).send({ error: "O campo 'action' deve ser 'enrich' ou 'summarize'." });
+    }
+    if (resolvedAction === 'summarize' && !value.trim()) {
+      return reply.status(400).send({ error: "O campo 'value' não pode estar vazio para resumir." });
+    }
 
     try {
-      const enriched = await this.enrichService.enrichField(field, value, context ?? {});
+      const enriched = await this.enrichService.transformField(field, value, context ?? {}, resolvedAction);
       return reply.status(200).send({ enriched });
     } catch (err) {
       this.logger.error('[Enrich] falha ao enriquecer campo', err instanceof Error ? err : new Error(String(err)));

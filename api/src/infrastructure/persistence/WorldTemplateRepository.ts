@@ -1,6 +1,8 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { WorldTemplate } from '../../domain/types.js';
+import { normalizeWorldTemplate } from '../../domain/worldNormalizer.js';
+import { slugify } from '../../domain/utils/slugify.js';
 
 export class WorldTemplateRepository {
   private readonly worldsDir: string;
@@ -29,5 +31,34 @@ export class WorldTemplateRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * Salva um cenário customizado como template reutilizável (Item 3).
+   * Normaliza via `normalizeWorldTemplate`, gera `custom-<slug>.json`
+   * com anti-colisão (`-2`, `-3`, ...) e retorna `{ id, template }`.
+   */
+  async save(input: Partial<WorldTemplate>): Promise<{ id: string; template: WorldTemplate & { id: string } }> {
+    const template = normalizeWorldTemplate(input);
+    const baseSlug = slugify(template.name || 'cenario-customizado') || 'cenario-customizado';
+    await fs.mkdir(this.worldsDir, { recursive: true });
+
+    let id = `custom-${baseSlug}`;
+    let fileName = `${id}.json`;
+    let counter = 2;
+    while (true) {
+      try {
+        await fs.access(path.join(this.worldsDir, fileName));
+        id = `custom-${baseSlug}-${counter}`;
+        fileName = `${id}.json`;
+        counter += 1;
+      } catch {
+        break;
+      }
+    }
+
+    const toPersist = { ...template, id };
+    await fs.writeFile(path.join(this.worldsDir, fileName), JSON.stringify(toPersist, null, 2), 'utf-8');
+    return { id, template: toPersist };
   }
 }

@@ -5,7 +5,7 @@ import { LoggingService } from './logging.service';
 import { SettingsService } from './settings.service';
 import type { GameSettings } from '../models/game-settings.model';
 import type { WorldTemplate } from '../models/world-template.model';
-import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, StartTurnResponse, ReactTurnResponse, ArbiterTurnResponse, TurnNarrateResponse, TurnStatusResponse, GameStateResponse, ObserveResponse, NarrateResponse, EnrichPayload, EnrichResponse, AdminCommandPayload, AdminCommandResponse } from '../models/api-payloads.model';
+import type { CreateGamePayload, CreateGameResponse, PlayerActionPayload, TurnResponse, StartTurnResponse, ReactTurnResponse, ArbiterTurnResponse, TurnNarrateResponse, TurnStatusResponse, GameStateResponse, ObserveResponse, NarrateResponse, EnrichPayload, EnrichResponse, SaveWorldResponse, AdminCommandPayload, AdminCommandResponse } from '../models/api-payloads.model';
 import type { SavedGameSummary, SessionBundle, PruneResponse } from '../models/session-save.model';
 
 @Injectable({ providedIn: 'root' })
@@ -191,6 +191,16 @@ export class ApiService {
     );
   }
 
+  /** Apaga a campanha inteira (todos os checkpoints do rootId). */
+  deleteCampaign(rootId: string): Observable<{ deleted: number; ids: string[] }> {
+    return this.http.delete<{ deleted: number; ids: string[] }>(`${this.baseUrl}/saves/campaign/${rootId}`).pipe(
+      tap({
+        next: (res) => this.log.info('ApiService.deleteCampaign', { rootId, deleted: res.deleted }),
+        error: (err) => this.log.error('ApiService.deleteCampaign falhou', err, { rootId }),
+      }),
+    );
+  }
+
   pruneSaves(options?: { keepLatest?: boolean; rootId?: string }): Observable<PruneResponse> {
     return this.http.post<PruneResponse>(`${this.baseUrl}/saves/prune`, options ?? {}).pipe(
       tap({
@@ -205,6 +215,16 @@ export class ApiService {
       tap({
         next: (res) => this.log.info('ApiService.enrichField', { field: payload.field, length: res.enriched?.length }),
         error: (err) => this.log.error('ApiService.enrichField falhou', err, { field: payload.field }),
+      }),
+    );
+  }
+
+  /** Salva o cenário customizado como template reutilizável (não cria jogo). */
+  saveWorld(world: WorldTemplate): Observable<SaveWorldResponse> {
+    return this.http.post<SaveWorldResponse>(`${this.baseUrl}/worlds`, world).pipe(
+      tap({
+        next: (res) => this.log.info('ApiService.saveWorld', { id: res.id }),
+        error: (err) => this.log.error('ApiService.saveWorld falhou', err),
       }),
     );
   }

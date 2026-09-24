@@ -634,6 +634,46 @@ describe('Fastify Game API', () => {
     expect(getState.statusCode).toBe(404);
   });
 
+  it('DELETE /api/saves/campaign/:rootId apaga a campanha inteira (card não volta no F5)', async () => {
+    const base: any = {
+      schemaVersion: 5,
+      rootId: 'camp-x',
+      parentId: null,
+      branchId: 0,
+      depth: 1,
+      mode: 'template',
+      title: 'Campanha X',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      narrativeStyle: 'Fantasia',
+      writingStyle: 'Épico',
+      turnNumber: 1,
+      playerCharacterName: 'Aric',
+      lastNarrative: 'Narrativa.',
+      state: {
+        worldContext: 'Ctx',
+        narrativeStyle: 'Fantasia',
+        writingStyle: 'Épico',
+        turnNumber: 1,
+        history: [],
+        characters: [],
+        locations: [],
+        lastSceneLocation: 'Ponto de Partida',
+      },
+    };
+    await checkpointRepo.save({ ...base, id: 'camp-x-t1', updatedAt: '2026-01-01T10:00:00.000Z' });
+    await checkpointRepo.save({ ...base, id: 'camp-x-t2', parentId: 'camp-x-t1', turnNumber: 2, updatedAt: '2026-01-01T11:00:00.000Z' });
+
+    const delRes = await app.inject({ method: 'DELETE', url: '/api/saves/campaign/camp-x' });
+    expect(delRes.statusCode).toBe(200);
+    expect(JSON.parse(delRes.payload).deleted).toBe(2);
+
+    // Nenhum checkpoint da campanha resta
+    const listRes = await app.inject({ method: 'GET', url: '/api/saves?all=true' });
+    const ids = (JSON.parse(listRes.payload) as any[]).map((b) => b.id);
+    expect(ids).not.toContain('camp-x-t1');
+    expect(ids).not.toContain('camp-x-t2');
+  });
+
   it('bundle de save não deve conter settings', async () => {
     const createRes = await app.inject({
       method: 'POST',

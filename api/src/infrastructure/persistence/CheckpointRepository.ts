@@ -16,6 +16,7 @@ export interface ICheckpointRepository {
   get(id: string): Promise<SessionBundle | null>;
   save(bundle: SessionBundle): Promise<void>;
   delete(id: string): Promise<void>;
+  deleteByRootId(rootId: string): Promise<string[]>;
   prune(options: { keepLatest?: boolean; rootId?: string }): Promise<PruneResult>;
 }
 
@@ -181,6 +182,23 @@ export class CheckpointRepository implements ICheckpointRepository {
         throw error;
       }
     }
+  }
+
+  /**
+   * Apaga TODOS os checkpoints de uma campanha (mesmo rootId) — usado pelo
+   * "Excluir partida" da tela inicial. Sem isso, deletar só o checkpoint mais
+   * recente faz o card "voltar" no F5 (o próximo checkpoint vira o latest).
+   * Retorna os ids apagados.
+   */
+  public async deleteByRootId(rootId: string): Promise<string[]> {
+    const bundles = await this.list();
+    const targets = bundles.filter((b) => b.rootId === rootId || b.id === rootId);
+    const deleted: string[] = [];
+    for (const bundle of targets) {
+      await this.delete(bundle.id);
+      deleted.push(bundle.id);
+    }
+    return deleted;
   }
 
   // Migração de versão: bundles antigos (sem schemaVersion ou v1/v2) são migrados para v5.

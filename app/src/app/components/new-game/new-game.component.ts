@@ -123,17 +123,20 @@ export class NewGameComponent implements OnInit {
   }
 
   private confirmDeleteSave(save: SavedGameSummary): void {
+    // Exclui a campanha inteira (todos os checkpoints do rootId): deletar só o
+    // checkpoint mais recente fazia o card "voltar" no F5 (o anterior virava o latest).
+    const rootId = save.rootId || save.id;
     this.operatingId.set(save.id);
-    this.api.deleteSave(save.id).subscribe({
-      next: () => {
-        this.log.info('Partida excluída', { sessionId: save.id });
-        this.saves.update(list => list.filter(s => s.id !== save.id));
+    this.api.deleteCampaign(rootId).subscribe({
+      next: (res) => {
+        this.log.info('Partida excluída', { rootId, deleted: res.deleted });
+        this.saves.update(list => list.filter(s => (s.rootId || s.id) !== rootId));
         this.operatingId.set(null);
         this.snackBar.open('Partida excluída.', 'Fechar', { duration: 3000 });
       },
       error: (err) => {
         this.operatingId.set(null);
-        this.log.error('Falha ao excluir partida', err, { sessionId: save.id });
+        this.log.error('Falha ao excluir partida', err, { rootId });
         this.snackBar.open('Falha ao excluir a partida.', 'Fechar', { duration: 5000 });
       },
     });

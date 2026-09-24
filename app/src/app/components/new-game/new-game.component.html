@@ -29,7 +29,7 @@
         } @else {
           <div class="saved-games__grid" role="list" aria-label="Lista de partidas salvas">
             @for (save of saves(); track save.id) {
-              <mat-card class="saved-game-card" role="listitem" [attr.aria-label]="'Continuar: ' + save.title" (click)="onContinueSave(save)">
+              <mat-card class="saved-game-card" role="listitem" [attr.aria-label]="'Partida: ' + save.title">
                 <mat-card-header>
                   <mat-card-title [matTooltip]="save.title" matTooltipPosition="above">{{ save.title }}</mat-card-title>
                   <mat-card-subtitle>{{ save.narrativeStyle }} · {{ save.writingStyle }}</mat-card-subtitle>

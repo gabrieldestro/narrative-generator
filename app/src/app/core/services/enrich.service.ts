@@ -17,4 +17,14 @@ export class EnrichService {
       }),
     );
   }
+
+  summarizeField(payload: EnrichPayload): Observable<EnrichResponse> {
+    return this.api.enrichField({ ...payload, action: 'summarize' }).pipe(
+      catchError((err) => {
+        // Em caso de falha (rede/LLM), devolve o valor original para não quebrar o fluxo do usuário.
+        console.error('EnrichService: falha ao resumir campo, mantendo valor original', err);
+        return of({ enriched: payload.value });
+      }),
+    );
+  }
 }

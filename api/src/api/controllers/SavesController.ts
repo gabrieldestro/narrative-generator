@@ -85,4 +85,22 @@ export class SavesController {
     this.logger.info('Save apagado', { sessionId });
     return reply.status(204).send();
   }
+
+  /**
+   * Apaga a campanha inteira (todos os checkpoints do rootId) — usado pelo
+   * "Excluir partida" da tela inicial. Deletar só 1 checkpoint fazia o card
+   * reaparecer no F5 (o checkpoint anterior virava o latest da campanha).
+   */
+  public async deleteCampaign(
+    req: FastifyRequest<{ Params: { rootId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    const { rootId } = req.params;
+    const deletedIds = await this.checkpointRepo.deleteByRootId(rootId);
+    for (const id of deletedIds) {
+      this.sessionRepo.deleteSession(id);
+    }
+    this.logger.info('Campanha apagada', { rootId, deleted: deletedIds.length });
+    return reply.status(200).send({ deleted: deletedIds.length, ids: deletedIds });
+  }
 }
