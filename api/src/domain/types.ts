@@ -127,6 +127,10 @@ export interface GameSettings {
   healSummaryOnOverflow: boolean;
   jsonRepairMaxInputChars: number;
   structuredMode?: 'prompt-json' | 'tool-call';
+  // Conexão LLM (vem do front; aplicada ao ChatOpenAI compartilhado).
+  apiUrl?: string;
+  model?: string;
+  apiToken?: string;
 }
 
 export const DEFAULT_NARRATION_SIZE_PROMPTS: NarrationSizePrompts = {
@@ -148,6 +152,9 @@ export const DEFAULT_SETTINGS: GameSettings = {
   maxHealRetries: 2,
   healSummaryOnOverflow: true,
   jsonRepairMaxInputChars: 4000,
+  apiUrl: process.env.OPENAI_API_BASE || 'http://localhost:1234/v1',
+  model: process.env.OPENAI_API_MODEL || 'gemma-4b',
+  apiToken: process.env.OPENAI_API_KEY || 'lm-studio',
 };
 
 // Ação de 1 step do turno (sem RPG).

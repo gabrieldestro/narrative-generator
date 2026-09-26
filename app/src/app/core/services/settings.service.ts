@@ -31,6 +31,17 @@ export class SettingsService {
     this.saveToStorage();
   }
 
+  /** Persiste um rascunho editado na tela de configurações (botão Salvar). */
+  saveAll(next: GameSettings): void {
+    this.settingsSignal.set({ ...next });
+    this.saveToStorage();
+  }
+
+  /** Restaura os padrões de fábrica (persiste imediatamente). */
+  resetToDefaults(): void {
+    this.saveAll({ ...DEFAULT_GAME_SETTINGS });
+  }
+
   private saveToStorage(): void {
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.settingsSignal()));
   }

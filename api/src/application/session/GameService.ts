@@ -5,6 +5,8 @@ import type { IUserInput, IOutputWriter, ILogger } from "../../domain/ports.js";
 import { TurnStore, TurnError } from "../turn/TurnStore.js";
 import type { IStateRepository } from "../../infrastructure/persistence/JsonStateRepository.js";
 import type { LlmService } from "../shared/LlmService.js";
+import { applyLlmConnection } from "../shared/LlmConnection.js";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { SessionFactory } from "./SessionFactory.js";
 import type { CharacterService } from "../characters/CharacterService.js";
 import type { TurnService } from "../turn/TurnService.js";
@@ -104,6 +106,7 @@ export class GameService {
     logger?: ILogger,
     adminCommandService?: AdminCommandService,
     private readonly orchestrator?: TurnService,
+    private readonly llmModel?: BaseChatModel,
   ) {
     this.input = input ?? new DummyInput();
     this.output = output ?? new DummyOutput();
@@ -111,12 +114,23 @@ export class GameService {
     this.worldService = worldService ?? new WorldService(this.llmService!);
     this.logger = logger ?? new NullLogger();
     this.adminCommandService = adminCommandService ?? new AdminCommandService(this.worldService, this.llmService, this.logger);
+    if (this.llmModel) {
+      applyLlmConnection(this.llmModel, this.settings);
+    }
   }
 
   public updateSettings(partial: Partial<GameSettings>): void {
     this.settings = { ...this.settings, ...partial };
     // Doc 27, Fase 3: o orquestrador guarda cópia — encaminha para não divergir.
     this.orchestrator?.updateSettings(this.settings);
+    // Caminhos legados (observe/narração declarada) leem o snapshot do
+    // LlmService — encaminha para o `narrationSize` valer neles também.
+    this.llmService?.updateSettings(this.settings);
+    // Conexão LLM da tela de configurações: aplica no modelo compartilhado
+    // (último request vence — global do servidor, sem isolamento por campanha).
+    if (this.llmModel && (partial.apiUrl !== undefined || partial.model !== undefined || partial.apiToken !== undefined)) {
+      applyLlmConnection(this.llmModel, partial, this.logger);
+    }
   }
 
   public getSettings(): Readonly<GameSettings> {

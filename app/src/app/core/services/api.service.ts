@@ -23,6 +23,9 @@ export class ApiService {
       godMode: s.godMode,
       unexpectedEventChance: s.unexpectedEventChance,
       narrationSize: s.narrationSize,
+      apiUrl: s.apiUrl,
+      model: s.model,
+      apiToken: s.apiToken,
     };
   }
 
@@ -58,7 +61,7 @@ export class ApiService {
 
   /** Fase `react`: resolve o próximo reator (1 LLM por chamada). */
   reactTurn(sessionId: string, turnId: string): Observable<ReactTurnResponse> {
-    return this.http.post<ReactTurnResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/react`, {}).pipe(
+    return this.http.post<ReactTurnResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/react`, { settings: this.buildEngineSettings() }).pipe(
       tap({
         next: (res) => this.log.info('ApiService.reactTurn', { sessionId, turnId, who: res.who, ignored: res.ignored }),
         error: (err) => this.log.error('ApiService.reactTurn falhou', err, { sessionId, turnId }),
@@ -68,7 +71,7 @@ export class ApiService {
 
   /** Fase `arbiter`: julga ação + reações. */
   arbiterTurn(sessionId: string, turnId: string): Observable<ArbiterTurnResponse> {
-    return this.http.post<ArbiterTurnResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/arbiter`, {}).pipe(
+    return this.http.post<ArbiterTurnResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/arbiter`, { settings: this.buildEngineSettings() }).pipe(
       tap({
         next: (res) => this.log.info('ApiService.arbiterTurn', { sessionId, turnId, outcome: res.outcome }),
         error: (err) => this.log.error('ApiService.arbiterTurn falhou', err, { sessionId, turnId }),
@@ -78,7 +81,7 @@ export class ApiService {
 
   /** Fase `narrate`: prosa do fato julgado. */
   narrateTurnPhase(sessionId: string, turnId: string): Observable<TurnNarrateResponse> {
-    return this.http.post<TurnNarrateResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/narrate`, {}).pipe(
+    return this.http.post<TurnNarrateResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/narrate`, { settings: this.buildEngineSettings() }).pipe(
       tap({
         next: (res) => this.log.info('ApiService.narrateTurnPhase', { sessionId, turnId }),
         error: (err) => this.log.error('ApiService.narrateTurnPhase falhou', err, { sessionId, turnId }),
@@ -88,7 +91,7 @@ export class ApiService {
 
   /** Fase `finish`: commit + checkpoint novo + próximo ator da rotação. */
   finishTurn(sessionId: string, turnId: string): Observable<TurnResponse> {
-    return this.http.post<TurnResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/finish`, {}).pipe(
+    return this.http.post<TurnResponse>(`${this.baseUrl}/games/${sessionId}/turn/${turnId}/finish`, { settings: this.buildEngineSettings() }).pipe(
       tap({
         next: (res) => this.log.info('ApiService.finishTurn', { sessionId, turnId, newSessionId: res.sessionId, turnNumber: res.updatedState?.turnNumber }),
         error: (err) => this.log.error('ApiService.finishTurn falhou', err, { sessionId, turnId }),

@@ -58,7 +58,7 @@ class NullLogger implements ILogger {
  * remoção do monolito; o turno roda no `TurnService`.
  */
 export class LlmService {
-  private readonly settings: GameSettings;
+  private settings: GameSettings;
   private readonly appLogger: ILogger;
   private readonly selfHealing: SelfHealingService;
   /** Doc 27, Fase 0: prova do padrão — extratores resolvem via `resolveJson`. */
@@ -84,6 +84,10 @@ export class LlmService {
     this.llmClient = new LlmClient(llm, logger, this.appLogger, this.contentLogger);
     this.arbiterService = new ArbiterService(this.llmClient, this.structuredResolver, this.selfHealing);
     this.memoryService = new MemoryService(this.llmClient, this.structuredResolver, this.appLogger);
+  }
+
+  public updateSettings(settings: GameSettings): void {
+    this.settings = { ...settings };
   }
 
   async generateInitialContext(style: string, writingStyle: string, baseContext?: string): Promise<string> {

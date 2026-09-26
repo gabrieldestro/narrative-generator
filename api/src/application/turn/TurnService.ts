@@ -160,6 +160,9 @@ export class TurnService {
 
   public updateSettings(settings: GameSettings): void {
     this.settings = settings;
+    // O narrador guarda snapshot da construção — repassa para o radio
+    // `narrationSize` valer no fluxo faseado.
+    (this.narrator as unknown as { updateSettings?: (s: GameSettings) => void }).updateSettings?.(settings);
   }
 
   /** Personagens que podem agir/reagir: ativos (sem `status` = ativo). */

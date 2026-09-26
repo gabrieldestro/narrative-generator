@@ -30,7 +30,7 @@
       <div class="settings-field">
         <label class="settings-field__label">Tamanho da Narração</label>
         <mat-radio-group class="settings-radio-group"
-          [ngModel]="settingsService.settings().narrationSize"
+          [ngModel]="draft.narrationSize"
           (ngModelChange)="update('narrationSize', $event)">
           <mat-radio-button value="concise">Conciso</mat-radio-button>
           <mat-radio-button value="balanced">Equilibrado</mat-radio-button>
@@ -42,10 +42,10 @@
       <div class="settings-field">
         <div class="settings-field__row">
           <label class="settings-field__label">Eventos Inesperados</label>
-          <span class="settings-field__value">{{ settingsService.settings().unexpectedEventChance * 100 }}%</span>
+          <span class="settings-field__value">{{ draft.unexpectedEventChance * 100 }}%</span>
         </div>
         <mat-slider class="settings-slider" min="0" max="50" step="5" discrete>
-          <input matSliderThumb [value]="settingsService.settings().unexpectedEventChance * 100" (valueChange)="update('unexpectedEventChance', $event / 100)">
+          <input matSliderThumb [value]="draft.unexpectedEventChance * 100" (valueChange)="update('unexpectedEventChance', $event / 100)">
         </mat-slider>
         <p class="settings-field__hint">Chance de um evento imprevisto alterar o rumo da história.</p>
       </div>
@@ -53,7 +53,7 @@
       <div class="settings-field">
         <label class="settings-field__label">Janela de Memória</label>
         <mat-radio-group class="settings-radio-group"
-          [ngModel]="settingsService.settings().memoryWindowSize"
+          [ngModel]="draft.memoryWindowSize"
           (ngModelChange)="update('memoryWindowSize', $event)">
           <mat-radio-button [value]="2">2 turnos</mat-radio-button>
           <mat-radio-button [value]="5">5 turnos</mat-radio-button>
@@ -61,21 +61,21 @@
           <mat-radio-button [value]="15">15 turnos</mat-radio-button>
           <mat-radio-button [value]="20">20 turnos</mat-radio-button>
         </mat-radio-group>
-        <p class="settings-field__hint">Quantos turnos a IA lembra ao escrever a próxima narração.</p>
+        <p class="settings-field__hint">Gatilho de sumarização: quantos turnos ficam no histórico antes de resumir os mais antigos.</p>
       </div>
 
       <div class="settings-field">
-        <mat-slide-toggle class="settings-toggle" [checked]="settingsService.settings().debug" (change)="update('debug', $event.checked)">
+        <mat-slide-toggle class="settings-toggle" [checked]="draft.debug" (change)="update('debug', $event.checked)">
           Modo Debug
         </mat-slide-toggle>
-        <p class="settings-field__hint">Exibe o painel de debug arcano com rolagens e decisões da IA.</p>
+        <p class="settings-field__hint">Libera o painel admin local no cabeçalho do jogo.</p>
       </div>
 
       <div class="settings-field">
-        <mat-slide-toggle class="settings-toggle" [checked]="settingsService.settings().godMode" (change)="update('godMode', $event.checked)">
+        <mat-slide-toggle class="settings-toggle" [checked]="draft.godMode" (change)="update('godMode', $event.checked)">
           God Mode
         </mat-slide-toggle>
-        <p class="settings-field__hint">Rolagens de dados sempre resultam em 20.</p>
+        <p class="settings-field__hint">Seus dados viram 20; NPCs rolam normalmente.</p>
       </div>
     </div>
   </section>
@@ -93,7 +93,7 @@
       <div class="settings-field">
         <label class="settings-field__label">URL da API</label>
         <mat-form-field appearance="outline" class="settings-form-field">
-          <input matInput [ngModel]="settingsService.settings().apiUrl" (ngModelChange)="update('apiUrl', $event)" placeholder="http://localhost:1234/v1">
+          <input matInput [ngModel]="draft.apiUrl" (ngModelChange)="update('apiUrl', $event)" placeholder="http://localhost:1234/v1">
         </mat-form-field>
         <p class="settings-field__hint">Endpoint compatível com a OpenAI API (ex: LM Studio, Ollama).</p>
       </div>
@@ -101,7 +101,7 @@
       <div class="settings-field">
         <label class="settings-field__label">Modelo</label>
         <mat-form-field appearance="outline" class="settings-form-field">
-          <input matInput [ngModel]="settingsService.settings().model" (ngModelChange)="update('model', $event)" placeholder="gemma-4b">
+          <input matInput [ngModel]="draft.model" (ngModelChange)="update('model', $event)" placeholder="gemma-4b">
         </mat-form-field>
         <p class="settings-field__hint">Identificador do modelo carregado no servidor.</p>
       </div>
@@ -109,38 +109,25 @@
       <div class="settings-field">
         <label class="settings-field__label">API Token (opcional)</label>
         <mat-form-field appearance="outline" class="settings-form-field">
-          <input matInput type="password" [ngModel]="settingsService.settings().apiToken" (ngModelChange)="update('apiToken', $event)" placeholder="Token de autenticação">
+          <input matInput type="password" [ngModel]="draft.apiToken" (ngModelChange)="update('apiToken', $event)" placeholder="Token de autenticação">
         </mat-form-field>
         <p class="settings-field__hint">Requerido apenas por provedores que exigem autenticação.</p>
       </div>
-
-      <button class="btn-test" mat-stroked-button (click)="testConnection()">
-        <mat-icon>wifi_tethering</mat-icon>
-        Testar Conexão
-      </button>
-    </div>
-  </section>
-
-  <section class="settings-card">
-    <header class="settings-card__header">
-      <mat-icon class="settings-card__icon">info</mat-icon>
-      <div class="settings-card__heading">
-        <h2 class="settings-card__title">Sobre</h2>
-        <p class="settings-card__subtitle">Narrative Generator v1.0</p>
-      </div>
-    </header>
-
-    <div class="settings-card__body">
-      <p class="settings-about__text">
-        Motor narrativo configurável com suporte a múltiplos modelos de linguagem, gerando aventuras únicas com IA.
-      </p>
     </div>
   </section>
 
   <div class="settings__actions">
-    <button class="btn-save" mat-raised-button (click)="saveSettings()">
+    <button class="btn-save" mat-raised-button [disabled]="!isDirty" (click)="saveSettings()">
       <mat-icon>save</mat-icon>
       Salvar Configurações
+    </button>
+    <button class="btn-secondary" mat-stroked-button [disabled]="!isDirty" (click)="cancelChanges()">
+      <mat-icon>close</mat-icon>
+      Cancelar
+    </button>
+    <button class="btn-secondary" mat-stroked-button (click)="resetDefaults()">
+      <mat-icon>restart_alt</mat-icon>
+      Restaurar padrões
     </button>
   </div>
 </div>

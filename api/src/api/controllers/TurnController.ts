@@ -77,13 +77,16 @@ export class TurnController {
   }
 
   public async reactTurn(
-    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string }; Body: Partial<{ settings: Partial<PlayerActionPayload['settings']> }> }>,
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId, turnId } = req.params;
     const state = await this.checkpoints.resolveSession(sessionId);
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    if (req.body?.settings) {
+      this.gameService.updateSettings(req.body.settings);
     }
     try {
       const reaction = await this.gameService.reactNext(turnId, sessionId);
@@ -94,13 +97,16 @@ export class TurnController {
   }
 
   public async arbiterTurn(
-    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string }; Body: Partial<{ settings: Partial<PlayerActionPayload['settings']> }> }>,
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId, turnId } = req.params;
     const state = await this.checkpoints.resolveSession(sessionId);
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    if (req.body?.settings) {
+      this.gameService.updateSettings(req.body.settings);
     }
     try {
       const judged = await this.gameService.arbitrateTurn(turnId, sessionId);
@@ -111,13 +117,16 @@ export class TurnController {
   }
 
   public async narrateTurn(
-    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string }; Body: Partial<{ settings: Partial<PlayerActionPayload['settings']> }> }>,
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId, turnId } = req.params;
     const state = await this.checkpoints.resolveSession(sessionId);
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    if (req.body?.settings) {
+      this.gameService.updateSettings(req.body.settings);
     }
     try {
       const told = await this.gameService.narrateTurn(turnId, sessionId);
@@ -128,13 +137,16 @@ export class TurnController {
   }
 
   public async finishTurn(
-    req: FastifyRequest<{ Params: { sessionId: string; turnId: string } }>,
+    req: FastifyRequest<{ Params: { sessionId: string; turnId: string }; Body: Partial<{ settings: Partial<PlayerActionPayload['settings']> }> }>,
     reply: FastifyReply
   ): Promise<void> {
     const { sessionId, turnId } = req.params;
     const state = await this.checkpoints.resolveSession(sessionId);
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
+    }
+    if (req.body?.settings) {
+      this.gameService.updateSettings(req.body.settings);
     }
     try {
       const turnResult = await this.gameService.finishTurn(turnId, sessionId);

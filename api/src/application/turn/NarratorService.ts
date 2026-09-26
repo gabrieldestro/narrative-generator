@@ -22,7 +22,7 @@ class NullLogger implements ILogger {
 export class NarratorService {
   /** Temp por função (§3): narrador `0.7-0.8` (mesma ressalva de factory do árbitro). */
   readonly temperature = 0.7;
-  private readonly settings: GameSettings;
+  private settings: GameSettings;
   private readonly appLogger: ILogger;
 
   constructor(
@@ -39,8 +39,12 @@ export class NarratorService {
       turn?: number,
     ) => Promise<string>,
   ) {
-    this.settings = settings;
+    this.settings = { ...settings };
     this.appLogger = appLogger ?? new NullLogger();
+  }
+
+  public updateSettings(settings: GameSettings): void {
+    this.settings = { ...settings };
   }
 
   async narrateStep(

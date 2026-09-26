@@ -78,7 +78,7 @@ export async function buildApp(options: AppOptions = {}) {
   } else {
     llmModel = new ChatOpenAI({
       temperature: 0.7,
-      model: "gemma-4b",
+      model: process.env.OPENAI_API_MODEL || "gemma-4b",
       apiKey: process.env.OPENAI_API_KEY || "lm-studio",
       configuration: {
         baseURL: process.env.OPENAI_API_BASE || "http://localhost:1234/v1",
@@ -105,6 +105,7 @@ export async function buildApp(options: AppOptions = {}) {
     logger,
     adminCommandService,
     orchestrator,
+    llmModel,
   );
 
   const checkpoints = new CheckpointService(checkpointRepo, sessionRepo, logger);

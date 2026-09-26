@@ -27,32 +27,34 @@
     <!-- Coluna esquerda: Formulário -->
     <div class="create-world__form-col">
 
-      <div class="form-section">
-        <label class="form-section__label">
-          <mat-icon class="form-section__icon">theater_comedy</mat-icon>
-          Gênero Narrativo
-        </label>
-        <mat-form-field appearance="outline" class="form-section__field">
-          <input
-            matInput
-            [(ngModel)]="narrativeStyle"
-            placeholder="Ex: Fantasia Medieval, Cyberpunk Noir, Space Opera…"
-            id="input-narrative-style">
-        </mat-form-field>
-      </div>
+      <div class="form-row form-row--2col">
+        <div class="form-section">
+          <label class="form-section__label">
+            <mat-icon class="form-section__icon">theater_comedy</mat-icon>
+            Gênero Narrativo
+          </label>
+          <mat-form-field appearance="outline" class="form-section__field">
+            <input
+              matInput
+              [(ngModel)]="narrativeStyle"
+              placeholder="Ex: Fantasia Medieval, Cyberpunk Noir, Space Opera…"
+              id="input-narrative-style">
+          </mat-form-field>
+        </div>
 
-      <div class="form-section">
-        <label class="form-section__label">
-          <mat-icon class="form-section__icon">edit_note</mat-icon>
-          Estilo de Escrita
-        </label>
-        <mat-form-field appearance="outline" class="form-section__field">
-          <input
-            matInput
-            [(ngModel)]="writingStyle"
-            placeholder="Ex: Épico, Cômico, Terror Sombrio, Introspectivo…"
-            id="input-writing-style">
-        </mat-form-field>
+        <div class="form-section">
+          <label class="form-section__label">
+            <mat-icon class="form-section__icon">edit_note</mat-icon>
+            Estilo de Escrita
+          </label>
+          <mat-form-field appearance="outline" class="form-section__field">
+            <input
+              matInput
+              [(ngModel)]="writingStyle"
+              placeholder="Ex: Épico, Cômico, Terror Sombrio, Introspectivo…"
+              id="input-writing-style">
+          </mat-form-field>
+        </div>
       </div>
 
       <div class="form-section">

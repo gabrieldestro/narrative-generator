@@ -253,64 +253,68 @@ mat-toolbar {
 }
 
 // ─── Botões ─────────────────────────────────────────────────────
-.btn-test {
-  align-self: flex-start;
-  background: var(--bg-hover) !important;
-  border: 1px solid rgba(137, 180, 250, 0.25) !important;
-  color: var(--text-secondary) !important;
-  font-family: 'Outfit', sans-serif !important;
-  border-radius: 12px !important;
-  height: 44px;
-  padding: 0 1.5rem !important;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease !important;
-
-  mat-icon {
-    font-size: 1.1rem;
-    width: 1.1rem;
-    height: 1.1rem;
-  }
-
-  &:hover {
-    border-color: var(--info) !important;
-    color: var(--info) !important;
-    background: rgba(137, 180, 250, 0.12) !important;
-  }
-}
-
 .settings__actions {
   display: flex;
   justify-content: center;
+  align-items: stretch;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   padding-top: 0.5rem;
 }
 
-.btn-save {
-  background: linear-gradient(135deg, var(--accent) 0%, #ffb74d 100%) !important;
-  color: var(--text-inverse) !important;
+// Base única: mesmo tamanho/padrão da aplicação (espelha .btn-action).
+.btn-save,
+.btn-secondary {
   font-family: 'Outfit', sans-serif !important;
   font-weight: 700 !important;
   font-size: 1rem !important;
   letter-spacing: 0.04em !important;
   border-radius: 12px !important;
-  padding: 0 2rem !important;
-  height: 48px;
-  box-shadow: 0 4px 12px rgba(255, 213, 79, 0.2) !important;
+  height: 46px !important;
+  padding: 0 1.75rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  line-height: 1 !important;
   transition: all 0.25s ease !important;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 
   mat-icon {
-    font-size: 1.2rem;
-    width: 1.2rem;
-    height: 1.2rem;
+    font-size: 1.2rem !important;
+    width: 1.2rem !important;
+    height: 1.2rem !important;
+    margin: 0 !important;
   }
+
+  &:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+  }
+}
+
+.btn-save {
+  background: linear-gradient(135deg, var(--accent) 0%, #ffb74d 100%) !important;
+  color: var(--text-inverse) !important;
+  box-shadow: 0 4px 12px rgba(255, 213, 79, 0.2) !important;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(255, 213, 79, 0.35) !important;
+  }
+}
+
+.btn-secondary {
+  background: var(--bg-hover) !important;
+  border: 1px solid var(--border-light) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--info) !important;
+    color: var(--info) !important;
+    background: rgba(137, 180, 250, 0.12) !important;
   }
 }
 
