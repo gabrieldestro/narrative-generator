@@ -1,6 +1,6 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { ILogger } from '../../domain/ports.js';
-import { DEFAULT_SETTINGS } from '../../domain/types.js';
+import { DEFAULT_SETTINGS, type GameSettings } from '../../domain/types.js';
 import { LlmClient } from '../shared/LlmClient.js';
 import { PromptJsonResolver } from '../shared/StructuredResolver.js';
 import { SelfHealingService } from '../shared/selfHealing/SelfHealingService.js';
@@ -32,8 +32,9 @@ export function buildTurnService(
   logger: ILogger,
   llmCallLogger?: LlmCallLogger,
   llmContentLogger?: LlmContentLogger,
+  /** F2: settings do escopo (default = global anterior). */
+  settings: GameSettings = { ...DEFAULT_SETTINGS },
 ): TurnService {
-  const settings = { ...DEFAULT_SETTINGS };
   const client = new LlmClient(llmModel, llmCallLogger, logger, llmContentLogger);
   const resolver = new PromptJsonResolver(llmModel, llmCallLogger, logger, settings, llmContentLogger);
   const selfHealing = new SelfHealingService(llmModel, llmCallLogger, logger, settings);

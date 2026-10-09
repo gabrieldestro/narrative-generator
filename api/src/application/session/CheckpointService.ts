@@ -30,6 +30,8 @@ export interface CheckpointMeta {
  */
 export class CheckpointService {
   private readonly logger: ILogger;
+  /** F2: cache sessionId → rootId (evita 1 leitura de disco por request). */
+  private readonly rootIds = new Map<string, string>();
 
   constructor(
     private readonly checkpointRepo: CheckpointRepository,
@@ -46,7 +48,22 @@ export class CheckpointService {
     const bundle = await this.checkpointRepo.get(sessionId);
     if (!bundle) return undefined;
     this.sessionRepo.saveSession(sessionId, bundle.state);
+    this.rootIds.set(sessionId, bundle.rootId ?? bundle.id);
     return bundle.state;
+  }
+
+  /**
+   * F2: raiz da campanha de um checkpoint (1 escopo por campanha).
+   * Cache em memória; miss → disco; desconhecido → o próprio id
+   * (sessão só em memória / CLI).
+   */
+  public async resolveRootId(sessionId: string): Promise<string> {
+    const cached = this.rootIds.get(sessionId);
+    if (cached) return cached;
+    const bundle = await this.checkpointRepo.get(sessionId);
+    const rootId = bundle?.rootId ?? bundle?.id ?? sessionId;
+    this.rootIds.set(sessionId, rootId);
+    return rootId;
   }
 
   /** Cria e persiste um novo checkpoint de save no disco. */
@@ -105,6 +122,8 @@ export class CheckpointService {
     };
 
     await this.checkpointRepo.save(bundle);
+    this.rootIds.set(checkpointId, rootId);
+    if (parentId) this.rootIds.set(parentId, this.rootIds.get(parentId) ?? rootId);
     this.logger.debug('Checkpoint persistido', { checkpointId, parentId, turnNumber: state.turnNumber });
     return bundle;
   }

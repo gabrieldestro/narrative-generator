@@ -3,6 +3,7 @@ import type { GameState, GameSettings, NpcDecision, DiceRoll, GateChannel, TurnS
 import { DEFAULT_SETTINGS } from "../../domain/types.js";
 import type { IUserInput, IOutputWriter, ILogger } from "../../domain/ports.js";
 import { TurnStore, TurnError } from "../turn/TurnStore.js";
+import type { SessionScopeStore } from "./SessionScopeStore.js";
 import type { IStateRepository } from "../../infrastructure/persistence/JsonStateRepository.js";
 import type { LlmService } from "../shared/LlmService.js";
 import { applyLlmConnection } from "../shared/LlmConnection.js";
@@ -107,6 +108,8 @@ export class GameService {
     adminCommandService?: AdminCommandService,
     private readonly orchestrator?: TurnService,
     private readonly llmModel?: BaseChatModel,
+    /** F2 (doc 31): ausente = caminho legado global (CLI/testes antigos). */
+    private readonly scopeStore?: SessionScopeStore,
   ) {
     this.input = input ?? new DummyInput();
     this.output = output ?? new DummyOutput();
@@ -119,22 +122,73 @@ export class GameService {
     }
   }
 
-  public updateSettings(partial: Partial<GameSettings>): void {
-    this.settings = { ...this.settings, ...partial };
-    // Doc 27, Fase 3: o orquestrador guarda cópia — encaminha para não divergir.
-    this.orchestrator?.updateSettings(this.settings);
-    // Caminhos legados (observe/narração declarada) leem o snapshot do
-    // LlmService — encaminha para o `narrationSize` valer neles também.
-    this.llmService?.updateSettings(this.settings);
-    // Conexão LLM da tela de configurações: aplica no modelo compartilhado
-    // (último request vence — global do servidor, sem isolamento por campanha).
+  /**
+   * F2 (doc 31): settings de gameplay por campanha. Com `scopeStore`, o
+   * merge é síncrono dentro do escopo do `rootId` (elimina R2/R3) e o grafo
+   * da campanha é reconstruído. Sem store (CLI/testes legados), mantém o
+   * comportamento global anterior.
+   */
+  public updateSettings(rootId: string, partial: Partial<GameSettings>): void {
+    if (this.scopeStore) {
+      this.scopeStore.update(rootId, partial);
+    } else {
+      this.settings = { ...this.settings, ...partial };
+      // Doc 27, Fase 3: o orquestrador guarda cópia — encaminha para não divergir.
+      this.orchestrator?.updateSettings({ ...this.settings });
+      // Caminhos legados (observe/narração declarada) leem o snapshot do
+      // LlmService — encaminha para o `narrationSize` valer neles também.
+      this.llmService?.updateSettings({ ...this.settings });
+    }
+    // Conexão LLM da tela de configurações: aplicada no modelo compartilhado
+    // (F3 tornará por campanha; até lá, último request vence — global).
     if (this.llmModel && (partial.apiUrl !== undefined || partial.model !== undefined || partial.apiToken !== undefined)) {
       applyLlmConnection(this.llmModel, partial, this.logger);
     }
   }
 
-  public getSettings(): Readonly<GameSettings> {
+  public getSettings(rootId?: string): Readonly<GameSettings> {
+    if (rootId && this.scopeStore) {
+      return this.scopeStore.getOrCreate(rootId, this.settings).settings;
+    }
     return this.settings;
+  }
+
+  /**
+   * F2: trio (settings + orquestrador + llm + character) da campanha — ou o
+   * legado quando não há store/rootId. Services continuam singletons como
+   * código; o estado por campanha vem do escopo.
+   */
+  private resolveScope(rootId?: string): {
+    settings: GameSettings;
+    orchestrator?: TurnService;
+    llmService?: LlmService;
+    characterService?: CharacterService;
+  } {
+    if (rootId && this.scopeStore) {
+      const scope = this.scopeStore.getOrCreate(rootId, this.settings);
+      const orchestrator = scope.graph?.orchestrator ?? this.orchestrator;
+      const llmService = scope.graph?.llmService ?? this.llmService;
+      const characterService = scope.graph?.characterService ?? this.characterService;
+      return {
+        settings: scope.settings,
+        ...(orchestrator ? { orchestrator } : {}),
+        ...(llmService ? { llmService } : {}),
+        ...(characterService ? { characterService } : {}),
+      };
+    }
+    return {
+      settings: this.settings,
+      ...(this.orchestrator ? { orchestrator: this.orchestrator } : {}),
+      ...(this.llmService ? { llmService: this.llmService } : {}),
+      ...(this.characterService ? { characterService: this.characterService } : {}),
+    };
+  }
+
+  private requireScopeOrchestrator(scope: { orchestrator?: TurnService }): TurnService {
+    if (!scope.orchestrator) {
+      throw new Error('TurnService não injetado no GameService.');
+    }
+    return scope.orchestrator;
   }
 
   public async start() {
@@ -252,13 +306,9 @@ export class GameService {
     if (fromSessionId === toSessionId) return;
     const last = this.lastActorBySession.get(fromSessionId);
     if (last !== undefined) this.lastActorBySession.set(toSessionId, last);
-  }
-
-  private requireOrchestrator() {
-    if (!this.orchestrator) {
-      throw new Error('TurnService não injetado no GameService.');
-    }
-    return this.orchestrator;
+    // F2: o checkpoint filho herda o escopo (na prática resolve o mesmo
+    // rootId; cobre sessões ainda só em memória).
+    this.scopeStore?.inherit(toSessionId, fromSessionId);
   }
 
   /**
@@ -266,8 +316,8 @@ export class GameService {
    * (ordem players → NPCs). Sem cursor ou sem o nome no roster ⇒ primeiro.
    * Cursor vive em memória (restart recomeça no jogador — sem migração).
    */
-  public nextActorName(state: GameState, sessionId: string): string | null {
-    const orchestrator = this.requireOrchestrator();
+  public nextActorName(state: GameState, sessionId: string, rootId?: string): string | null {
+    const orchestrator = this.requireScopeOrchestrator(this.resolveScope(rootId));
     const ordered = orchestrator.spotlightOrder(
       state.characters.filter((c) => !c.status || c.status === 'active'),
     );
@@ -287,8 +337,16 @@ export class GameService {
     sessionId: string,
     state: GameState,
     playerAction: { charName: string; text: string } | null,
+    rootId?: string,
   ): Promise<StartTurnResult> {
-    const orchestrator = this.requireOrchestrator();
+    // F1 (doc 31, R6): marcação síncrona na entrada — o corpo de um método
+    // async executa de forma síncrona até o 1º await, então o 2º begin
+    // concorrente falha aqui, antes de gastar LLMs. Limpo em finally.
+    this.turnStore.tryMarkStarting(sessionId);
+    try {
+    const scope = this.resolveScope(rootId);
+    const orchestrator = this.requireScopeOrchestrator(scope);
+    const scopeLlm = scope.llmService;
     const turnLog = this.logger.child({ turnNumber: state.turnNumber });
     turnLog.info('[beginTurn iniciado]');
 
@@ -300,7 +358,7 @@ export class GameService {
         ?? roster.find((c) => c.isPlayer === true))
       : undefined;
     if (!playerAction) {
-      const nextName = this.nextActorName(workingState, sessionId);
+      const nextName = this.nextActorName(workingState, sessionId, rootId);
       if (!nextName) {
         throw new TurnError('NO_ACTORS', 'Nenhum personagem ativo para agir.', undefined);
       }
@@ -314,8 +372,8 @@ export class GameService {
     }
 
     // Chance de evento inesperado (1x por turno).
-    const unexpectedEvent = Math.random() < this.settings.unexpectedEventChance;
-    if (unexpectedEvent && this.settings.debug) {
+    const unexpectedEvent = Math.random() < scope.settings.unexpectedEventChance;
+    if (unexpectedEvent && scope.settings.debug) {
       this.output.writeLine("\x1b[95m[Destino ✨] Algo inesperado está prestes a acontecer...\x1b[0m");
     }
 
@@ -324,7 +382,7 @@ export class GameService {
     const actorLocation = actor.currentLocation;
     if (actorLocation && actorLocation !== workingState.lastSceneLocation) {
       this.output.writeLine("\n[Cenário] Novo local detectado, descrevendo o ambiente...");
-      sceneDescription = await this.llmService!.generateSceneDescription(workingState, actorLocation);
+      sceneDescription = await scopeLlm!.generateSceneDescription(workingState, actorLocation);
       workingState.lastSceneLocation = actorLocation;
     }
 
@@ -349,6 +407,8 @@ export class GameService {
       allowed: started.ordered,
       denied: started.denied,
       reactionCursor: 0,
+      reactionSlots: new Array(started.ordered.length).fill(null),
+      pendingReactions: 0,
       reacted: [],
       ignored: [],
       priorLines: [`${actor.name}: ${started.text}`],
@@ -372,42 +432,64 @@ export class GameService {
       reactionsPending: started.ordered.length,
       ...(sceneDescription !== undefined ? { sceneDescription } : {}),
     };
+    } finally {
+      this.turnStore.clearStarting(sessionId);
+    }
   }
 
   /** Fase `react`: resolve o próximo reator da fila (1 LLM por chamada). */
-  public async reactNext(turnId: string, sessionId: string): Promise<ReactTurnResult> {
-    const active = this.turnStore.requireOpen(turnId, sessionId);
-    if (active.phase !== 'awaiting_reactions') {
-      throw new TurnError('OUT_OF_ORDER', `Turno '${turnId}' não aguarda reações (fase: ${active.phase}).`, turnId);
-    }
-    const ruling = active.allowed[active.reactionCursor];
-    if (!ruling) {
-      throw new TurnError('NO_PENDING_REACTIONS', `Turno '${turnId}' sem reações pendentes.`, turnId);
-    }
-    const orchestrator = this.requireOrchestrator();
+  public async reactNext(turnId: string, sessionId: string, rootId?: string): Promise<ReactTurnResult> {
+    // F1 (doc 31, R4): claim síncrono antes de qualquer await — o cursor
+    // avança aqui; o 2º react concorrente já vê o próximo reator.
+    const { turn: active, ruling, index } = this.turnStore.tryClaimReaction(turnId, sessionId);
+    const orchestrator = this.requireScopeOrchestrator(this.resolveScope(rootId));
     const reactor = active.workingState.characters.find((c) => c.name === ruling.who);
     let ignored = false;
     let action = '';
     let reasoning = '';
-    if (reactor && (!reactor.status || reactor.status === 'active')) {
-      const result = await orchestrator.resolveReaction(
-        active.workingState, reactor, active.priorLines, active.action, ruling.channel, this.output,
-      );
-      ignored = result.ignored;
-      action = result.action;
-      reasoning = result.reasoning;
-    } else {
+    try {
+      if (reactor && (!reactor.status || reactor.status === 'active')) {
+        const result = await orchestrator.resolveReaction(
+          active.workingState, reactor, active.priorLines, active.action, ruling.channel, this.output,
+        );
+        ignored = result.ignored;
+        action = result.action;
+        reasoning = result.reasoning;
+      } else {
+        ignored = true;
+      }
+    } catch (err) {
+      // Erro inesperado (o resolveReaction normal já converte falha de LLM
+      // em ignored): não emperra a saga — registra como ignorado e segue.
+      this.logger.warn('[React] erro inesperado, seguindo sem o reator', {
+        turnId, who: ruling.who, error: err instanceof Error ? err.message : String(err),
+      });
       ignored = true;
     }
-    if (ignored) {
-      active.ignored.push(ruling.who);
-    } else {
-      active.reacted.push({ who: ruling.who, action, reasoning, channel: ruling.channel });
-      active.priorLines.push(`${ruling.who}: ${action}`);
+    // Escrita no índice reservado + reconstrução em ordem de slot: a ordem
+    // de reacted/ignored/priorLines não depende da ordem dos awaits.
+    active.reactionSlots![index] = ignored
+      ? { ignored: true as const, who: ruling.who }
+      : { who: ruling.who, action, reasoning, channel: ruling.channel };
+    active.pendingReactions = (active.pendingReactions ?? 1) - 1;
+    const head = active.priorLines[0] ?? `${active.actorName}: ${active.actionText}`;
+    const reacted: { who: string; action: string; reasoning: string; channel: Exclude<GateChannel, 'none'> }[] = [];
+    const ignoredList: string[] = [];
+    const lines = [head];
+    for (const slot of active.reactionSlots ?? []) {
+      if (!slot) continue;
+      if ('ignored' in slot) {
+        ignoredList.push(slot.who);
+      } else {
+        reacted.push({ who: slot.who, action: slot.action, reasoning: slot.reasoning, channel: slot.channel });
+        lines.push(`${slot.who}: ${slot.action}`);
+      }
     }
-    active.reactionCursor++;
+    active.reacted = reacted;
+    active.ignored = ignoredList;
+    active.priorLines = lines;
     const reactionsPending = active.allowed.length - active.reactionCursor;
-    const reactionsDone = reactionsPending <= 0;
+    const reactionsDone = reactionsPending <= 0 && (active.pendingReactions ?? 0) <= 0;
     if (reactionsDone) active.phase = 'awaiting_arbiter';
     return {
       turnId,
@@ -421,12 +503,12 @@ export class GameService {
   }
 
   /** Fase `arbiter`: julga a ação + reações e aplica a regra do dado. */
-  public async arbitrateTurn(turnId: string, sessionId: string): Promise<ArbiterTurnResult> {
+  public async arbitrateTurn(turnId: string, sessionId: string, rootId?: string): Promise<ArbiterTurnResult> {
     const active = this.turnStore.requireOpen(turnId, sessionId);
     if (active.phase !== 'awaiting_arbiter') {
       throw new TurnError('OUT_OF_ORDER', `Turno '${turnId}' não aguarda árbitro (fase: ${active.phase}).`, turnId);
     }
-    const orchestrator = this.requireOrchestrator();
+    const orchestrator = this.requireScopeOrchestrator(this.resolveScope(rootId));
     const resolution = await orchestrator.arbitrateAction(
       active.workingState,
       active.action,
@@ -441,12 +523,12 @@ export class GameService {
   }
 
   /** Fase `narrate`: 1-2 parágrafos sobre o fato julgado. */
-  public async narrateTurn(turnId: string, sessionId: string): Promise<NarrateTurnResult> {
+  public async narrateTurn(turnId: string, sessionId: string, rootId?: string): Promise<NarrateTurnResult> {
     const active = this.turnStore.requireOpen(turnId, sessionId);
     if (active.phase !== 'awaiting_narrate' || !active.resolution) {
       throw new TurnError('OUT_OF_ORDER', `Turno '${turnId}' não aguarda narração (fase: ${active.phase}).`, turnId);
     }
-    const orchestrator = this.requireOrchestrator();
+    const orchestrator = this.requireScopeOrchestrator(this.resolveScope(rootId));
     const actionLine = `${active.actorName} tenta: ${active.actionText} (d20: ${active.diceRoll.roll})`;
     const narration = await orchestrator.narrateAction(
       active.workingState, actionLine, active.resolution, active.unexpectedEvent,
@@ -461,20 +543,32 @@ export class GameService {
    * Fase `finish` (commit): mutações + cena + memória + `history/summary/
    * worldContext` + `turnNumber++`. Só aqui o estado é definitivo.
    */
-  public async finishTurn(turnId: string, sessionId: string): Promise<FinishTurnResult> {
-    const active = this.turnStore.requireOpen(turnId, sessionId);
-    if (active.phase !== 'awaiting_finish' || !active.resolution || active.narration === undefined) {
+  public async finishTurn(turnId: string, sessionId: string, rootId?: string): Promise<FinishTurnResult> {
+    // F1 (doc 31, R5): claim síncrono antes dos awaits — o 2º finish
+    // concorrente falha com OUT_OF_ORDER, sem duplo commit.
+    const active = this.turnStore.tryClaimCommit(turnId, sessionId);
+    // tryClaimCommit já validou; reafirma para o narrowing do TS.
+    const resolution = active.resolution;
+    const narrationForCommit = active.narration;
+    if (!resolution || narrationForCommit === undefined) {
       throw new TurnError('OUT_OF_ORDER', `Turno '${turnId}' não está pronto para commit (fase: ${active.phase}).`, turnId);
     }
-    const orchestrator = this.requireOrchestrator();
+    // F2: trio da campanha (ou legado).
+    const scope = this.resolveScope(rootId);
+    const postLlm = scope.llmService ?? this.llmService;
+    if (!postLlm) {
+      throw new Error('LlmService não injetado no GameService.');
+    }
+    try {
+    const orchestrator = this.requireScopeOrchestrator(scope);
     const turnLog = this.logger.child({ turnNumber: active.workingState.turnNumber });
     const committed = await orchestrator.commitTurn(active.workingState, {
       actorName: active.actorName,
       actionText: active.actionText,
       reactions: active.reacted.map((r) => ({ who: r.who, action: r.action })),
-      resolution: active.resolution,
+      resolution,
       actorWhere: active.actorWhere,
-      narration: active.narration,
+      narration: narrationForCommit,
       ...(active.sceneDescription !== undefined ? { sceneDescription: active.sceneDescription } : {}),
       gate: {
         allowed: active.allowed.map((r) => ({ who: r.who, channel: r.channel })),
@@ -485,9 +579,9 @@ export class GameService {
     });
 
     const narrative = active.sceneDescription
-      ? `${active.sceneDescription}\n\n${active.narration}`
-      : active.narration;
-    const success = active.resolution.outcome !== 'failure';
+      ? `${active.sceneDescription}\n\n${narrationForCommit}`
+      : narrationForCommit;
+    const success = resolution.outcome !== 'failure';
     const npcDecisions: NpcDecision[] = [];
     const actorChar = active.workingState.characters.find((c) => c.name === active.actorName);
     if (actorChar && !actorChar.isPlayer) {
@@ -505,10 +599,10 @@ export class GameService {
       }
     }
 
-    await this.applyTurnPostProcessing(active.workingState, narrative);
+    await this.applyTurnPostProcessing(active.workingState, narrative, postLlm, scope.settings.memoryWindowSize);
 
     this.lastActorBySession.set(sessionId, active.actorName);
-    const nextActor = this.nextActorName(active.workingState, sessionId);
+    const nextActor = this.nextActorName(active.workingState, sessionId, rootId);
     const nextChar = nextActor
       ? active.workingState.characters.find((c) => c.name === nextActor)
       : undefined;
@@ -524,6 +618,10 @@ export class GameService {
       nextActor,
       awaitingPlayer: nextChar?.isPlayer === true,
     };
+    } catch (err) {
+      this.turnStore.clearCommit(turnId);
+      throw err;
+    }
   }
 
   /** Progresso + acumulados parciais (resume após F5). */
@@ -563,19 +661,24 @@ export class GameService {
     this.logger.info('[cancelTurn]', { turnId });
   }
 
-  private async applyTurnPostProcessing(state: GameState, narrative: string): Promise<void> {
+  private async applyTurnPostProcessing(
+    state: GameState,
+    narrative: string,
+    llm: Pick<LlmService, 'summarizeMemory' | 'updateWorldContext'>,
+    memoryWindowSize: number,
+  ): Promise<void> {
     state.history.push(`Turno ${state.turnNumber}: ${narrative}`);
 
-    if (state.history.length > this.settings.memoryWindowSize) {
+    if (state.history.length > memoryWindowSize) {
       this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
-      const excessCount = state.history.length - this.settings.memoryWindowSize;
+      const excessCount = state.history.length - memoryWindowSize;
       const oldestTurns = state.history.slice(0, excessCount);
-      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+      state.longTermSummary = await llm.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
       state.history = state.history.slice(excessCount);
     }
 
     this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
-    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, narrative, state.turnNumber);
+    state.worldContext = await llm.updateWorldContext(state.worldContext, narrative, state.turnNumber);
 
     state.turnNumber++;
   }
@@ -584,14 +687,19 @@ export class GameService {
    * Gera uma observação/detalhamento da cena e a registra no histórico,
    * contando para o limite de sumarização, mas sem avançar o turno.
    */
-  public async recordObservation(state: GameState, request: string, characterName?: string): Promise<string> {
-    const observation = await this.llmService!.generateObservation(state, request, characterName);
+  public async recordObservation(state: GameState, request: string, characterName?: string, rootId?: string): Promise<string> {
+    const scope = this.resolveScope(rootId);
+    const llm = scope.llmService ?? this.llmService;
+    if (!llm) {
+      throw new Error('LlmService não injetado no GameService.');
+    }
+    const observation = await llm.generateObservation(state, request, characterName);
     state.history.push(`Observação (Turno ${state.turnNumber}): ${observation}`);
 
-    if (state.history.length > this.settings.memoryWindowSize) {
-      const excessCount = state.history.length - this.settings.memoryWindowSize;
+    if (state.history.length > scope.settings.memoryWindowSize) {
+      const excessCount = state.history.length - scope.settings.memoryWindowSize;
       const oldestTurns = state.history.slice(0, excessCount);
-      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+      state.longTermSummary = await llm.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
       state.history = state.history.slice(excessCount);
     }
 
@@ -604,8 +712,13 @@ export class GameService {
    * o estado do mundo é resolvido como no fim de um turno (itens, locais,
    * ciclo de vida, contexto do mundo e localizações) SEM avançar o turno.
    */
-  public async recordPlayerNarration(state: GameState, request: string, characterName?: string): Promise<string> {
-    const narration = await this.llmService!.generatePlayerNarration(state, request, characterName);
+  public async recordPlayerNarration(state: GameState, request: string, characterName?: string, rootId?: string): Promise<string> {
+    const scope = this.resolveScope(rootId);
+    const llm = scope.llmService ?? this.llmService;
+    if (!llm) {
+      throw new Error('LlmService não injetado no GameService.');
+    }
+    const narration = await llm.generatePlayerNarration(state, request, characterName);
     state.history.push(`Narração (Turno ${state.turnNumber}): ${narration}`);
 
     // Executa a extração automática pós-narração pelo LLM
@@ -616,19 +729,19 @@ export class GameService {
       state.locations = stateWithUpdates.locations;
     }
 
-    if (state.history.length > this.settings.memoryWindowSize) {
+    if (state.history.length > scope.settings.memoryWindowSize) {
       this.output.writeLine("\n[Motor] Sumarizando memórias antigas...");
-      const excessCount = state.history.length - this.settings.memoryWindowSize;
+      const excessCount = state.history.length - scope.settings.memoryWindowSize;
       const oldestTurns = state.history.slice(0, excessCount);
-      state.longTermSummary = await this.llmService!.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
+      state.longTermSummary = await llm.summarizeMemory(state.longTermSummary, oldestTurns, state.turnNumber);
       state.history = state.history.slice(excessCount);
     }
 
     this.output.writeLine("\n[Motor] Atualizando contexto do mundo...");
-    state.worldContext = await this.llmService!.updateWorldContext(state.worldContext, narration, state.turnNumber);
+    state.worldContext = await llm.updateWorldContext(state.worldContext, narration, state.turnNumber);
 
     this.output.writeLine("[Motor] Extraindo localizações dos personagens...");
-    const locations = await this.llmService!.extractCharacterLocations(state, narration);
+    const locations = await llm.extractCharacterLocations(state, narration);
     if (Object.keys(locations).length > 0) {
       for (const char of state.characters) {
         const loc = locations[char.name];

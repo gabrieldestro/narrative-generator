@@ -57,7 +57,9 @@ export class AdminController {
     }
 
     if (payload.settings) {
-      this.GameService.updateSettings(payload.settings);
+      // F2: 1 escopo por campanha.
+      const rootId = await this.checkpoints.resolveRootId(sessionId);
+      this.GameService.updateSettings(rootId, payload.settings);
     }
 
     const reqLog = this.logger.child({ sessionId, command: payload.command });

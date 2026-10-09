@@ -53,8 +53,10 @@ export class TurnController {
     const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
     reqLog.info('startTurn chamado');
 
+    // F2: 1 escopo por campanha — settings do payload valem só aqui.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (payload.settings) {
-      this.gameService.updateSettings(payload.settings);
+      this.gameService.updateSettings(rootId, payload.settings);
     }
 
     // Ação do jogador (opcional): presente ⇒ turno do jogador; ausente ⇒
@@ -68,7 +70,7 @@ export class TurnController {
     }
 
     try {
-      const started = await this.gameService.beginTurn(sessionId, state, playerAction);
+      const started = await this.gameService.beginTurn(sessionId, state, playerAction, rootId);
       reqLog.info('startTurn concluído', { turnId: started.turnId, actor: started.actor });
       return reply.status(201).send({ sessionId, ...started });
     } catch (err) {
@@ -85,11 +87,13 @@ export class TurnController {
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
+    // F2: 1 escopo por campanha.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (req.body?.settings) {
-      this.gameService.updateSettings(req.body.settings);
+      this.gameService.updateSettings(rootId, req.body.settings);
     }
     try {
-      const reaction = await this.gameService.reactNext(turnId, sessionId);
+      const reaction = await this.gameService.reactNext(turnId, sessionId, rootId);
       return reply.status(200).send({ sessionId, ...reaction });
     } catch (err) {
       return this.sendTurnError(reply, err);
@@ -105,11 +109,13 @@ export class TurnController {
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
+    // F2: 1 escopo por campanha.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (req.body?.settings) {
-      this.gameService.updateSettings(req.body.settings);
+      this.gameService.updateSettings(rootId, req.body.settings);
     }
     try {
-      const judged = await this.gameService.arbitrateTurn(turnId, sessionId);
+      const judged = await this.gameService.arbitrateTurn(turnId, sessionId, rootId);
       return reply.status(200).send({ sessionId, ...judged });
     } catch (err) {
       return this.sendTurnError(reply, err);
@@ -125,11 +131,13 @@ export class TurnController {
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
+    // F2: 1 escopo por campanha.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (req.body?.settings) {
-      this.gameService.updateSettings(req.body.settings);
+      this.gameService.updateSettings(rootId, req.body.settings);
     }
     try {
-      const told = await this.gameService.narrateTurn(turnId, sessionId);
+      const told = await this.gameService.narrateTurn(turnId, sessionId, rootId);
       return reply.status(200).send({ sessionId, ...told });
     } catch (err) {
       return this.sendTurnError(reply, err);
@@ -145,11 +153,13 @@ export class TurnController {
     if (!state) {
       return reply.status(404).send({ error: `Sessão '${sessionId}' não encontrada.` });
     }
+    // F2: 1 escopo por campanha.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (req.body?.settings) {
-      this.gameService.updateSettings(req.body.settings);
+      this.gameService.updateSettings(rootId, req.body.settings);
     }
     try {
-      const turnResult = await this.gameService.finishTurn(turnId, sessionId);
+      const turnResult = await this.gameService.finishTurn(turnId, sessionId, rootId);
 
       // Gera novo checkpoint imutável (só no finish o estado é definitivo)
       const newCheckpointId = randomUUID();
@@ -234,8 +244,10 @@ export class TurnController {
     const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
     reqLog.info('observe chamado');
 
+    // F2: 1 escopo por campanha.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (payload.settings) {
-      this.gameService.updateSettings(payload.settings);
+      this.gameService.updateSettings(rootId, payload.settings);
     }
 
     // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
@@ -244,7 +256,7 @@ export class TurnController {
 
     // Gera a observação detalhada via LLM (não avança a história nem o turno)
     const observeStart = Date.now();
-    const observation = await this.gameService.recordObservation(state, payload.playerText, charName);
+    const observation = await this.gameService.recordObservation(state, payload.playerText, charName, rootId);
     reqLog.info('observe concluído', { durationMs: Date.now() - observeStart });
 
     const newCheckpointId = randomUUID();
@@ -279,8 +291,10 @@ export class TurnController {
     const reqLog = this.logger.child({ sessionId, turnNumber: state.turnNumber });
     reqLog.info('narrate chamado');
 
+    // F2: 1 escopo por campanha.
+    const rootId = await this.checkpoints.resolveRootId(sessionId);
     if (payload.settings) {
-      this.gameService.updateSettings(payload.settings);
+      this.gameService.updateSettings(rootId, payload.settings);
     }
 
     // Identifica o personagem do jogador (primeiro personagem isPlayer ativo)
@@ -290,7 +304,7 @@ export class TurnController {
     // Gera a narração respeitando a declaração do jogador e resolve o estado do mundo
     // (bypassa árbitro, NPCs e dados, e não avança o turno)
     const narrateStart = Date.now();
-    const narration = await this.gameService.recordPlayerNarration(state, payload.playerText, charName);
+    const narration = await this.gameService.recordPlayerNarration(state, payload.playerText, charName, rootId);
     reqLog.info('narrate concluído', { durationMs: Date.now() - narrateStart });
 
     const newCheckpointId = randomUUID();

@@ -5,7 +5,7 @@ import { MemoryService } from '../MemoryService.js';
 describe('MemoryService.consolidateFacts', () => {
   function mockDeps(resolvedValue: unknown | null) {
     const client = { invoke: vi.fn(async (system: string, human: string) => `${system}\n${human}`.slice(0, 50)) };
-    const resolver = { resolveJson: vi.fn(async () => (resolvedValue === null ? null : { value: resolvedValue, attempt: 1 })) };
+    const resolver = { resolveJson: vi.fn(async (_opts: { human: string }) => (resolvedValue === null ? null : { value: resolvedValue, attempt: 1 })) };
     return { client, resolver };
   }
 
@@ -26,8 +26,9 @@ describe('MemoryService.consolidateFacts', () => {
       threads: [{ id: 'artefato', text: 'recuperar artefato no Sótão', status: 'open' }],
     });
     // Entrada inclui narrações dos steps da cena (events sozinhos insuficientes).
-    const human = resolver.resolveJson.mock.calls[0]![0].human as string;
-    expect(human).toContain('Darian resgata Elara no Porão.');
+    const firstCall = resolver.resolveJson.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    expect(firstCall![0].human).toContain('Darian resgata Elara no Porão.');
   });
 
   it('falha de parse mantém a ficha antiga (nunca apaga)', async () => {
@@ -47,12 +48,14 @@ describe('MemoryService.consolidateFacts', () => {
 
 describe('MemoryService.summarizeMemory/updateWorldContext', () => {
   it('delegam ao `LlmClient` com os prompts legados', async () => {
-    const client = { invoke: vi.fn(async () => 'resumo ou contexto') };
+    const client = { invoke: vi.fn(async (_system: string, _human: string) => 'resumo ou contexto') };
     const resolver = { resolveJson: vi.fn() };
     const agent = new MemoryService(client as any, resolver as any);
     expect(await agent.summarizeMemory('antigo', ['Turno 1: x'], 3)).toBe('resumo ou contexto');
     expect(await agent.updateWorldContext('ctx', 'narr', 3)).toBe('resumo ou contexto');
     expect(client.invoke).toHaveBeenCalledTimes(2);
-    expect(client.invoke.mock.calls[0]![0]).toContain('condensar');
+    const firstInvoke = client.invoke.mock.calls[0];
+    expect(firstInvoke).toBeDefined();
+    expect(firstInvoke![0]).toContain('condensar');
   });
 });

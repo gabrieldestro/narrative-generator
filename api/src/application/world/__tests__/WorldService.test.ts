@@ -147,7 +147,7 @@ describe("WorldService", () => {
     });
 
     expect(newState.concepts).toHaveLength(1);
-    expect(newState.concepts?.[0].id).toBe("olhar_de_merlim");
+    expect(newState.concepts?.[0]?.id).toBe("olhar_de_merlim");
   });
 
   it("should remove a concept successfully", () => {
@@ -186,6 +186,6 @@ describe("WorldService", () => {
 
     const newState = await service.applyAutomaticStateUpdates(state, "Eles ouviram falar da lendária Ordem de Avalon.");
     expect(newState.concepts).toHaveLength(1);
-    expect(newState.concepts?.[0].id).toBe("ordem_de_avalon");
+    expect(newState.concepts?.[0]?.id).toBe("ordem_de_avalon");
   });
 });

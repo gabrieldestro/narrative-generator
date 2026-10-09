@@ -77,9 +77,9 @@ export class SetupController {
     // Não rodar extração automática sobre a narrativa de abertura (Item 2).
     let preserveGraph = false;
 
-    if (settings) {
-      this.gameService.updateSettings(settings);
-    }
+    // F2: settings aplicados no escopo da campanha após a criação do
+    // sessionId (= rootId) — nunca no global. A narrativa inicial e a
+    // extração não leem settings, então a ordem é preservada.
 
     if (mode === 'template' && templateName) {
       const templates = await this.worldRepo.listAll();
@@ -132,6 +132,10 @@ export class SetupController {
     const sessionId = randomUUID();
     this.sessionRepo.saveSession(sessionId, state);
     await this.checkpoints.persistCheckpoint(null, sessionId, state, { mode: req.body.mode, title, rootId: sessionId, branchId: 0, depth: 1 });
+    // F2: congela os settings da campanha no próprio escopo.
+    if (settings) {
+      this.gameService.updateSettings(sessionId, settings);
+    }
 
     return reply.status(201).send({
       sessionId,

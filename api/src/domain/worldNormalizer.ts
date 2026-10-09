@@ -26,13 +26,24 @@ function cleanArray(values: (string | undefined)[] | undefined): string[] {
 }
 
 /**
+ * Entrada do usuário/front: tudo opcional — ids são gerados quando ausentes,
+ * `connectedTo` inválidos são filtrados, tipos fora da whitelist viram
+ * `custom`. É o contrato real da função (o corpo usa `?.` em tudo).
+ */
+export interface LenientWorldTemplate extends Omit<Partial<WorldTemplate>, 'characters' | 'locations' | 'concepts'> {
+  characters?: Partial<CharacterTemplate>[] | undefined;
+  locations?: Partial<Location>[] | undefined;
+  concepts?: Partial<WorldConcept>[] | undefined;
+}
+
+/**
  * Normaliza e valida um WorldTemplate vindo do frontend (entrada do usuário).
  * - Gera IDs para characters/locations/concepts ausentes.
  * - Filtra connectedTo inválidos (que não apontam para um local existente) e duplicatas.
  * - Aplica whitelist de tipos de conceito (default 'custom').
  * - Remove entradas vazias de inventário.
  */
-export function normalizeWorldTemplate(input: Partial<WorldTemplate>): WorldTemplate {
+export function normalizeWorldTemplate(input: LenientWorldTemplate): WorldTemplate {
   const characters: CharacterTemplate[] = (input.characters ?? []).map((c, i) => {
     const character: CharacterTemplate = {
       name: c?.name?.trim() || `Personagem ${i + 1}`,

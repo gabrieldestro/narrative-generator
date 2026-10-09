@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeWorldTemplate, slugify } from '../worldNormalizer.js';
-import type { WorldTemplate } from '../../domain/types.js';
+import { normalizeWorldTemplate, slugify, type LenientWorldTemplate } from '../worldNormalizer.js';
 
 describe('normalizeWorldTemplate', () => {
   it('gera ids para characters/locations/concepts ausentes', () => {
-    const input: Partial<WorldTemplate> = {
+    const input: LenientWorldTemplate = {
       narrativeStyle: 'Fantasia',
       writingStyle: 'Épico',
       worldContext: 'Mundo de teste',
@@ -15,13 +14,13 @@ describe('normalizeWorldTemplate', () => {
 
     const result = normalizeWorldTemplate(input);
 
-    expect(result.locations[0]!.id).toMatch(/taverna-\d+/);
-    expect(result.concepts[0]!.id).toMatch(/amuleto-\d+/);
+    expect(result.locations?.[0]?.id).toMatch(/taverna-\d+/);
+    expect(result.concepts?.[0]?.id).toMatch(/amuleto-\d+/);
     expect(result.characters[0]!.isPlayer).toBe(false);
   });
 
   it('remove connectedTo inválidos e duplicatas', () => {
-    const input: Partial<WorldTemplate> = {
+    const input: LenientWorldTemplate = {
       name: 'X',
       description: '',
       narrativeStyle: 'F',
@@ -40,7 +39,7 @@ describe('normalizeWorldTemplate', () => {
   });
 
   it('aplica whitelist de tipo de conceito (default custom)', () => {
-    const input: Partial<WorldTemplate> = {
+    const input: LenientWorldTemplate = {
       name: 'X',
       description: '',
       narrativeStyle: 'F',
@@ -59,7 +58,7 @@ describe('normalizeWorldTemplate', () => {
   });
 
   it('filtra entradas vazias do inventário', () => {
-    const input: Partial<WorldTemplate> = {
+    const input: LenientWorldTemplate = {
       name: 'X',
       description: '',
       narrativeStyle: 'F',

@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
+import { pathToFileURL } from 'url';
 
 import { WorldTemplateRepository } from '../infrastructure/persistence/WorldTemplateRepository.js';
 import { LlmService } from '../application/shared/LlmService.js';
@@ -11,6 +12,7 @@ import { CharacterService } from '../application/characters/CharacterService.js'
 import { WorldService } from '../application/world/WorldService.js';
 import { buildTurnService } from '../application/turn/buildTurnService.js';
 import { SessionRepository } from '../infrastructure/persistence/SessionRepository.js';
+import { SessionScopeStore } from '../application/session/SessionScopeStore.js';
 import { CheckpointRepository } from '../infrastructure/persistence/CheckpointRepository.js';
 import { AdminCommandService } from '../application/admin/AdminCommandService.js';
 import { CheckpointService } from '../application/session/CheckpointService.js';
@@ -88,6 +90,15 @@ export async function buildApp(options: AppOptions = {}) {
   }
 
   const worldService = new WorldService(llmService, logger);
+  // F2 (doc 31): 1 grafo de serviços por campanha (orquestrador + llm +
+  // characters com os settings do escopo). Services seguem singletons como
+  // código; o estado por campanha vive no store, chaveado por rootId.
+  const scopeStore = new SessionScopeStore(undefined, (settings) => {
+    const scopeLlm = new LlmService(llmModel, settings, llmCallLogger, logger, llmContentLogger);
+    const scopeChars = new CharacterService(scopeLlm, settings, logger);
+    const scopeOrchestrator = buildTurnService(llmModel, worldService, scopeChars, scopeLlm, logger, llmCallLogger, llmContentLogger, settings);
+    return { orchestrator: scopeOrchestrator, llmService: scopeLlm, characterService: scopeChars };
+  });
   const adminCommandService = new AdminCommandService(worldService, llmService, logger);
   const characterService = new CharacterService(llmService, {}, logger);
   const sessionFactory = new SessionFactory(undefined, undefined, undefined, llmService, worldRepo);
@@ -106,6 +117,7 @@ export async function buildApp(options: AppOptions = {}) {
     adminCommandService,
     orchestrator,
     llmModel,
+    scopeStore,
   );
 
   const checkpoints = new CheckpointService(checkpointRepo, sessionRepo, logger);
@@ -170,4 +182,12 @@ export async function startServer(port = 3000, host = '0.0.0.0') {
   }
 }
 
-startServer();
+// Só escuta quando executado diretamente (`tsx src/api/server.ts`).
+// Importar este módulo (testes, outros entrypoints) nunca deve abrir porta
+// — antes, 2 arquivos de teste importando `buildApp` disputavam a 3000
+// (EADDRINUSE + process.exit no worker).
+const isDirectRun =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  void startServer();
+}
